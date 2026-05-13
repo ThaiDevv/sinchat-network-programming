@@ -7,6 +7,8 @@ import org.java_websocket.server.WebSocketServer;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.WebSocket;
 
+import com.example.handler.RegisterHandler;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -27,6 +29,9 @@ public class Main {
                 os.close();
             }
         });
+
+        // Đăng ký endpoint /api/register
+        server.createContext("/api/register", new RegisterHandler());
 
         server.setExecutor(null); // creates a default executor
         server.start();
