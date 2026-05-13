@@ -1,1 +1,4 @@
 .idea/
+*.sql
+API_DOCUMENTATION.md
+Code/Server/.env

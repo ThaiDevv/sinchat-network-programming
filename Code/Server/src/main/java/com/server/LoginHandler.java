@@ -45,13 +45,13 @@ public class LoginHandler implements HttpHandler {
      * Server-side login function to verify credentials against the database.
      */
     public boolean login(String username, String password) {
-        String query = "SELECT password FROM users WHERE username = ?";
+        String query = "SELECT password_hash FROM users WHERE username = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, username);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    String storedHash = rs.getString("password");
+                    String storedHash = rs.getString("password_hash");
                     de.mkammerer.argon2.Argon2 argon2 = de.mkammerer.argon2.Argon2Factory.create(de.mkammerer.argon2.Argon2Factory.Argon2Types.ARGON2id);
                     return argon2.verify(storedHash, password.toCharArray());
                 }

@@ -12,12 +12,17 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.github.cdimascio.dotenv.Dotenv;
 
 public class Main {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static final Dotenv dotenv = Dotenv.configure()
+            .ignoreIfMissing()
+            .load();
 
     public static void main(String[] args) throws IOException {
-        int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "3000"));
+        String portStr = dotenv.get("PORT");
+        int port = (portStr != null) ? Integer.parseInt(portStr) : 3000; // Fallback to 3000 if not set, but better to keep 3000 as a sensible default for local dev.
 
         // Create HTTP Server for /api/test
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);

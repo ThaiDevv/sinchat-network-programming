@@ -30,12 +30,12 @@ public class RegisterHandler implements HttpHandler {
             JsonObject json = gson.fromJson(reader, JsonObject.class);
             String username = json.get("username").getAsString();
             String password = json.get("password").getAsString();
-            String dob = json.get("dob").getAsString();
+            String email = json.get("email").getAsString();
 
-            if (register(username, password, dob)) {
+            if (register(username, password, email)) {
                 sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
             } else {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed. Username might already exist.\"}");
+                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed. Username or Email might already exist.\"}");
             }
         } catch (Exception e) {
             logger.error("Registration processing error", e);
@@ -43,7 +43,7 @@ public class RegisterHandler implements HttpHandler {
         }
     }
 
-    public boolean register(String username, String password, String dob) {
+    public boolean register(String username, String password, String email) {
         // Initialize Argon2id
         Argon2 argon2 = Argon2Factory.create(Argon2Factory.Argon2Types.ARGON2id);
         
@@ -51,12 +51,12 @@ public class RegisterHandler implements HttpHandler {
         // Parameters: iterations=10, memory=65536 KB, parallelism=1
         String hash = argon2.hash(10, 65536, 1, password.toCharArray());
 
-        String query = "INSERT INTO users (username, password, dob) VALUES (?, ?, ?)";
+        String query = "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, username);
             pstmt.setString(2, hash);
-            pstmt.setString(3, dob);
+            pstmt.setString(3, email);
             
             int rowsAffected = pstmt.executeUpdate();
             return rowsAffected > 0;

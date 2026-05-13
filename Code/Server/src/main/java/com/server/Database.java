@@ -5,14 +5,18 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.github.cdimascio.dotenv.Dotenv;
 
 public class Database {
     private static final Logger logger = LoggerFactory.getLogger(Database.class);
 
-    private static final String URL = System.getenv().getOrDefault("DB_URL",
-            "jdbc:mysql://localhost:3306/network_project");
-    private static final String USER = System.getenv().getOrDefault("DB_USER", "root");
-    private static final String PASSWORD = System.getenv().getOrDefault("DB_PASSWORD", "");
+    private static final Dotenv dotenv = Dotenv.configure()
+            .ignoreIfMissing()
+            .load();
+
+    private static final String URL = dotenv.get("DB_URL");
+    private static final String USER = dotenv.get("DB_USER");
+    private static final String PASSWORD = dotenv.get("DB_PASSWORD");
 
     static {
         try {
