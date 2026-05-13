@@ -1,3 +1,7 @@
+.idea/
+*.sql
+API_DOCUMENTATION.md
+Code/Server/.env
 # IntelliJ
 .idea/
 *.iml

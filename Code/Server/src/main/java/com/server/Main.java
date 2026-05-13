@@ -1,4 +1,4 @@
-package com.example;
+package com.server;
 
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
@@ -10,16 +10,26 @@ import org.java_websocket.WebSocket;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import io.github.cdimascio.dotenv.Dotenv;
 
 public class Main {
+    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static final Dotenv dotenv = Dotenv.configure()
+            .ignoreIfMissing()
+            .load();
+
     public static void main(String[] args) throws IOException {
-        int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "3000"));
+        String portStr = dotenv.get("PORT");
+        int port = (portStr != null) ? Integer.parseInt(portStr) : 3000; // Fallback to 3000 if not set, but better to keep 3000 as a sensible default for local dev.
 
         // Create HTTP Server for /api/test
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/api/test", new HttpHandler() {
             @Override
             public void handle(HttpExchange exchange) throws IOException {
+                logger.info("Received HTTP request: {} {}", exchange.getRequestMethod(), exchange.getRequestURI());
                 String response = "server worked!";
                 exchange.sendResponseHeaders(200, response.length());
                 OutputStream os = exchange.getResponseBody();
@@ -28,9 +38,12 @@ public class Main {
             }
         });
 
+        server.createContext("/api/login", new LoginHandler());
+        server.createContext("/api/register", new RegisterHandler());
+
         server.setExecutor(null); // creates a default executor
         server.start();
-        System.out.println("HTTP Server started on port " + port);
+        logger.info("HTTP Server started on port {}", port);
 
         // Optional: WebSocket Server (using java-websocket)
         // Since Render typically exposes only one port, we'd normally multiplex, 
@@ -39,17 +52,24 @@ public class Main {
         WebSocketServer wsServer = new WebSocketServer(new InetSocketAddress(wsPort)) {
             @Override
             public void onOpen(WebSocket conn, ClientHandshake handshake) {
+                logger.info("WebSocket connection opened: {}", conn.getRemoteSocketAddress());
                 conn.send("server worked! (via websocket)");
             }
             @Override
-            public void onClose(WebSocket conn, int code, String reason, boolean remote) {}
+            public void onClose(WebSocket conn, int code, String reason, boolean remote) {
+                logger.info("WebSocket connection closed: {}", conn.getRemoteSocketAddress());
+            }
             @Override
-            public void onMessage(WebSocket conn, String message) {}
+            public void onMessage(WebSocket conn, String message) {
+                logger.debug("Received message: {}", message);
+            }
             @Override
-            public void onError(WebSocket conn, Exception ex) {}
+            public void onError(WebSocket conn, Exception ex) {
+                logger.error("WebSocket error occurred", ex);
+            }
             @Override
             public void onStart() {
-                System.out.println("WebSocket Server started on port " + wsPort);
+                logger.info("WebSocket Server started on port {}", wsPort);
             }
         };
         wsServer.start();
