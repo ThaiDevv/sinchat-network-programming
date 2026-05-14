@@ -32,35 +32,36 @@ public class RegisterHandler implements HttpHandler {
             String email = json.get("email").getAsString();
 
             try {
-                register(username, password, email);
-                sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
-            } catch (java.sql.SQLIntegrityConstraintViolationException e) {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed. Username or Email already exists.\"}");
-            } catch (java.sql.SQLException e) {
-                logger.error("Database error during registration", e);
-                sendResponse(exchange, 500, "{\"status\": \"error\", \"message\": \"Database error: " + e.getMessage().replace("\"", "\\\"") + "\"}");
-            } catch (Exception e) {
-                logger.error("Registration processing error", e);
-                sendResponse(exchange, 500, "{\"status\": \"error\", \"message\": \"Internal Server Error\"}");
+                if (register(username, password, email)) {
+                    sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
+                } else {
+                    sendResponse(exchange, 400,
+                            "{\"status\": \"error\", \"message\": \"Registration failed. No rows affected.\"}");
+                }
+            } catch (Exception dbEx) {
+                logger.error("Database registration error", dbEx);
+                String errMsg = dbEx.getMessage() != null ? dbEx.getMessage().replace("\"", "'") : "Unknown DB Error";
+                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"DB Error: " + errMsg + "\"}");
             }
+        } catch (Exception e) {
+            logger.error("Registration processing error", e);
+            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\"}");
         }
     }
 
-    public void register(String username, String password, String email) throws java.sql.SQLException {
-        // Initialize Argon2id
-        Argon2 argon2 = Argon2Factory.create(Argon2Factory.Argon2Types.ARGON2id);
-        
-        // Hash the password
-        String hash = argon2.hash(10, 65536, 1, password.toCharArray());
+    public boolean register(String username, String password, String email) throws Exception {
+        // Hash the password using BCrypt
+        String hash = BCrypt.hashpw(password, BCrypt.gensalt());
 
         String query = "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)";
         try (Connection conn = Database.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(query)) {
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, username);
             pstmt.setString(2, hash);
             pstmt.setString(3, email);
-            
-            pstmt.executeUpdate();
+
+            int rowsAffected = pstmt.executeUpdate();
+            return rowsAffected > 0;
         }
     }
 
