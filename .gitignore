@@ -2,3 +2,5 @@
 *.sql
 API_DOCUMENTATION.md
 Code/Server/.env
+# Ignore environment files
+.env

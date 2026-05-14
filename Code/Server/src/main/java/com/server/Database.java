@@ -11,12 +11,22 @@ public class Database {
     private static final Logger logger = LoggerFactory.getLogger(Database.class);
 
     private static final Dotenv dotenv = Dotenv.configure()
+            .directory("./Code/Server")
             .ignoreIfMissing()
             .load();
 
     private static final String URL = dotenv.get("DB_URL");
     private static final String USER = dotenv.get("DB_USER");
     private static final String PASSWORD = dotenv.get("DB_PASSWORD");
+
+    static {
+        if (URL == null) {
+            logger.error("CRITICAL: DB_URL is missing! Check your .env file or environment variables.");
+        }
+        if (USER == null) {
+            logger.error("CRITICAL: DB_USER is missing!");
+        }
+    }
 
     static {
         try {

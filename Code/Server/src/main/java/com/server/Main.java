@@ -17,6 +17,7 @@ import io.github.cdimascio.dotenv.Dotenv;
 public class Main {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
     private static final Dotenv dotenv = Dotenv.configure()
+            .directory("./Code/Server") // Search in Code/Server if running from project root
             .ignoreIfMissing()
             .load();
 
