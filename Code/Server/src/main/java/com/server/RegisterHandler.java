@@ -32,23 +32,26 @@ public class RegisterHandler implements HttpHandler {
             String password = json.get("password").getAsString();
             String email = json.get("email").getAsString();
 
-            if (register(username, password, email)) {
+            try {
+                register(username, password, email);
                 sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
-            } else {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed. Username or Email might already exist.\"}");
+            } catch (java.sql.SQLIntegrityConstraintViolationException e) {
+                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed. Username or Email already exists.\"}");
+            } catch (java.sql.SQLException e) {
+                logger.error("Database error during registration", e);
+                sendResponse(exchange, 500, "{\"status\": \"error\", \"message\": \"Database error: " + e.getMessage().replace("\"", "\\\"") + "\"}");
+            } catch (Exception e) {
+                logger.error("Registration processing error", e);
+                sendResponse(exchange, 500, "{\"status\": \"error\", \"message\": \"Internal Server Error\"}");
             }
-        } catch (Exception e) {
-            logger.error("Registration processing error", e);
-            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\"}");
         }
     }
 
-    public boolean register(String username, String password, String email) {
+    public void register(String username, String password, String email) throws java.sql.SQLException {
         // Initialize Argon2id
         Argon2 argon2 = Argon2Factory.create(Argon2Factory.Argon2Types.ARGON2id);
         
         // Hash the password
-        // Parameters: iterations=10, memory=65536 KB, parallelism=1
         String hash = argon2.hash(10, 65536, 1, password.toCharArray());
 
         String query = "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)";
@@ -58,12 +61,8 @@ public class RegisterHandler implements HttpHandler {
             pstmt.setString(2, hash);
             pstmt.setString(3, email);
             
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
-        } catch (Exception e) {
-            logger.error("Database registration error", e);
+            pstmt.executeUpdate();
         }
-        return false;
     }
 
     private void sendResponse(HttpExchange exchange, int status, String body) throws IOException {

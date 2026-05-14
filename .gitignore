@@ -16,3 +16,5 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+# Ignore environment files
+.env
