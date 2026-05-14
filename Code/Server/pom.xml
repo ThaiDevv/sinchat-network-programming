@@ -35,9 +35,9 @@
       <version>2.10.1</version>
     </dependency>
     <dependency>
-      <groupId>de.mkammerer</groupId>
-      <artifactId>argon2-jvm</artifactId>
-      <version>2.11</version>
+      <groupId>org.mindrot</groupId>
+      <artifactId>jbcrypt</artifactId>
+      <version>0.4</version>
     </dependency>
     <dependency>
       <groupId>io.github.cdimascio</groupId>

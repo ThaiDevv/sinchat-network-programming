@@ -52,8 +52,7 @@ public class LoginHandler implements HttpHandler {
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     String storedHash = rs.getString("password_hash");
-                    de.mkammerer.argon2.Argon2 argon2 = de.mkammerer.argon2.Argon2Factory.create(de.mkammerer.argon2.Argon2Factory.Argon2Types.ARGON2id);
-                    return argon2.verify(storedHash, password.toCharArray());
+                    return org.mindrot.jbcrypt.BCrypt.checkpw(password, storedHash);
                 }
             }
         } catch (Exception e) {

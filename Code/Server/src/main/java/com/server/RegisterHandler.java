@@ -6,8 +6,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import de.mkammerer.argon2.Argon2;
-import de.mkammerer.argon2.Argon2Factory;
+import org.mindrot.jbcrypt.BCrypt;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -32,10 +31,16 @@ public class RegisterHandler implements HttpHandler {
             String password = json.get("password").getAsString();
             String email = json.get("email").getAsString();
 
-            if (register(username, password, email)) {
-                sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
-            } else {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed. Username or Email might already exist.\"}");
+            try {
+                if (register(username, password, email)) {
+                    sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
+                } else {
+                    sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed. No rows affected.\"}");
+                }
+            } catch (Exception dbEx) {
+                logger.error("Database registration error", dbEx);
+                String errMsg = dbEx.getMessage() != null ? dbEx.getMessage().replace("\"", "'") : "Unknown DB Error";
+                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"DB Error: " + errMsg + "\"}");
             }
         } catch (Exception e) {
             logger.error("Registration processing error", e);
@@ -43,13 +48,9 @@ public class RegisterHandler implements HttpHandler {
         }
     }
 
-    public boolean register(String username, String password, String email) {
-        // Initialize Argon2id
-        Argon2 argon2 = Argon2Factory.create(Argon2Factory.Argon2Types.ARGON2id);
-        
-        // Hash the password
-        // Parameters: iterations=10, memory=65536 KB, parallelism=1
-        String hash = argon2.hash(10, 65536, 1, password.toCharArray());
+    public boolean register(String username, String password, String email) throws Exception {
+        // Hash the password using BCrypt
+        String hash = BCrypt.hashpw(password, BCrypt.gensalt());
 
         String query = "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)";
         try (Connection conn = Database.getConnection();
@@ -60,10 +61,7 @@ public class RegisterHandler implements HttpHandler {
             
             int rowsAffected = pstmt.executeUpdate();
             return rowsAffected > 0;
-        } catch (Exception e) {
-            logger.error("Database registration error", e);
         }
-        return false;
     }
 
     private void sendResponse(HttpExchange exchange, int status, String body) throws IOException {
