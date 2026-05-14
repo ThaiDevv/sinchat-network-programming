@@ -1,6 +1,9 @@
+.idea/
 *.sql
 API_DOCUMENTATION.md
 Code/Server/.env
+# Ignore environment files
+.env
 Code/Server/target/*
 
 # IntelliJ
@@ -16,5 +19,3 @@ target/
 # OS
 .DS_Store
 Thumbs.db
-# Ignore environment files
-.env
