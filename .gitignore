@@ -1,22 +1,25 @@
-.idea/
-*.sql
-API_DOCUMENTATION.md
-Code/Server/.env
-# Ignore environment files
-.env
-Code/Server/target/*
-
-# IntelliJ
-.idea/
-*.iml
-
-# Maven
-target/
-
-# Logs
+.deps/
+*.class
 *.log
 
-# OS
+# IDE files
+.idea/
+*.iml
+.vscode/settings.json
+
+# Environment files
+.env
+Code/Server/.env
+
+# Maven build output
+target/
+Code/Server/target/
+Code/Client/target/
+
+# Local/generated artifacts
+*.sql
+API_DOCUMENTATION.md
+
+# OS files
 .DS_Store
 Thumbs.db
-.vscode/settings.json
