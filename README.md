@@ -1,22 +1,18 @@
-# SinChat - Chat Application
-
-SinChat is a student project for a chat application with a JavaFX desktop
-interface and backend API integration.
+# Project chat application with GUI via TCP/IP protocol
 
 ## Features
 
-- [x] JavaFX GUI interface
+- [x] GUI interface
 - [x] Login with username and password
-- [x] Register a new account
-- [x] Forgot password flow with verification code
-- [x] Basic chat screen prototype
-- [x] Send message in the local UI prototype
-- [ ] Receive message from server
-- [ ] Chat with multiple users
+- [x] Register new account
+- [x] Forgot password
 - [ ] Change password from profile
 - [ ] Change username
 - [ ] Change avatar
-- [ ] Send image, video, and voice messages
+- [x] Send message in local UI prototype
+- [ ] Receive message from server
+- [ ] Send message with image, video, voice
+- [ ] Chat with multiple users
 - [ ] Voice call
 - [ ] Video call
 - [ ] Screen sharing
@@ -25,14 +21,29 @@ interface and backend API integration.
 
 ## Built With
 
+### Programming language
+
 - [Java 25](https://www.oracle.com/asean/java/technologies/downloads/#java25)
-- [JavaFX](https://openjfx.io/)
-- [MySQL](https://www.mysql.com/)
+  - [JavaFX](https://openjfx.io/) - GUI interface
+  - [Java-WebSocket](https://github.com/TooTallNate/Java-WebSocket) - WebSocket library
 
-## API Base URL
+### Database
 
-The UI uses `http://localhost:8080` by default. To use the deployed backend,
-run the app with:
+- [MySQL](https://www.mysql.com/) - database hosted on 123host.vn
+
+### Server host
+
+- [Render](https://render.com/) - server host
+  - [Docker](https://www.docker.com/) - containerization
+
+### Image hosting
+
+- [ImgBB](https://imgbb.com/) - image hosting
+
+## Client API Base URL
+
+The JavaFX client uses `http://localhost:8080` by default. To use the deployed
+backend, run the client with:
 
 ```powershell
 java -Dchatapp.api.baseUrl=https://network-programming-project.onrender.com ...
