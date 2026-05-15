@@ -26,6 +26,12 @@ public class RegisterHandler implements HttpHandler {
 
         try (InputStreamReader reader = new InputStreamReader(exchange.getRequestBody())) {
             JsonObject json = gson.fromJson(reader, JsonObject.class);
+
+            if (json == null || !json.has("username") || !json.has("password") || !json.has("email")) {
+                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Missing required fields: username, password, email\"}");
+                return;
+            }
+
             String username = json.get("username").getAsString();
             String password = json.get("password").getAsString();
             String email = json.get("email").getAsString();

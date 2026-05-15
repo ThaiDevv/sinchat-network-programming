@@ -26,6 +26,12 @@ public class LoginHandler implements HttpHandler {
 
         try (InputStreamReader reader = new InputStreamReader(exchange.getRequestBody())) {
             JsonObject json = gson.fromJson(reader, JsonObject.class);
+
+            if (json == null || !json.has("username") || !json.has("password")) {
+                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Missing username or password\"}");
+                return;
+            }
+
             String username = json.get("username").getAsString();
             String password = json.get("password").getAsString();
 
