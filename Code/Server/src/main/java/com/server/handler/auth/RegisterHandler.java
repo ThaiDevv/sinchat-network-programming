@@ -1,22 +1,21 @@
-package com.server;
+package com.server.handler.auth;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.server.service.AuthService;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.mindrot.jbcrypt.BCrypt;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 
 public class RegisterHandler implements HttpHandler {
     private static final Logger logger = LoggerFactory.getLogger(RegisterHandler.class);
     private final Gson gson = new Gson();
+    private final AuthService authService = new AuthService();
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -32,36 +31,20 @@ public class RegisterHandler implements HttpHandler {
             String email = json.get("email").getAsString();
 
             try {
-                if (register(username, password, email)) {
+                // Gọi logic từ Service
+                if (authService.register(username, password, email)) {
                     sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
                 } else {
-                    sendResponse(exchange, 400,
-                            "{\"status\": \"error\", \"message\": \"Registration failed. No rows affected.\"}");
+                    sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed\"}");
                 }
             } catch (Exception dbEx) {
-                logger.error("Database registration error", dbEx);
-                String errMsg = dbEx.getMessage() != null ? dbEx.getMessage().replace("\"", "'") : "Unknown DB Error";
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"DB Error: " + errMsg + "\"}");
+                logger.error("Registration error", dbEx);
+                String errMsg = dbEx.getMessage() != null ? dbEx.getMessage().replace("\"", "'") : "Unknown Error";
+                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"" + errMsg + "\"}");
             }
         } catch (Exception e) {
             logger.error("Registration processing error", e);
             sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\"}");
-        }
-    }
-
-    public boolean register(String username, String password, String email) throws Exception {
-        // Hash the password using BCrypt
-        String hash = BCrypt.hashpw(password, BCrypt.gensalt());
-
-        String query = "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)";
-        try (Connection conn = Database.getConnection();
-                PreparedStatement pstmt = conn.prepareStatement(query)) {
-            pstmt.setString(1, username);
-            pstmt.setString(2, hash);
-            pstmt.setString(3, email);
-
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
         }
     }
 

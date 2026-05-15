@@ -1,11 +1,11 @@
 package com.server;
 
+import com.server.handler.auth.LoginHandler;
+import com.server.handler.auth.RegisterHandler;
+import com.server.websocket.ChatWebSocket;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
-import org.java_websocket.server.WebSocketServer;
-import org.java_websocket.handshake.ClientHandshake;
-import org.java_websocket.WebSocket;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -50,29 +50,7 @@ public class Main {
         // Since Render typically exposes only one port, we'd normally multiplex, 
         // but for this sample, we'll just show it can be integrated.
         int wsPort = 8887;
-        WebSocketServer wsServer = new WebSocketServer(new InetSocketAddress(wsPort)) {
-            @Override
-            public void onOpen(WebSocket conn, ClientHandshake handshake) {
-                logger.info("WebSocket connection opened: {}", conn.getRemoteSocketAddress());
-                conn.send("server worked! (via websocket)");
-            }
-            @Override
-            public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-                logger.info("WebSocket connection closed: {}", conn.getRemoteSocketAddress());
-            }
-            @Override
-            public void onMessage(WebSocket conn, String message) {
-                logger.debug("Received message: {}", message);
-            }
-            @Override
-            public void onError(WebSocket conn, Exception ex) {
-                logger.error("WebSocket error occurred", ex);
-            }
-            @Override
-            public void onStart() {
-                logger.info("WebSocket Server started on port {}", wsPort);
-            }
-        };
+        ChatWebSocket wsServer = new ChatWebSocket(new InetSocketAddress(wsPort));
         wsServer.start();
     }
 }
