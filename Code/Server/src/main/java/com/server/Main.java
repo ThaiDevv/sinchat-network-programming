@@ -2,6 +2,9 @@ package com.server;
 
 import com.server.handler.auth.LoginHandler;
 import com.server.handler.auth.RegisterHandler;
+import com.server.handler.message.ConversationHandle;
+import com.server.handler.message.GetMessagesHandler;
+import com.server.handler.message.SendMessageHandler;
 import com.server.websocket.ChatWebSocket;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
@@ -41,7 +44,9 @@ public class Main {
 
         server.createContext("/api/login", new LoginHandler());
         server.createContext("/api/register", new RegisterHandler());
-
+        server.createContext("/api/messages", new GetMessagesHandler());
+        server.createContext("/api/messages/send", new SendMessageHandler());
+        server.createContext("/api/conversations/get-or-create", new ConversationHandle());
         server.setExecutor(null); // creates a default executor
         server.start();
         logger.info("HTTP Server started on port {}", port);
