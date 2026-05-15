@@ -25,34 +25,30 @@ public class SendMessageHandler implements HttpHandler {
         }
         try (InputStreamReader reader = new InputStreamReader(exchange.getRequestBody())) {
             JsonObject json = gson.fromJson(reader, JsonObject.class);
-            Long conversationId = (json.has("conversationId") && !json.get("conversationId").isJsonNull()) 
-                                  ? json.get("conversationId").getAsLong() : null;
+            if (!json.has("conversationId") || !json.has("senderId") || !json.has("content")) {
+                sendResponse(exchange, 400, "{\"error\": \"Missing required fields: conversationId, senderId, content\"}");
+                return;
+            }
+
+            long conversationId = json.get("conversationId").getAsLong();
             long senderId = json.get("senderId").getAsLong();
-            
-            Long receiverId = (json.has("receiverId") && !json.get("receiverId").isJsonNull()) 
-                                ? json.get("receiverId").getAsLong() : null;
-            
-            String content = json.has("content") ? json.get("content").getAsString() : "";
-            if (content == null || content.trim().isEmpty()) {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Content cannot be empty\"}");
+            String content = json.get("content").getAsString();
+
+            if (content.trim().isEmpty()) {
+                sendResponse(exchange, 400, "{\"error\": \"Content cannot be empty\"}");
                 return;
             }
 
-            if (conversationId == null && receiverId == null) {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Missing conversationId or receiverId\"}");
-                return;
-            }
+            long messageId = messageService.sendMessage(conversationId, senderId, content);
 
-            long messageId = messageService.sendMessage(conversationId, senderId, receiverId, content);
-            
             if (messageId > 0) {
                 sendResponse(exchange, 200, "{\"status\": \"success\", \"messageId\": " + messageId + "}");
             } else {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Failed to send message\"}");
+                sendResponse(exchange, 400, "{\"error\": \"Failed to send message\"}");
             }
         } catch (Exception e) {
             logger.error("Send message error", e);
-            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error: " + e.getMessage() + "\"}");
+            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\"}");
         }
     }
 

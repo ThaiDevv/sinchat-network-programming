@@ -5,6 +5,8 @@ import com.server.model.Conversation;
 import com.server.model.User;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ConversationRepository {
     public Long findPrivateConversation(long user1Id, long user2Id) {
@@ -46,5 +48,29 @@ public class ConversationRepository {
             pstmt.setLong(2, userId);
             pstmt.executeUpdate();
         }
+    }
+    public List<Conversation> getConversationsByUserId(long userId) {
+        List<Conversation> list = new ArrayList<>();
+        String query = "SELECT c.* FROM conversations c " +
+                "JOIN conversation_members cm ON c.id = cm.conversation_id " +
+                "WHERE cm.user_id = ? ORDER BY c.last_message_at DESC";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new Conversation(
+                            rs.getLong("id"),
+                            Conversation.ConversationType.valueOf(rs.getString("type")),
+                            rs.getString("name"),
+                            rs.getString("avatar_url"),
+                            rs.getLong("created_by"),
+                            rs.getTimestamp("created_at"),
+                            rs.getTimestamp("last_message_at")
+                    ));
+                }
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return list;
     }
 }
