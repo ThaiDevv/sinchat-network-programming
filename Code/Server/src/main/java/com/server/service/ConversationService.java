@@ -9,14 +9,12 @@ public class ConversationService {
 
     public long getOrCreatePrivateConversation(long user1Id, long user2Id) throws SQLException {
         Long existingId = conversationRepo.findPrivateConversation(user1Id, user2Id);
-
         if (existingId != null) {
             return existingId;
         }
         long newId = conversationRepo.createConversation(Conversation.ConversationType.PRIVATE, user1Id);
         conversationRepo.addMember(newId, user1Id);
         conversationRepo.addMember(newId, user2Id);
-
         return newId;
     }
 }
