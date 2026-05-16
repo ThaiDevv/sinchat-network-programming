@@ -4,6 +4,9 @@ import com.server.config.Database;
 import com.server.model.Conversation;
 import com.server.model.User;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -72,6 +75,52 @@ public class ConversationRepository {
             }
         } catch (SQLException e) { e.printStackTrace(); }
         return list;
+    }
+
+    public JsonArray getConversationsWithDetails(long userId) {
+        JsonArray array = new JsonArray();
+        String query = "SELECT c.id, c.type, " +
+                "CASE " +
+                "  WHEN c.type = 'PRIVATE' THEN (" +
+                "    SELECT u.username FROM users u " +
+                "    JOIN conversation_members cm2 ON u.id = cm2.user_id " +
+                "    WHERE cm2.conversation_id = c.id AND cm2.user_id != ? LIMIT 1" +
+                "  ) " +
+                "  ELSE c.name " +
+                "END AS display_name, " +
+                "(SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message, " +
+                "c.last_message_at " +
+                "FROM conversations c " +
+                "JOIN conversation_members cm ON c.id = cm.conversation_id " +
+                "WHERE cm.user_id = ? " +
+                "ORDER BY c.last_message_at DESC";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, userId);
+            pstmt.setLong(2, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    JsonObject obj = new JsonObject();
+                    obj.addProperty("conversationId", rs.getLong("id"));
+                    obj.addProperty("type", rs.getString("type"));
+                    
+                    String displayName = rs.getString("display_name");
+                    obj.addProperty("displayName", displayName != null ? displayName : "Unknown");
+                    
+                    String lastMessage = rs.getString("last_message");
+                    obj.addProperty("lastMessage", lastMessage != null ? lastMessage : "");
+                    
+                    Timestamp ts = rs.getTimestamp("last_message_at");
+                    if (ts != null) obj.addProperty("lastMessageAt", ts.toString());
+                    
+                    array.add(obj);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return array;
     }
 
 
