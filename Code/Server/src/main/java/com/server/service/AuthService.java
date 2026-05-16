@@ -13,14 +13,15 @@ public class AuthService {
     private final UserRepository userRepository = new UserRepository();
 
     /**
-     * Authenticate a user by username and password.
+     * Xác thực user theo username và password.
+     * @return User nếu đăng nhập thành công, null nếu thất bại.
      */
-    public boolean login(String username, String password) {
+    public User login(String username, String password) {
         User user = userRepository.findByUsername(username);
-        if (user != null) {
-            return BCrypt.checkpw(password, user.getPasswordHash());
+        if (user != null && BCrypt.checkpw(password, user.getPasswordHash())) {
+            return user;
         }
-        return false;
+        return null;
     }
 
     /**
