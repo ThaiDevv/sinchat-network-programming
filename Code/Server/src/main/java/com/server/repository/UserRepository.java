@@ -54,6 +54,20 @@ public class UserRepository {
         }
     }
 
+    /** Cập nhật mật khẩu mới */
+    public boolean updatePassword(String username, String newPasswordHash) {
+        String query = "UPDATE users SET password_hash = ? WHERE username = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, newPasswordHash);
+            pstmt.setString(2, username);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            logger.error("Error updating password for user: {}", username, e);
+        }
+        return false;
+    }
+
     /** Cập nhật trạng thái online/offline */
     public void updateOnlineStatus(long userId, boolean isOnline) {
         String query = "UPDATE users SET is_online = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?";

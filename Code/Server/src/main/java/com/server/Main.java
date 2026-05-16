@@ -2,6 +2,7 @@ package com.server;
 
 import com.server.handler.auth.LoginHandler;
 import com.server.handler.auth.RegisterHandler;
+import com.server.handler.auth.ForgotPasswordHandler;
 import com.server.handler.message.ConversationHandle;
 import com.server.handler.message.GetMessagesHandler;
 import com.server.handler.message.GetConversationsHandler;
@@ -45,6 +46,8 @@ public class Main {
 
         server.createContext("/api/login", new LoginHandler());
         server.createContext("/api/register", new RegisterHandler());
+        server.createContext("/api/forgotpwd", new ForgotPasswordHandler());
+
         server.createContext("/api/messages", new GetMessagesHandler());
         server.createContext("/api/messages/send", new SendMessageHandler());
         server.createContext("/api/conversations/get-or-create", new ConversationHandle());
