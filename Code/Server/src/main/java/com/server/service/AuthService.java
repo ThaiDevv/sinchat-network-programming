@@ -15,12 +15,12 @@ public class AuthService {
     /**
      * Authenticate a user by username and password.
      */
-    public boolean login(String username, String password) {
+    public User login(String username, String password) {
         User user = userRepository.findByUsername(username);
-        if (user != null) {
-            return BCrypt.checkpw(password, user.getPasswordHash());
+        if (user != null && BCrypt.checkpw(password, user.getPasswordHash())) {
+            return user;
         }
-        return false;
+        return null;
     }
 
     /**

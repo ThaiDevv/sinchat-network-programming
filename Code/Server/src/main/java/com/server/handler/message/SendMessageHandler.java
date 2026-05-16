@@ -3,6 +3,7 @@ package com.server.handler.message;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.server.service.MessageService;
+import com.server.websocket.ChatWebSocket;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.slf4j.Logger;
@@ -42,6 +43,12 @@ public class SendMessageHandler implements HttpHandler {
             long messageId = messageService.sendMessage(conversationId, senderId, content);
 
             if (messageId > 0) {
+                ChatWebSocket wsServer = ChatWebSocket.getInstance();
+                if (wsServer != null) {
+                    String createdAt = new java.sql.Timestamp(System.currentTimeMillis()).toString();
+                    wsServer.broadcastNewMessage(messageId, conversationId, senderId, content, createdAt);
+                }
+
                 sendResponse(exchange, 200, "{\"status\": \"success\", \"messageId\": " + messageId + "}");
             } else {
                 sendResponse(exchange, 400, "{\"error\": \"Failed to send message\"}");

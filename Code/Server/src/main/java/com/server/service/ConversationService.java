@@ -17,4 +17,8 @@ public class ConversationService {
         conversationRepo.addMember(newId, user2Id);
         return newId;
     }
+
+    public com.google.gson.JsonArray getConversationsWithDetails(long userId) {
+        return conversationRepo.getConversationsWithDetails(userId);
+    }
 }

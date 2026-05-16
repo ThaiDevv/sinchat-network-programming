@@ -63,7 +63,8 @@ public class LoginView {
                     () -> apiClient.login(account, password),
                     response -> {
                         if (response.isSuccess()) {
-                            ChatView chatView = new ChatView(stage);
+                            long userId = response.userId() != null ? response.userId() : 0;
+                            ChatView chatView = new ChatView(stage, userId);
                             stage.setScene(chatView.createScene());
                             return;
                         }
@@ -528,8 +529,9 @@ public class LoginView {
                         return new ChatApiClient.ApiResponse(
                                 0,
                                 "error",
-                                "Kh\u00f4ng k\u1ebft n\u1ed1i \u0111\u01b0\u1ee3c server. Ki\u1ec3m tra API base URL ho\u1eb7c server backend.",
+                                "Không kết nối được server. Kiểm tra API base URL hoặc server backend.",
                                 "",
+                                null,
                                 exception.getMessage()
                         );
                     }

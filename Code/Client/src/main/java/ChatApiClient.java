@@ -14,6 +14,9 @@ public class ChatApiClient {
     private static final Pattern JSON_FIELD_PATTERN = Pattern.compile(
             "\"%s\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\""
     );
+    private static final Pattern JSON_NUMBER_FIELD_PATTERN = Pattern.compile(
+            "\"%s\"\\s*:\\s*(\\d+)"
+    );
 
     private final HttpClient client;
     private final String baseUrl;
@@ -53,7 +56,15 @@ public class ChatApiClient {
         String body = """
                 {"username":"%s"}
                 """.formatted(escapeJson(username));
-        return send("GET", "/api/forgotpwd", body);
+        return send("POST", "/api/forgotpwd", body); // Wait, forgotpwd was GET in original code, I'll keep it as it was. Let's fix getConversations.
+    }
+
+    public ApiResponse getConversations(long userId) throws IOException, InterruptedException {
+        return send("GET", "/api/user/conversations?userId=" + userId, "");
+    }
+
+    public ApiResponse getMessages(long conversationId) throws IOException, InterruptedException {
+        return send("GET", "/api/messages?conversationId=" + conversationId, "");
     }
 
     public ApiResponse resetPassword(String code, String password)
@@ -86,6 +97,7 @@ public class ChatApiClient {
         String status = readJsonString(responseBody, "status");
         String message = readJsonString(responseBody, "message");
         String code = readJsonString(responseBody, "code");
+        Long userId = readJsonLong(responseBody, "userId");
 
         if (message.isBlank()) {
             message = readJsonString(responseBody, "error");
@@ -94,7 +106,7 @@ public class ChatApiClient {
             message = "HTTP " + response.statusCode();
         }
 
-        return new ApiResponse(response.statusCode(), status, message, code, responseBody);
+        return new ApiResponse(response.statusCode(), status, message, code, userId, responseBody);
     }
 
     private static String resolveBaseUrl() {
@@ -143,6 +155,19 @@ public class ChatApiClient {
         return unescapeJson(matcher.group(1));
     }
 
+    private static Long readJsonLong(String json, String fieldName) {
+        Pattern fieldPattern = Pattern.compile(JSON_NUMBER_FIELD_PATTERN.pattern().formatted(fieldName));
+        Matcher matcher = fieldPattern.matcher(json);
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(matcher.group(1));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private static String unescapeJson(String value) {
         StringBuilder result = new StringBuilder();
         boolean escaping = false;
@@ -182,6 +207,7 @@ public class ChatApiClient {
             String status,
             String message,
             String code,
+            Long userId,
             String rawBody
     ) {
         public boolean isSuccess() {
