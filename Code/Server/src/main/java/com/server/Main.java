@@ -2,6 +2,7 @@ package com.server;
 
 import com.server.handler.auth.LoginHandler;
 import com.server.handler.auth.RegisterHandler;
+import com.server.handler.changeavatar.AvatarHandler;
 import com.server.handler.auth.ForgotPasswordHandler;
 import com.server.handler.message.ConversationHandle;
 import com.server.handler.message.GetMessagesHandler;
@@ -15,6 +16,9 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.github.cdimascio.dotenv.Dotenv;
@@ -51,6 +55,27 @@ public class Main {
         server.createContext("/api/messages", new GetMessagesHandler());
         server.createContext("/api/messages/send", new SendMessageHandler());
         server.createContext("/api/conversations/get-or-create", new ConversationHandle());
+        server.createContext("/api/change-avatar", new AvatarHandler());
+
+        // Phục vụ file ảnh tĩnh từ thư mục uploads/
+        server.createContext("/uploads/", exchange -> {
+            String uriPath = exchange.getRequestURI().getPath();
+            Path filePath = Paths.get(uriPath.substring(1)); // bỏ dấu / đầu
+
+            if (!Files.exists(filePath) || Files.isDirectory(filePath)) {
+                byte[] notFound = "Not Found".getBytes();
+                exchange.sendResponseHeaders(404, notFound.length);
+                try (OutputStream os = exchange.getResponseBody()) { os.write(notFound); }
+                return;
+            }
+
+            byte[] fileBytes = Files.readAllBytes(filePath);
+            String ct = Files.probeContentType(filePath);
+            exchange.getResponseHeaders().set("Content-Type", ct != null ? ct : "application/octet-stream");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.sendResponseHeaders(200, fileBytes.length);
+            try (OutputStream os = exchange.getResponseBody()) { os.write(fileBytes); }
+        });
         server.createContext("/api/user/conversations", new GetConversationsHandler());
         server.setExecutor(null); // creates a default executor
         server.start();

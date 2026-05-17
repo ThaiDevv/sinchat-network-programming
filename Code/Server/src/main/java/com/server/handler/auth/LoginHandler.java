@@ -37,6 +37,13 @@ public class LoginHandler implements HttpHandler {
             String password = json.get("password").getAsString();
 
             // Gọi logic từ Service
+            com.server.model.User user = authService.login(username, password);
+            if (user != null) {
+                String body = String.format(
+                    "{\"status\": \"success\", \"userId\": %d, \"username\": \"%s\"}",
+                    user.getId(), user.getUsername()
+                );
+                sendResponse(exchange, 200, body);
             User user = authService.login(username, password);
             if (user != null) {
                 sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Login successful\", \"userId\": " + user.getId() + "}");
