@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 
 public class AvatarService {
     private static final Logger logger = LoggerFactory.getLogger(AvatarService.class);

@@ -3,7 +3,6 @@ package com.server.websocket;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.server.model.Message;
 import com.server.repository.ConversationRepository;
 import com.server.service.MessageService;
 import org.java_websocket.WebSocket;

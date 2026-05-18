@@ -3,30 +3,18 @@ package com.server.service;
 import com.server.model.User;
 import com.server.repository.UserRepository;
 import org.mindrot.jbcrypt.BCrypt;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.security.SecureRandom;
+import java.util.Random;
 
 public class AuthService {
-    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
-    
-    private static class ResetCodeInfo {
-        final String username;
-        final long expiryTime;
-        ResetCodeInfo(String username, long expiryTime) {
-            this.username = username;
-            this.expiryTime = expiryTime;
-        }
-    }
-    
-    private static final ConcurrentHashMap<String, ResetCodeInfo> passwordResetCodes = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, String> passwordResetCodes = new ConcurrentHashMap<>();
     private final UserRepository userRepository = new UserRepository();
 
     /**
      * Xác thực user theo username và password.
+     * 
      * @return User nếu đăng nhập thành công, null nếu thất bại.
      */
     public User login(String username, String password) {
@@ -57,15 +45,14 @@ public class AuthService {
         if (user == null) {
             return null; // User not found
         }
-        
-        // Generate 6-digit code using SecureRandom
-        SecureRandom rand = new SecureRandom();
+
+        // Generate 6-digit code
+        Random rand = new Random();
         String code = String.format("%06d", rand.nextInt(1000000));
-        
-        // Store in map with a 10-minute expiration
-        long expiry = System.currentTimeMillis() + 10 * 60 * 1000;
-        passwordResetCodes.put(code, new ResetCodeInfo(username, expiry));
-        
+
+        // Store in map
+        passwordResetCodes.put(code, username);
+
         return code;
     }
 
@@ -73,17 +60,14 @@ public class AuthService {
      * Reset password using a valid code.
      */
     public boolean resetPassword(String code, String newPassword) {
-        ResetCodeInfo info = passwordResetCodes.get(code);
-        if (info == null || System.currentTimeMillis() > info.expiryTime) {
-            passwordResetCodes.remove(code); // cleanup expired code
+        String username = passwordResetCodes.get(code);
+        if (username == null) {
             return false; // Code not found or expired
         }
-        
-        String username = info.username;
-        
+
         // Hash new password
         String newHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
-        
+
         // Update DB
         boolean success = userRepository.updatePassword(username, newHash);
         if (success) {

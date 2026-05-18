@@ -1,6 +1,5 @@
 package com.server.model;
 
-import java.sql.Timestamp;
 
 public class Friendship {
     // Enum  `status` ENUM('PENDING','ACCEPTED','BLOCKED')

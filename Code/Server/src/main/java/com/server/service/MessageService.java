@@ -2,14 +2,10 @@ package com.server.service;
 
 import com.server.model.Message;
 import com.server.repository.MessageRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.sql.SQLException;
 import java.util.List;
 
 public class MessageService {
-    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
     private final MessageRepository messageRepository = new MessageRepository();
 
 

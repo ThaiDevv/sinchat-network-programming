@@ -1,7 +1,6 @@
 package com.server.handler.message;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.server.model.Message;
 import com.server.service.MessageService;
