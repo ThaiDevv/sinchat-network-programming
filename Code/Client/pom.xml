@@ -5,9 +5,9 @@
   <artifactId>sinchat-client</artifactId>
   <version>1.0-SNAPSHOT</version>
   <properties>
-    <maven.compiler.source>21</maven.compiler.source>
-    <maven.compiler.target>21</maven.compiler.target>
-    <javafx.version>21</javafx.version>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
+    <javafx.version>25</javafx.version>
   </properties>
   <dependencies>
     <dependency>
@@ -20,12 +20,7 @@
       <artifactId>javafx-fxml</artifactId>
       <version>${javafx.version}</version>
     </dependency>
-    <!-- WebSocket client để kết nối realtime với server -->
-    <dependency>
-      <groupId>org.java-websocket</groupId>
-      <artifactId>Java-WebSocket</artifactId>
-      <version>1.5.7</version>
-    </dependency>
+
     <!-- JSON parsing -->
     <dependency>
       <groupId>com.google.code.gson</groupId>

@@ -1,16 +1,13 @@
 package com.server.handler.auth;
 
+import com.google.gson.JsonObject;
 import com.server.service.AuthService;
-import com.sun.net.httpserver.Headers;
-import com.sun.net.httpserver.HttpExchange;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.*;
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ForgotPasswordHandlerTest {
@@ -27,85 +24,68 @@ class ForgotPasswordHandlerTest {
         field.set(handler, mockAuthService);
     }
 
-    private HttpExchange createMockExchange(String method, String body) {
-        HttpExchange exchange = mock(HttpExchange.class);
-        when(exchange.getRequestMethod()).thenReturn(method);
-        when(exchange.getRequestBody()).thenReturn(
-                new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
-        when(exchange.getRequestHeaders()).thenReturn(new Headers());
-        when(exchange.getResponseHeaders()).thenReturn(new Headers());
-        when(exchange.getResponseBody()).thenReturn(new ByteArrayOutputStream());
-        return exchange;
-    }
-
     @Test
-    void testMethodNotAllowed() throws Exception {
-        HttpExchange ex = createMockExchange("DELETE", "");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(405), anyLong());
-    }
-
-    @Test
-    void testPostRequestCode() throws Exception {
+    void testRequestCodeSuccess() throws Exception {
         when(mockAuthService.generateResetCode("alice")).thenReturn("123456");
-        HttpExchange ex = createMockExchange("POST", "{\"username\":\"alice\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(200), anyLong());
+
+        JsonObject req = new JsonObject();
+        req.addProperty("username", "alice");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertEquals("123456", resp.get("code").getAsString());
     }
 
     @Test
-    void testPostRequestCodeUserNotFound() throws Exception {
+    void testRequestCodeUserNotFound() throws Exception {
         when(mockAuthService.generateResetCode("unknown")).thenReturn(null);
-        HttpExchange ex = createMockExchange("POST", "{\"username\":\"unknown\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(404), anyLong());
+
+        JsonObject req = new JsonObject();
+        req.addProperty("username", "unknown");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Account not found"));
     }
 
     @Test
-    void testPostResetPasswordSuccess() throws Exception {
+    void testResetPasswordSuccess() throws Exception {
         when(mockAuthService.resetPassword("123456", "newpw")).thenReturn(true);
-        HttpExchange ex = createMockExchange("POST",
-                "{\"code\":\"123456\",\"password\":\"newpw\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(200), anyLong());
+
+        JsonObject req = new JsonObject();
+        req.addProperty("code", "123456");
+        req.addProperty("password", "newpw");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("successful"));
     }
 
     @Test
-    void testPostResetPasswordInvalidCode() throws Exception {
+    void testResetPasswordInvalidCode() throws Exception {
         when(mockAuthService.resetPassword("000000", "pw")).thenReturn(false);
-        HttpExchange ex = createMockExchange("POST",
-                "{\"code\":\"000000\",\"password\":\"pw\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(400), anyLong());
+
+        JsonObject req = new JsonObject();
+        req.addProperty("code", "000000");
+        req.addProperty("password", "pw");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Invalid or expired"));
     }
 
     @Test
-    void testPostMissingFields() throws Exception {
-        HttpExchange ex = createMockExchange("POST", "{\"other\":\"value\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(400), anyLong());
-    }
+    void testMissingFields() throws Exception {
+        JsonObject req = new JsonObject();
+        req.addProperty("other", "value");
 
-    @Test
-    void testPostEmptyBody() throws Exception {
-        HttpExchange ex = createMockExchange("POST", "");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(anyInt(), anyLong());
-    }
-
-    @Test
-    void testGetRequestCode() throws Exception {
-        when(mockAuthService.generateResetCode("bob")).thenReturn("654321");
-        HttpExchange ex = createMockExchange("GET", "{\"username\":\"bob\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(200), anyLong());
-    }
-
-    @Test
-    void testGetRequestCodeNotFound() throws Exception {
-        when(mockAuthService.generateResetCode("nope")).thenReturn(null);
-        HttpExchange ex = createMockExchange("GET", "{\"username\":\"nope\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(404), anyLong());
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Missing required info"));
     }
 }

@@ -1,124 +1,109 @@
 package com.server.integration;
 
-import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpExchange;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.server.tcp.TcpServer;
 import org.junit.jupiter.api.*;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.io.*;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Integration tests that spin up a real HttpServer with the /api/test endpoint
- * and verify real HTTP connections work correctly — mimicking how the client connects.
+ * Integration tests that spin up a real TcpServer on an ephemeral port
+ * and verify real TCP connections, routing, and concurrent socket handling works correctly.
  */
 class EndpointIntegrationTest {
 
-    private static HttpServer server;
+    private static TcpServer server;
     private static int port;
-    private static HttpClient client;
 
     @BeforeAll
-    static void startServer() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(0), 0); // random port
-        port = server.getAddress().getPort();
-
-        // /api/test — simple health check (same as Main.java)
-        server.createContext("/api/test", exchange -> {
-            String response = "server worked!";
-            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(200, bytes.length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(bytes);
-            }
-        });
-
-        server.setExecutor(null);
+    static void startServer() {
+        server = new TcpServer(0); // ephemeral port
         server.start();
-
-        client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+        
+        // Wait a brief moment for the server thread to bind
+        int retries = 0;
+        while (server.getPort() == 0 && retries < 10) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            retries++;
+        }
+        port = server.getPort();
+        assertTrue(port > 0, "Server failed to bind to an ephemeral port");
     }
 
     @AfterAll
     static void stopServer() {
-        server.stop(0);
+        if (server != null) {
+            server.stop();
+        }
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + port;
-    }
-
-    @Test
-    void testServerHealthEndpoint() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + "/api/test"))
-                .GET()
-                .build();
-
-        HttpResponse<String> response = client.send(request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-
-        assertEquals(200, response.statusCode());
-        assertEquals("server worked!", response.body());
-    }
-
-    @Test
-    void testServerHealthEndpointWithPost() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + "/api/test"))
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .build();
-
-        HttpResponse<String> response = client.send(request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-
-        // The /api/test handler responds to all methods with 200
-        assertEquals(200, response.statusCode());
-        assertEquals("server worked!", response.body());
+    private JsonObject sendTcpRequest(JsonObject requestJson) throws IOException {
+        try (Socket socket = new Socket("localhost", port);
+             PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+            
+            out.println(requestJson.toString());
+            String responseLine = in.readLine();
+            if (responseLine == null) {
+                return null;
+            }
+            return JsonParser.parseString(responseLine).getAsJsonObject();
+        }
     }
 
     @Test
-    void testNonExistentEndpointReturns404() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + "/api/nonexistent"))
-                .GET()
-                .build();
+    void testServerUnknownActionReturnsError() throws Exception {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "NON_EXISTENT");
+        req.addProperty("requestId", "123");
 
-        HttpResponse<String> response = client.send(request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-
-        assertEquals(404, response.statusCode());
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Unknown action"));
     }
 
     @Test
-    void testMultipleConcurrentRequests() throws Exception {
-        int count = 10;
-        var futures = new java.util.concurrent.CompletableFuture[count];
+    void testServerMissingActionFieldReturnsError() throws Exception {
+        JsonObject req = new JsonObject();
+        req.addProperty("requestId", "123");
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Missing action"));
+    }
+
+    @Test
+    void testMultipleConcurrentTcpConnections() throws Exception {
+        int count = 15;
+        CompletableFuture<?>[] futures = new CompletableFuture[count];
 
         for (int i = 0; i < count; i++) {
-            futures[i] = client.sendAsync(
-                    HttpRequest.newBuilder()
-                            .uri(URI.create(baseUrl() + "/api/test"))
-                            .GET()
-                            .build(),
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
-            ).thenAccept(resp -> {
-                assertEquals(200, resp.statusCode());
-                assertEquals("server worked!", resp.body());
+            futures[i] = CompletableFuture.runAsync(() -> {
+                try {
+                    JsonObject req = new JsonObject();
+                    req.addProperty("action", "NON_EXISTENT");
+
+                    JsonObject resp = sendTcpRequest(req);
+                    assertNotNull(resp);
+                    assertEquals("error", resp.get("status").getAsString());
+                } catch (IOException e) {
+                    fail("TCP connection failed: " + e.getMessage());
+                }
             });
         }
 
-        java.util.concurrent.CompletableFuture.allOf(futures).join();
+        CompletableFuture.allOf(futures).join();
     }
 }

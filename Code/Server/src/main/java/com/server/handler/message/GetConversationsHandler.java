@@ -1,57 +1,36 @@
 package com.server.handler.message;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.server.service.ConversationService;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
+import com.server.tcp.ClientConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-
-public class GetConversationsHandler implements HttpHandler {
+/**
+ * TCP handler for retrieving a user's conversations.
+ */
+public class GetConversationsHandler {
+    private static final Logger logger = LoggerFactory.getLogger(GetConversationsHandler.class);
     private final ConversationService conversationService = new ConversationService();
 
-    @Override
-    public void handle(HttpExchange exchange) throws IOException {
-        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1);
-            return;
-        }
-
+    public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
+        JsonObject response = new JsonObject();
         try {
-            // Extract userId from query parameter: ?userId=1
-            String query = exchange.getRequestURI().getQuery();
-            long userId = -1;
-            if (query != null && query.contains("userId=")) {
-                String[] params = query.split("&");
-                for (String param : params) {
-                    if (param.startsWith("userId=")) {
-                        userId = Long.parseLong(param.substring("userId=".length()));
-                        break;
-                    }
-                }
+            if (!request.has("userId")) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Missing userId");
+                return response;
             }
-
-            if (userId == -1) {
-                sendResponse(exchange, 400, "{\"error\": \"Missing or invalid userId\"}");
-                return;
-            }
-
-            JsonArray array = conversationService.getConversationsWithDetails(userId);
-            String response = "{\"status\": \"success\", \"data\": " + array.toString() + "}";
-            sendResponse(exchange, 200, response);
-            
+            long userId = request.get("userId").getAsLong();
+            JsonArray convs = conversationService.getConversationsWithDetails(userId);
+            response.addProperty("status", "success");
+            response.add("conversations", convs);
         } catch (Exception e) {
-            e.printStackTrace();
-            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\"}");
+            logger.error("Get conversations error", e);
+            response.addProperty("status", "error");
+            response.addProperty("message", "Internal Server Error");
         }
-    }
-
-    private void sendResponse(HttpExchange exchange, int status, String body) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        byte[] bytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.getResponseBody().close();
+        return response;
     }
 }

@@ -13,7 +13,7 @@ public class LoginView {
 
     private final BorderPane root;
     private final Stage stage;
-    private final ChatApiClient apiClient = new ChatApiClient();
+    private final ChatTcpClient apiClient = ChatTcpClient.getInstance();
 
     private String resetCode;
     private String resetAccount;
@@ -516,7 +516,7 @@ public class LoginView {
             Label message,
             String loadingText,
             ApiCall apiCall,
-            Consumer<ChatApiClient.ApiResponse> onComplete
+            Consumer<ChatTcpClient.ApiResponse> onComplete
     ) {
         actionButton.setDisable(true);
         setMessage(message, loadingText, "#aaa");
@@ -526,7 +526,7 @@ public class LoginView {
                     try {
                         return apiCall.execute();
                     } catch (Exception exception) {
-                        return new ChatApiClient.ApiResponse(
+                        return new ChatTcpClient.ApiResponse(
                                 0,
                                 "error",
                                 "Không kết nối được server. Kiểm tra API base URL hoặc server backend.",
@@ -544,7 +544,7 @@ public class LoginView {
 
     @FunctionalInterface
     private interface ApiCall {
-        ChatApiClient.ApiResponse execute() throws Exception;
+        ChatTcpClient.ApiResponse execute() throws Exception;
     }
 
     public Scene createScene() {

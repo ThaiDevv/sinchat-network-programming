@@ -1,5 +1,8 @@
 package com.server.integration;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.server.handler.message.GetMessagesHandler;
 import com.server.handler.message.SendMessageHandler;
 import com.server.handler.message.ConversationHandle;
@@ -7,21 +10,15 @@ import com.server.handler.message.GetConversationsHandler;
 import com.server.service.MessageService;
 import com.server.service.ConversationService;
 import com.server.model.Message;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.sun.net.httpserver.HttpServer;
+import com.server.tcp.TcpServer;
+import com.server.tcp.Router;
 import org.junit.jupiter.api.*;
 
-import java.io.IOException;
+import java.io.*;
 import java.lang.reflect.Field;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -30,14 +27,14 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Integration tests for message/conversation endpoints.
- * These test the same HTTP paths the client's ChatApiClient calls.
+ * Integration tests for message/conversation TCP actions.
+ * Spins up a real TcpServer with real handlers but mocked services
+ * to test the full TCP request/response JSON cycle.
  */
 class MessageEndpointIntegrationTest {
 
-    private static HttpServer server;
+    private static TcpServer server;
     private static int port;
-    private static HttpClient client;
     private static MessageService mockMsgService;
     private static ConversationService mockConvService;
 
@@ -46,36 +43,41 @@ class MessageEndpointIntegrationTest {
         mockMsgService = mock(MessageService.class);
         mockConvService = mock(ConversationService.class);
 
-        GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
+        GetMessagesHandler getMessagesHandler = (GetMessagesHandler) getStaticField(Router.class, "getMessagesHandler");
+        ConversationHandle conversationHandle = (ConversationHandle) getStaticField(Router.class, "conversationHandle");
+        GetConversationsHandler getConversationsHandler = (GetConversationsHandler) getStaticField(Router.class, "getConversationsHandler");
+
+        // Subclass SendMessageHandler to avoid database dependency
+        SendMessageHandler sendMessageHandler = new SendMessageHandler() {
+            @Override
+            protected java.util.List<Long> getMemberIds(long conversationId) {
+                return java.util.Arrays.asList(1L, 2L);
+            }
+        };
+
         injectField(getMessagesHandler, "messageService", mockMsgService);
-
-        SendMessageHandler sendMessageHandler = new SendMessageHandler();
         injectField(sendMessageHandler, "messageService", mockMsgService);
+        injectField(Router.class, "sendMessageHandler", sendMessageHandler); // Inject custom handler into Router
 
-        ConversationHandle convHandle = new ConversationHandle();
-        injectField(convHandle, "conversationService", mockConvService);
+        injectField(conversationHandle, "conversationService", mockConvService);
+        injectField(getConversationsHandler, "conversationService", mockConvService);
 
-        GetConversationsHandler getConvHandler = new GetConversationsHandler();
-        injectField(getConvHandler, "conversationService", mockConvService);
-
-        server = HttpServer.create(new InetSocketAddress(0), 0);
-        port = server.getAddress().getPort();
-
-        server.createContext("/api/messages", getMessagesHandler);
-        server.createContext("/api/messages/send", sendMessageHandler);
-        server.createContext("/api/conversations/get-or-create", convHandle);
-        server.createContext("/api/user/conversations", getConvHandler);
-        server.setExecutor(null);
+        server = new TcpServer(0); // Ephemeral port
         server.start();
 
-        client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+        int retries = 0;
+        while (server.getPort() == 0 && retries < 10) {
+            Thread.sleep(100);
+            retries++;
+        }
+        port = server.getPort();
     }
 
     @AfterAll
     static void stopServer() {
-        server.stop(0);
+        if (server != null) {
+            server.stop();
+        }
     }
 
     @BeforeEach
@@ -83,34 +85,51 @@ class MessageEndpointIntegrationTest {
         reset(mockMsgService, mockConvService);
     }
 
+    private static Object getStaticField(Class<?> clazz, String fieldName) throws Exception {
+        Field field = clazz.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(null);
+    }
+
     private static void injectField(Object target, String fieldName, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(fieldName);
+        Class<?> clazz = target.getClass();
+        Field field = null;
+        while (clazz != null) {
+            try {
+                field = clazz.getDeclaredField(fieldName);
+                break;
+            } catch (NoSuchFieldException e) {
+                clazz = clazz.getSuperclass();
+            }
+        }
+        if (field == null) {
+            throw new NoSuchFieldException(fieldName);
+        }
         field.setAccessible(true);
         field.set(target, value);
     }
 
-    private String baseUrl() {
-        return "http://localhost:" + port;
+    private static void injectField(Class<?> clazz, String fieldName, Object value) throws Exception {
+        Field field = clazz.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(null, value);
     }
 
-    private HttpResponse<String> sendPost(String path, String body) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    private JsonObject sendTcpRequest(JsonObject requestJson) throws IOException {
+        try (Socket socket = new Socket("localhost", port);
+             PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+            
+            out.println(requestJson.toString());
+            String responseLine = in.readLine();
+            if (responseLine == null) {
+                return null;
+            }
+            return JsonParser.parseString(responseLine).getAsJsonObject();
+        }
     }
 
-    private HttpResponse<String> sendGet(String path) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + path))
-                .GET()
-                .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    }
-
-    // ──────────────── GET /api/messages ────────────────
+    // ──────────────── GET_MESSAGES Action ────────────────
 
     @Test
     void getMessagesSuccess() throws Exception {
@@ -120,134 +139,117 @@ class MessageEndpointIntegrationTest {
                 new Message(2L, 10L, 2L, Message.MessageType.TEXT, "Hi back", now)
         ));
 
-        HttpResponse<String> resp = sendGet("/api/messages?conversationId=10");
-        assertEquals(200, resp.statusCode());
-        assertTrue(resp.body().contains("success"));
-        assertTrue(resp.body().contains("Hello"));
-        assertTrue(resp.body().contains("Hi back"));
-        assertTrue(resp.body().contains("\"count\":2"));
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_MESSAGES");
+        req.addProperty("conversationId", 10);
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertTrue(resp.toString().contains("Hello"));
+        assertTrue(resp.toString().contains("Hi back"));
+        assertEquals(2, resp.get("count").getAsInt());
     }
 
     @Test
     void getMessagesEmptyConversation() throws Exception {
         when(mockMsgService.getMessages(99L)).thenReturn(Collections.emptyList());
 
-        HttpResponse<String> resp = sendGet("/api/messages?conversationId=99");
-        assertEquals(200, resp.statusCode());
-        assertTrue(resp.body().contains("\"count\":0"));
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_MESSAGES");
+        req.addProperty("conversationId", 99);
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertEquals(0, resp.get("count").getAsInt());
     }
 
     @Test
     void getMessagesMissingConversationId() throws Exception {
-        HttpResponse<String> resp = sendGet("/api/messages");
-        assertEquals(400, resp.statusCode());
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_MESSAGES");
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Missing"));
     }
 
-    @Test
-    void getMessagesInvalidConversationId() throws Exception {
-        HttpResponse<String> resp = sendGet("/api/messages?conversationId=abc");
-        assertEquals(400, resp.statusCode());
-    }
-
-    @Test
-    void getMessagesPostMethodNotAllowed() throws Exception {
-        HttpResponse<String> resp = sendPost("/api/messages", "{}");
-        assertEquals(405, resp.statusCode());
-    }
-
-    @Test
-    void getMessagesCorsOptions() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + "/api/messages"))
-                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
-                .build();
-        HttpResponse<String> resp = client.send(request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        assertEquals(204, resp.statusCode());
-    }
-
-    // ──────────────── POST /api/messages/send ────────────────
+    // ──────────────── SEND_MESSAGE Action ────────────────
 
     @Test
     void sendMessageSuccess() throws Exception {
         when(mockMsgService.sendMessage(1L, 5L, "Hello world")).thenReturn(100L);
 
-        HttpResponse<String> resp = sendPost("/api/messages/send",
-                "{\"conversationId\":1,\"senderId\":5,\"content\":\"Hello world\"}");
-        assertEquals(200, resp.statusCode());
-        assertTrue(resp.body().contains("success"));
-        assertTrue(resp.body().contains("100"));
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SEND_MESSAGE");
+        req.addProperty("conversationId", 1);
+        req.addProperty("senderId", 5);
+        req.addProperty("content", "Hello world");
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertEquals(100, resp.get("messageId").getAsLong());
     }
 
     @Test
     void sendMessageMissingFields() throws Exception {
-        HttpResponse<String> resp = sendPost("/api/messages/send",
-                "{\"conversationId\":1}");
-        assertEquals(400, resp.statusCode());
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SEND_MESSAGE");
+        req.addProperty("conversationId", 1);
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Missing"));
     }
 
     @Test
     void sendMessageEmptyContent() throws Exception {
-        HttpResponse<String> resp = sendPost("/api/messages/send",
-                "{\"conversationId\":1,\"senderId\":5,\"content\":\"   \"}");
-        assertEquals(400, resp.statusCode());
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SEND_MESSAGE");
+        req.addProperty("conversationId", 1);
+        req.addProperty("senderId", 5);
+        req.addProperty("content", "   ");
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Message content is required"));
     }
 
-    @Test
-    void sendMessageGetMethodNotAllowed() throws Exception {
-        HttpResponse<String> resp = sendGet("/api/messages/send");
-        assertEquals(405, resp.statusCode());
-    }
-
-    @Test
-    void sendMessageCorsOptions() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + "/api/messages/send"))
-                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
-                .build();
-        HttpResponse<String> resp = client.send(request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        assertEquals(204, resp.statusCode());
-    }
-
-    // ──────────── POST /api/conversations/get-or-create ────────────
+    // ──────────── GET_OR_CREATE_CONVERSATION Action ────────────
 
     @Test
     void getOrCreateConversationSuccess() throws Exception {
         when(mockConvService.getOrCreatePrivateConversation(1L, 2L)).thenReturn(42L);
 
-        HttpResponse<String> resp = sendPost("/api/conversations/get-or-create",
-                "{\"user1Id\":1,\"user2Id\":2}");
-        assertEquals(200, resp.statusCode());
-        assertTrue(resp.body().contains("42"));
-        assertTrue(resp.body().contains("success"));
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_OR_CREATE_CONVERSATION");
+        req.addProperty("user1Id", 1);
+        req.addProperty("user2Id", 2);
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertEquals(42, resp.get("conversationId").getAsLong());
     }
 
     @Test
     void getOrCreateConversationMissingFields() throws Exception {
-        HttpResponse<String> resp = sendPost("/api/conversations/get-or-create",
-                "{\"user1Id\":1}");
-        assertEquals(400, resp.statusCode());
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_OR_CREATE_CONVERSATION");
+        req.addProperty("user1Id", 1);
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Missing"));
     }
 
-    @Test
-    void getOrCreateConversationGetMethodNotAllowed() throws Exception {
-        HttpResponse<String> resp = sendGet("/api/conversations/get-or-create");
-        assertEquals(405, resp.statusCode());
-    }
-
-    @Test
-    void getOrCreateConversationCorsOptions() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl() + "/api/conversations/get-or-create"))
-                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
-                .build();
-        HttpResponse<String> resp = client.send(request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        assertEquals(204, resp.statusCode());
-    }
-
-    // ──────────── GET /api/user/conversations ────────────
+    // ──────────── GET_USER_CONVERSATIONS Action ────────────
 
     @Test
     void getUserConversationsSuccess() throws Exception {
@@ -260,32 +262,40 @@ class MessageEndpointIntegrationTest {
         array.add(conv);
         when(mockConvService.getConversationsWithDetails(5L)).thenReturn(array);
 
-        HttpResponse<String> resp = sendGet("/api/user/conversations?userId=5");
-        assertEquals(200, resp.statusCode());
-        assertTrue(resp.body().contains("success"));
-        assertTrue(resp.body().contains("Alice"));
-        assertTrue(resp.body().contains("Hey!"));
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_USER_CONVERSATIONS");
+        req.addProperty("userId", 5);
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertTrue(resp.toString().contains("Alice"));
+        assertTrue(resp.toString().contains("Hey!"));
     }
 
     @Test
     void getUserConversationsEmpty() throws Exception {
         when(mockConvService.getConversationsWithDetails(99L)).thenReturn(new JsonArray());
 
-        HttpResponse<String> resp = sendGet("/api/user/conversations?userId=99");
-        assertEquals(200, resp.statusCode());
-        assertTrue(resp.body().contains("success"));
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_USER_CONVERSATIONS");
+        req.addProperty("userId", 99);
+
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertEquals(0, resp.get("conversations").getAsJsonArray().size());
     }
 
     @Test
     void getUserConversationsMissingUserId() throws Exception {
-        HttpResponse<String> resp = sendGet("/api/user/conversations");
-        assertEquals(400, resp.statusCode());
-    }
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_USER_CONVERSATIONS");
 
-    @Test
-    void getUserConversationsPostMethodNotAllowed() throws Exception {
-        HttpResponse<String> resp = sendPost("/api/user/conversations", "{}");
-        assertEquals(405, resp.statusCode());
+        JsonObject resp = sendTcpRequest(req);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Missing"));
     }
 
     // ──────────── Full Client Message Flow ────────────
@@ -294,26 +304,42 @@ class MessageEndpointIntegrationTest {
     void fullSendAndRetrieveMessageFlow() throws Exception {
         // Step 1: Create/get conversation
         when(mockConvService.getOrCreatePrivateConversation(1L, 2L)).thenReturn(10L);
-        HttpResponse<String> convResp = sendPost("/api/conversations/get-or-create",
-                "{\"user1Id\":1,\"user2Id\":2}");
-        assertEquals(200, convResp.statusCode());
-        assertTrue(convResp.body().contains("10"));
+        JsonObject convReq = new JsonObject();
+        convReq.addProperty("action", "GET_OR_CREATE_CONVERSATION");
+        convReq.addProperty("user1Id", 1);
+        convReq.addProperty("user2Id", 2);
+
+        JsonObject convResp = sendTcpRequest(convReq);
+        assertNotNull(convResp);
+        assertEquals("success", convResp.get("status").getAsString());
+        assertEquals(10, convResp.get("conversationId").getAsLong());
 
         // Step 2: Send message in conversation
         when(mockMsgService.sendMessage(10L, 1L, "Test message")).thenReturn(50L);
-        HttpResponse<String> sendResp = sendPost("/api/messages/send",
-                "{\"conversationId\":10,\"senderId\":1,\"content\":\"Test message\"}");
-        assertEquals(200, sendResp.statusCode());
-        assertTrue(sendResp.body().contains("50"));
+        JsonObject sendReq = new JsonObject();
+        sendReq.addProperty("action", "SEND_MESSAGE");
+        sendReq.addProperty("conversationId", 10);
+        sendReq.addProperty("senderId", 1);
+        sendReq.addProperty("content", "Test message");
+
+        JsonObject sendResp = sendTcpRequest(sendReq);
+        assertNotNull(sendResp);
+        assertEquals("success", sendResp.get("status").getAsString());
+        assertEquals(50, sendResp.get("messageId").getAsLong());
 
         // Step 3: Retrieve messages
         Timestamp now = new Timestamp(System.currentTimeMillis());
         when(mockMsgService.getMessages(10L)).thenReturn(
                 Arrays.asList(new Message(50L, 10L, 1L, Message.MessageType.TEXT, "Test message", now))
         );
-        HttpResponse<String> getResp = sendGet("/api/messages?conversationId=10");
-        assertEquals(200, getResp.statusCode());
-        assertTrue(getResp.body().contains("Test message"));
-        assertTrue(getResp.body().contains("\"count\":1"));
+        JsonObject getReq = new JsonObject();
+        getReq.addProperty("action", "GET_MESSAGES");
+        getReq.addProperty("conversationId", 10);
+
+        JsonObject getResp = sendTcpRequest(getReq);
+        assertNotNull(getResp);
+        assertEquals("success", getResp.get("status").getAsString());
+        assertTrue(getResp.toString().contains("Test message"));
+        assertEquals(1, getResp.get("count").getAsInt());
     }
 }

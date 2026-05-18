@@ -1,15 +1,13 @@
 package com.server.handler.auth;
 
+import com.google.gson.JsonObject;
 import com.server.service.AuthService;
-import com.sun.net.httpserver.Headers;
-import com.sun.net.httpserver.HttpExchange;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.*;
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -27,64 +25,60 @@ class RegisterHandlerTest {
         field.set(handler, mockAuthService);
     }
 
-    private HttpExchange createMockExchange(String method, String body) {
-        HttpExchange exchange = mock(HttpExchange.class);
-        when(exchange.getRequestMethod()).thenReturn(method);
-        when(exchange.getRequestBody()).thenReturn(
-                new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
-        when(exchange.getRequestHeaders()).thenReturn(new Headers());
-        when(exchange.getResponseHeaders()).thenReturn(new Headers());
-        when(exchange.getResponseBody()).thenReturn(new ByteArrayOutputStream());
-        return exchange;
-    }
-
-    @Test
-    void testOptionsRequest() throws Exception {
-        HttpExchange ex = createMockExchange("OPTIONS", "");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(204), eq(-1L));
-    }
-
-    @Test
-    void testMethodNotAllowed() throws Exception {
-        HttpExchange ex = createMockExchange("GET", "");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(405), anyLong());
-    }
-
     @Test
     void testMissingEmail() throws Exception {
-        HttpExchange ex = createMockExchange("POST",
-                "{\"username\":\"a\",\"password\":\"p\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(400), anyLong());
+        JsonObject req = new JsonObject();
+        req.addProperty("username", "a");
+        req.addProperty("password", "p");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Missing required fields"));
     }
 
     @Test
     void testSuccessfulRegistration() throws Exception {
         when(mockAuthService.register("u", "p", "e@e.com")).thenReturn(true);
-        HttpExchange ex = createMockExchange("POST",
-                "{\"username\":\"u\",\"password\":\"p\",\"email\":\"e@e.com\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(200), anyLong());
+
+        JsonObject req = new JsonObject();
+        req.addProperty("username", "u");
+        req.addProperty("password", "p");
+        req.addProperty("email", "e@e.com");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("successful"));
     }
 
     @Test
     void testFailedRegistration() throws Exception {
         when(mockAuthService.register("u", "p", "e@e.com")).thenReturn(false);
-        HttpExchange ex = createMockExchange("POST",
-                "{\"username\":\"u\",\"password\":\"p\",\"email\":\"e@e.com\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(400), anyLong());
+
+        JsonObject req = new JsonObject();
+        req.addProperty("username", "u");
+        req.addProperty("password", "p");
+        req.addProperty("email", "e@e.com");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
     }
 
     @Test
     void testDuplicateEntry() throws Exception {
         when(mockAuthService.register(any(), any(), any()))
                 .thenThrow(new java.sql.SQLException("Duplicate entry"));
-        HttpExchange ex = createMockExchange("POST",
-                "{\"username\":\"a\",\"password\":\"p\",\"email\":\"e@e.com\"}");
-        handler.handle(ex);
-        verify(ex).sendResponseHeaders(eq(400), anyLong());
+
+        JsonObject req = new JsonObject();
+        req.addProperty("username", "a");
+        req.addProperty("password", "p");
+        req.addProperty("email", "e@e.com");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("error", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("already exists"));
     }
 }
