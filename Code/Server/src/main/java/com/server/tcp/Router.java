@@ -97,13 +97,13 @@ public class Router {
                 }
                 conn.send(response);
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             logger.error("Error handling action " + action, e);
             JsonObject err = new JsonObject();
             err.addProperty("action", action + "_RESPONSE");
             if (requestId != null) err.addProperty("requestId", requestId);
             err.addProperty("status", "error");
-            err.addProperty("message", "Internal server error");
+            err.addProperty("message", "Internal server error: " + e.getMessage());
             conn.send(err);
         }
     }

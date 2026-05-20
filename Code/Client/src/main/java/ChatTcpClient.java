@@ -74,6 +74,11 @@ public class ChatTcpClient {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        // Fail all pending requests to prevent blocking
+        pendingRequests.forEach((requestId, future) -> {
+            future.complete(new ApiResponse(500, "error", "Kết nối đã bị ngắt hoặc không thể thiết lập", null, null, ""));
+        });
+        pendingRequests.clear();
     }
 
     public boolean isConnected() {

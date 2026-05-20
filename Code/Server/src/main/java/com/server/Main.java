@@ -9,10 +9,15 @@ import java.io.IOException;
 
 public class Main {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
-    private static final Dotenv dotenv = Dotenv.configure()
-            .directory("./Code/Server") // Search in Code/Server if running from project root
-            .ignoreIfMissing()
-            .load();
+    private static final Dotenv dotenv = loadDotenv();
+
+    private static Dotenv loadDotenv() {
+        if (new java.io.File("./Code/Server/.env").exists()) {
+            return Dotenv.configure().directory("./Code/Server").ignoreIfMissing().load();
+        } else {
+            return Dotenv.configure().directory("./").ignoreIfMissing().load();
+        }
+    }
 
     public static void main(String[] args) throws IOException {
         String portStr = dotenv.get("PORT");
