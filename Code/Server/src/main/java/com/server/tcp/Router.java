@@ -21,12 +21,15 @@ public class Router {
     private static ConversationHandle conversationHandle = new ConversationHandle();
     private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
     private static AvatarHandler avatarHandler = new AvatarHandler();
+    private static final PresenceService presenceService = PresenceService.getInstance();
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
             conn.sendError("Missing action field");
             return;
         }
+
+        conn.markActive();
 
         String action = request.get("action").getAsString();
         String requestId = request.has("requestId") ? request.get("requestId").getAsString() : null;
@@ -64,35 +67,71 @@ public class Router {
                 case "JOIN":
                     if (request.has("userId")) {
                         long userId = request.get("userId").getAsLong();
+                        Long previousUserId = conn.getUserId();
+                        if (previousUserId != null && previousUserId != userId) {
+                            TcpConnectionManager.getInstance().removeConnection(conn);
+                            if (!TcpConnectionManager.getInstance().hasOnlineConnection(previousUserId)) {
+                                presenceService.onUserOffline(previousUserId);
+                            }
+                        }
                         conn.setUserId(userId);
                         TcpConnectionManager.getInstance().addConnection(userId, conn);
+                        presenceService.onUserOnline(userId);
                         response = new JsonObject();
                         response.addProperty("status", "success");
                         response.addProperty("message", "Joined successfully");
                     }
                     break;
-                case "TYPING":
-                    if (request.has("conversationId") && request.has("memberId") && request.has("isTyping")) {
-                        long conversationId = request.get("conversationId").getAsLong();
-                        long memberId = request.get("memberId").getAsLong();
-                        boolean isTyping = request.get("isTyping").getAsBoolean();
-                        
-                        JsonObject typingEvent = new JsonObject();
-                        typingEvent.addProperty("action", "TYPING_EVENT");
-                        typingEvent.addProperty("conversationId", conversationId);
-                        typingEvent.addProperty("userId", conn.getUserId());
-                        typingEvent.addProperty("isTyping", isTyping);
-                        TcpConnectionManager.getInstance().broadcastToUser(memberId, typingEvent);
+                case "PING":
+                    response = new JsonObject();
+                    response.addProperty("action", "PING_RESPONSE");
+                    response.addProperty("status", "success");
+                    if (requestId != null) {
+                        response.addProperty("requestId", requestId);
                     }
+                    conn.send(response);
                     return;
+                case "TYPING":
+                    // Broadcast typing status to the target member in real-time.
+                    // Expected by AdditionalEndpointsIntegrationTest.typingEventBroadcastSuccess.
+                    if (!request.has("conversationId") || !request.has("memberId") || !request.has("isTyping")) {
+                        conn.sendError("Missing required fields for TYPING");
+                        return;
+                    }
+
+                    Long fromUserId = conn.getUserId();
+                    if (fromUserId == null) {
+                        conn.sendError("Not joined (missing userId). Send JOIN first");
+                        return;
+                    }
+
+                    long conversationId = request.get("conversationId").getAsLong();
+                    long memberId = request.get("memberId").getAsLong();
+                    boolean isTyping = request.get("isTyping").getAsBoolean();
+
+                    JsonObject evt = new JsonObject();
+                    evt.addProperty("action", "TYPING_EVENT");
+                    evt.addProperty("conversationId", conversationId);
+                    evt.addProperty("userId", fromUserId);
+                    evt.addProperty("isTyping", isTyping);
+
+                    TcpConnectionManager.getInstance().broadcastToUser(memberId, evt);
+
+                    // Send a lightweight ACK (sender side typically ignores it; safe for clients that expect a response).
+                    response = new JsonObject();
+                    response.addProperty("status", "success");
+                    response.addProperty("message", "Typing event broadcasted");
+                    break;
                 default:
                     conn.sendError("Unknown action: " + action);
                     return;
             }
 
             if (response != null) {
-                response.addProperty("action", action + "_RESPONSE");
-                if (requestId != null) {
+                if (!response.has("action")) {
+                    response.addProperty("action", action + "_RESPONSE");
+                }
+                if (requestId != null && !response.has("requestId")) {
                     response.addProperty("requestId", requestId);
                 }
                 conn.send(response);

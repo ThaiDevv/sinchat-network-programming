@@ -13,6 +13,7 @@ public class ClientConnection implements Runnable {
     private final BufferedReader reader;
     private final PrintWriter writer;
     private Long userId;
+    private volatile long lastActiveAt = System.currentTimeMillis();
 
     public ClientConnection(Socket socket) throws IOException {
         this.socket = socket;
@@ -28,11 +29,20 @@ public class ClientConnection implements Runnable {
         this.userId = userId;
     }
 
+    public long getLastActiveAt() {
+        return lastActiveAt;
+    }
+
+    public void markActive() {
+        this.lastActiveAt = System.currentTimeMillis();
+    }
+
     @Override
     public void run() {
         try {
             String line;
             while ((line = reader.readLine()) != null) {
+                markActive();
                 try {
                     JsonObject request = com.google.gson.JsonParser.parseString(line).getAsJsonObject();
                     Router.route(request, this);
@@ -48,7 +58,7 @@ public class ClientConnection implements Runnable {
         }
     }
 
-    public void send(JsonObject json) {
+    public synchronized void send(JsonObject json) {
         writer.println(json.toString());
     }
 
@@ -57,6 +67,14 @@ public class ClientConnection implements Runnable {
         res.addProperty("status", "error");
         res.addProperty("message", message);
         send(res);
+    }
+
+    public boolean isClosed() {
+        return socket == null || socket.isClosed();
+    }
+
+    public String getRemoteAddress() {
+        return socket != null ? String.valueOf(socket.getRemoteSocketAddress()) : "unknown";
     }
 
     public void close() {

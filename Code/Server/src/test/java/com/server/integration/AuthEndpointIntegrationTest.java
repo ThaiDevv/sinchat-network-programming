@@ -231,8 +231,9 @@ class AuthEndpointIntegrationTest {
 
         JsonObject resp = sendTcpRequest(req);
         assertNotNull(resp);
-        assertEquals("error", resp.get("status").getAsString());
-        assertTrue(resp.get("message").getAsString().contains("Account not found"));
+        // Generic response returns success to prevent user enumeration
+        assertEquals("success", resp.get("status").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Reset code generated."));
     }
 
     @Test

@@ -38,18 +38,10 @@ public class ProfileHandler {
                     return response;
                 }
                 int userId = request.get("userId").getAsInt();
-                String fullName = request.has("full_name") && !request.get("full_name").isJsonNull() ? request.get("full_name").getAsString() : null;
                 String email = request.has("email") && !request.get("email").isJsonNull() ? request.get("email").getAsString() : null;
-                String phoneNumber = request.has("phone_number") && !request.get("phone_number").isJsonNull() ? request.get("phone_number").getAsString() : null;
-                String dateOfBirthStr = request.has("date_of_birth") && !request.get("date_of_birth").isJsonNull() ? request.get("date_of_birth").getAsString() : null;
-                String avatar = request.has("avatar") && !request.get("avatar").isJsonNull() ? request.get("avatar").getAsString() : null;
+                String avatarUrl = request.has("avatar_url") && !request.get("avatar_url").isJsonNull() ? request.get("avatar_url").getAsString() : null;
 
-                Date dateOfBirth = null;
-                if (dateOfBirthStr != null && !dateOfBirthStr.trim().isEmpty()) {
-                    dateOfBirth = Date.valueOf(dateOfBirthStr);
-                }
-
-                if (updateUserProfile(userId, fullName, email, phoneNumber, dateOfBirth, avatar)) {
+                if (updateUserProfile(userId, email, avatarUrl)) {
                     response.addProperty("status", "success");
                     response.addProperty("message", "Profile updated successfully");
                 } else {
@@ -73,7 +65,7 @@ public class ProfileHandler {
     }
 
     public JsonObject getUserProfile(int userId) {
-        String query = "SELECT username, full_name, email, phone_number, date_of_birth, avatar FROM users WHERE id = ?";
+        String query = "SELECT username, email, avatar_url FROM users WHERE id = ?";
         try (Connection c = getConnection(); PreparedStatement pstmt = c.prepareStatement(query)) {
             pstmt.setInt(1, userId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -81,12 +73,8 @@ public class ProfileHandler {
                     JsonObject profile = new JsonObject();
                     profile.addProperty("status", "success");
                     profile.addProperty("username", rs.getString("username"));
-                    profile.addProperty("full_name", rs.getString("full_name"));
                     profile.addProperty("email", rs.getString("email"));
-                    profile.addProperty("phone_number", rs.getString("phone_number"));
-                    Date dob = rs.getDate("date_of_birth");
-                    profile.addProperty("date_of_birth", dob != null ? dob.toString() : null);
-                    profile.addProperty("avatar", rs.getString("avatar"));
+                    profile.addProperty("avatar_url", rs.getString("avatar_url"));
                     return profile;
                 }
             }
@@ -96,14 +84,11 @@ public class ProfileHandler {
         return null;
     }
 
-    public boolean updateUserProfile(int userId, String fullName, String email, String phoneNumber, Date dateOfBirth, String avatar) {
+    public boolean updateUserProfile(int userId, String email, String avatarUrl) {
         StringBuilder queryBuilder = new StringBuilder("UPDATE users SET ");
         java.util.List<Object> params = new java.util.ArrayList<>();
-        if (fullName != null) { queryBuilder.append("full_name = ?, "); params.add(fullName); }
         if (email != null) { queryBuilder.append("email = ?, "); params.add(email); }
-        if (phoneNumber != null) { queryBuilder.append("phone_number = ?, "); params.add(phoneNumber); }
-        if (dateOfBirth != null) { queryBuilder.append("date_of_birth = ?, "); params.add(dateOfBirth); }
-        if (avatar != null) { queryBuilder.append("avatar = ?, "); params.add(avatar); }
+        if (avatarUrl != null) { queryBuilder.append("avatar_url = ?, "); params.add(avatarUrl); }
         if (params.isEmpty()) return false;
         queryBuilder.setLength(queryBuilder.length() - 2);
         queryBuilder.append(" WHERE id = ?");
@@ -112,8 +97,7 @@ public class ProfileHandler {
         try (Connection c = getConnection(); PreparedStatement pstmt = c.prepareStatement(queryBuilder.toString())) {
             for (int i = 0; i < params.size(); i++) {
                 Object param = params.get(i);
-                if (param instanceof Date) pstmt.setDate(i + 1, (Date) param);
-                else if (param instanceof String) pstmt.setString(i + 1, (String) param);
+                if (param instanceof String) pstmt.setString(i + 1, (String) param);
                 else if (param instanceof Integer) pstmt.setInt(i + 1, (Integer) param);
             }
             return pstmt.executeUpdate() > 0;

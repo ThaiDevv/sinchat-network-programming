@@ -119,11 +119,8 @@ class AdditionalEndpointsIntegrationTest {
         when(mockStmt.executeQuery()).thenReturn(mockRs);
         when(mockRs.next()).thenReturn(true);
         when(mockRs.getString("username")).thenReturn("alice");
-        when(mockRs.getString("full_name")).thenReturn("Alice Smith");
         when(mockRs.getString("email")).thenReturn("alice@test.com");
-        when(mockRs.getString("phone_number")).thenReturn("123456789");
-        when(mockRs.getDate("date_of_birth")).thenReturn(null);
-        when(mockRs.getString("avatar")).thenReturn("avatar.png");
+        when(mockRs.getString("avatar_url")).thenReturn("avatar.png");
 
         JsonObject req = new JsonObject();
         req.addProperty("action", "PROFILE");
@@ -134,7 +131,7 @@ class AdditionalEndpointsIntegrationTest {
         assertNotNull(resp);
         assertEquals("success", resp.get("status").getAsString());
         assertEquals("alice", resp.get("username").getAsString());
-        assertEquals("Alice Smith", resp.get("full_name").getAsString());
+        assertEquals("alice@test.com", resp.get("email").getAsString());
     }
 
     @Test
@@ -159,8 +156,8 @@ class AdditionalEndpointsIntegrationTest {
         req.addProperty("action", "PROFILE");
         req.addProperty("subAction", "UPDATE_PROFILE");
         req.addProperty("userId", 42);
-        req.addProperty("full_name", "Alice Updated");
-        req.addProperty("phone_number", "987654321");
+        req.addProperty("email", "alice@new.com");
+        req.addProperty("avatar_url", "new_avatar_url.png");
 
         JsonObject resp = sendTcpRequest(req);
         assertNotNull(resp);

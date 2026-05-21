@@ -3,6 +3,8 @@ package com.server.tcp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ServerSocketFactory;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -12,24 +14,42 @@ import java.util.concurrent.Executors;
 public class TcpServer {
     private static final Logger logger = LoggerFactory.getLogger(TcpServer.class);
     private final int port;
-    private final ExecutorService threadPool;
+    private final boolean tlsEnabled;
+    private final long idleTimeoutMillis;
+    private ExecutorService threadPool;
     private ServerSocket serverSocket;
     private volatile boolean running = false;
+    private IdleConnectionSweeper idleConnectionSweeper;
+
+    public TcpServer(int port, boolean tlsEnabled, long idleTimeoutMillis) {
+        this.port = port;
+        this.tlsEnabled = tlsEnabled;
+        this.idleTimeoutMillis = idleTimeoutMillis;
+        this.threadPool = Executors.newVirtualThreadPerTaskExecutor();
+    }
 
     public TcpServer(int port) {
-        this.port = port;
-        this.threadPool = Executors.newFixedThreadPool(100);
+        this(port, false, 60_000L);
     }
 
     public void start() {
         running = true;
+        idleConnectionSweeper = new IdleConnectionSweeper(
+                TcpConnectionManager.getInstance(),
+                PresenceService.getInstance(),
+                idleTimeoutMillis
+        );
+        idleConnectionSweeper.start();
+
         new Thread(() -> {
             try {
-                serverSocket = new ServerSocket(port);
-                logger.info("TCP Server started on port " + getPort());
+                ServerSocketFactory factory = TcpServerSocketFactory.create(tlsEnabled);
+                serverSocket = factory.createServerSocket(port);
+                logger.info("TCP Server started on port {} (tlsEnabled={})", getPort(), tlsEnabled);
                 while (running) {
+                    Socket socket = null;
                     try {
-                        Socket socket = serverSocket.accept();
+                        socket = serverSocket.accept();
                         logger.info("New connection from " + socket.getRemoteSocketAddress());
                         ClientConnection conn = new ClientConnection(socket);
                         threadPool.submit(conn);
@@ -37,12 +57,19 @@ public class TcpServer {
                         if (running) {
                             logger.error("Error accepting connection", e);
                         }
+                        if (socket != null && !socket.isClosed()) {
+                            try {
+                                socket.close();
+                            } catch (IOException ex) {
+                                // ignore
+                            }
+                        }
                     }
                 }
             } catch (IOException e) {
                 logger.error("TCP Server start error", e);
             }
-        }).start();
+        }, "tcp-accept-loop").start();
     }
 
     public int getPort() {
@@ -54,6 +81,9 @@ public class TcpServer {
 
     public void stop() {
         running = false;
+        if (idleConnectionSweeper != null) {
+            idleConnectionSweeper.stop();
+        }
         if (serverSocket != null) {
             try {
                 serverSocket.close();
