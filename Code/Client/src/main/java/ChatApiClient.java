@@ -67,6 +67,74 @@ public class ChatApiClient {
         return send("GET", "/api/messages?conversationId=" + conversationId, "");
     }
 
+    /**
+     * Upload avatar image as multipart/form-data to /api/change-avatar.
+     * @param userId  ID của user cần đổi avatar
+     * @param imageBytes  Dữ liệu ảnh đã crop (PNG)
+     * @param filename  Tên file (vd: "avatar.png")
+     */
+    public ApiResponse uploadAvatar(long userId, byte[] imageBytes, String filename)
+            throws IOException, InterruptedException {
+
+        String boundary = "----AvatarBoundary" + System.currentTimeMillis();
+        String CRLF = "\r\n";
+
+        // Build multipart body
+        StringBuilder sb = new StringBuilder();
+
+        // Part 1: userId field
+        sb.append("--").append(boundary).append(CRLF);
+        sb.append("Content-Disposition: form-data; name=\"userId\"").append(CRLF);
+        sb.append(CRLF);
+        sb.append(userId).append(CRLF);
+
+        // Part 2: avatar file header
+        sb.append("--").append(boundary).append(CRLF);
+        sb.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"")
+          .append(filename).append("\"").append(CRLF);
+        sb.append("Content-Type: image/png").append(CRLF);
+        sb.append(CRLF);
+
+        byte[] headerBytes = sb.toString().getBytes(StandardCharsets.UTF_8);
+
+        // Closing boundary
+        byte[] closingBytes = (CRLF + "--" + boundary + "--" + CRLF)
+                .getBytes(StandardCharsets.UTF_8);
+
+        // Combine: header + imageBytes + closing
+        byte[] bodyBytes = new byte[headerBytes.length + imageBytes.length + closingBytes.length];
+        System.arraycopy(headerBytes, 0, bodyBytes, 0, headerBytes.length);
+        System.arraycopy(imageBytes, 0, bodyBytes, headerBytes.length, imageBytes.length);
+        System.arraycopy(closingBytes, 0, bodyBytes, headerBytes.length + imageBytes.length, closingBytes.length);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/change-avatar"))
+                .timeout(Duration.ofSeconds(30))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(bodyBytes))
+                .build();
+
+        HttpResponse<String> response = client.send(
+                request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
+
+        String responseBody = response.body() == null ? "" : response.body();
+        String status = readJsonString(responseBody, "status");
+        String message = readJsonString(responseBody, "message");
+        String avatarUrl = readJsonString(responseBody, "avatarUrl");
+
+        if (message.isBlank()) {
+            message = readJsonString(responseBody, "error");
+        }
+        if (message.isBlank()) {
+            message = "HTTP " + response.statusCode();
+        }
+
+        return new ApiResponse(response.statusCode(), status, message, avatarUrl, null, responseBody);
+    }
+
     public ApiResponse resetPassword(String code, String password)
             throws IOException, InterruptedException {
         String body = """

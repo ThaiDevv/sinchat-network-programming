@@ -1,7 +1,7 @@
-package com.example.service;
+package com.server.service;
 
-import com.example.config.Database;
-import com.example.model.User;
+import com.server.config.Database;
+import com.server.model.User;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.Connection;
