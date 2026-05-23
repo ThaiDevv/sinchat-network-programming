@@ -81,6 +81,57 @@ public class UserRepository {
         }
     }
 
+    public void updateOnlineStatusWithoutLastSeen(long userId, boolean isOnline) {
+        String query = "UPDATE users SET is_online = ? WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setBoolean(1, isOnline);
+            pstmt.setLong(2, userId);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("Error updating online status (without last_seen) for user: {}", userId, e);
+        }
+    }
+
+    public java.util.List<Long> findAcceptedFriendIds(long userId) {
+        java.util.List<Long> friendIds = new java.util.ArrayList<>();
+
+        // friendships schema: (user1_id, user2_id, status)
+        String query = "SELECT CASE WHEN user1_id = ? THEN user2_id ELSE user1_id END AS friend_id " +
+                "FROM friendships WHERE (user1_id = ? OR user2_id = ?) AND status = 'ACCEPTED'";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, userId);
+            pstmt.setLong(2, userId);
+            pstmt.setLong(3, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    friendIds.add(rs.getLong("friend_id"));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error finding accepted friend ids for user: {}", userId, e);
+        }
+        return friendIds;
+    }
+
+    public Timestamp findLastSeen(long userId) {
+        String query = "SELECT last_seen FROM users WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getTimestamp("last_seen");
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error finding last_seen for user: {}", userId, e);
+        }
+        return null;
+    }
+
     private User mapRow(ResultSet rs) throws SQLException {
         return new User(
                 rs.getLong("id"),

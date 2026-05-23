@@ -3,20 +3,35 @@ package com.server.service;
 import com.server.model.User;
 import com.server.repository.UserRepository;
 import org.mindrot.jbcrypt.BCrypt;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Random;
 
 public class AuthService {
-    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
-    private static final ConcurrentHashMap<String, String> passwordResetCodes = new ConcurrentHashMap<>();
+    
+    // In-memory record to store reset state: code, username, expiration timestamp (ms), and attempt counter.
+    public static class ResetCodeState {
+        public final String code;
+        public final String username;
+        public final long expiryTime;
+        public int attempts;
+
+        public ResetCodeState(String code, String username, long ttlMs) {
+            this.code = code;
+            this.username = username;
+            this.expiryTime = System.currentTimeMillis() + ttlMs;
+            this.attempts = 0;
+        }
+    }
+
+    private static final ConcurrentHashMap<String, ResetCodeState> passwordResetCodes = new ConcurrentHashMap<>();
     private final UserRepository userRepository = new UserRepository();
+    private static final SecureRandom secureRandom = new SecureRandom();
 
     /**
      * Xác thực user theo username và password.
+     * 
      * @return User nếu đăng nhập thành công, null nếu thất bại.
      */
     public User login(String username, String password) {
@@ -43,18 +58,21 @@ public class AuthService {
      * Generate a 6-digit reset code for a username.
      */
     public String generateResetCode(String username) {
+        // Clean up expired codes first
+        long now = System.currentTimeMillis();
+        passwordResetCodes.entrySet().removeIf(entry -> entry.getValue().expiryTime < now);
+
         User user = userRepository.findByUsername(username);
         if (user == null) {
             return null; // User not found
         }
-        
-        // Generate 6-digit code
-        Random rand = new Random();
-        String code = String.format("%06d", rand.nextInt(1000000));
-        
-        // Store in map
-        passwordResetCodes.put(code, username);
-        
+
+        // Generate 6-digit code using SecureRandom
+        String code = String.format("%06d", secureRandom.nextInt(1000000));
+
+        // Store reset state with 5-minute (300,000 ms) TTL
+        passwordResetCodes.put(code, new ResetCodeState(code, username, 300000));
+
         return code;
     }
 
@@ -62,16 +80,28 @@ public class AuthService {
      * Reset password using a valid code.
      */
     public boolean resetPassword(String code, String newPassword) {
-        String username = passwordResetCodes.get(code);
-        if (username == null) {
+        // Clean up expired codes first
+        long now = System.currentTimeMillis();
+        passwordResetCodes.entrySet().removeIf(entry -> entry.getValue().expiryTime < now);
+
+        ResetCodeState state = passwordResetCodes.get(code);
+        if (state == null) {
             return false; // Code not found or expired
         }
-        
+
+        synchronized (state) {
+            if (state.attempts >= 5) {
+                passwordResetCodes.remove(code);
+                return false; // Block brute force: too many attempts, code is now invalidated
+            }
+            state.attempts++;
+        }
+
         // Hash new password
         String newHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
-        
+
         // Update DB
-        boolean success = userRepository.updatePassword(username, newHash);
+        boolean success = userRepository.updatePassword(state.username, newHash);
         if (success) {
             // Remove code from map after successful reset
             passwordResetCodes.remove(code);

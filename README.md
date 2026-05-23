@@ -8,16 +8,16 @@
 - [x] Forgot password
 - [ ] Change password from profile
 - [ ] Change username
-- [ ] Change avatar
+- [x] Change avatar
 - [x] Send message in local UI prototype
-- [ ] Receive message from server
-- [ ] Send message with image, video, voice
-- [ ] Chat with multiple users
+- [x] Receive message from server (via Stateful TCP Sockets)
+- [x] Send message with image, video, voice
+- [x] Chat with multiple users
 - [ ] Voice call
 - [ ] Video call
 - [ ] Screen sharing
-- [ ] File sharing
-- [ ] Group chat
+- [x] File sharing
+- [x] Group chat
 
 ## Built With
 
@@ -25,11 +25,11 @@
 
 - [Java 25](https://www.oracle.com/asean/java/technologies/downloads/#java25)
   - [JavaFX](https://openjfx.io/) - GUI interface
-  - [Java-WebSocket](https://github.com/TooTallNate/Java-WebSocket) - WebSocket library
+  - Stateful Raw TCP Sockets (`java.net.Socket`)
 
 ### Database
 
-- [MySQL](https://www.mysql.com/) - database hosted on 123host.vn
+- [MySQL](https://www.mysql.com/) - database hosted on 123host.vn (utilizing HikariCP connection pooling)
 
 ### Server host
 
@@ -40,11 +40,29 @@
 
 - [ImgBB](https://imgbb.com/) - image hosting
 
-## Client API Base URL
+## Running the Application
 
-The JavaFX client uses `http://localhost:8080` by default. To use the deployed
-backend, run the client with:
+### Launching with Windows Command Scripts
 
+The project includes convenient double-click script files at the root level:
+
+- Run the server: Double-click **`run_server.cmd`**
+- Run the client: Double-click **`run_client.cmd`**
+
+### Running Manually with Maven
+
+Alternatively, you can run the modules using the command line:
+
+#### 1. Start the Stateful TCP Server
 ```powershell
-java -Dchatapp.api.baseUrl=https://network-programming-project.onrender.com ...
+cd Code/Server
+mvn compile
+mvn exec:java -Dexec.mainClass="com.server.Main"
+```
+
+#### 2. Start the JavaFX UI Client
+```powershell
+cd Code/Client
+mvn compile
+mvn javafx:run
 ```

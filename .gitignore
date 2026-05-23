@@ -4,6 +4,7 @@
 
 # IDE files
 .idea/
+.claude/
 *.iml
 .vscode/settings.json
 
@@ -15,11 +16,23 @@ Code/Server/.env
 target/
 Code/Server/target/
 Code/Client/target/
+dependency-reduced-pom.xml
+
+# Build output
+out/
+
+# Test reports (generated)
+test-reports/
 
 # Local/generated artifacts
 *.sql
+sql.txt
 API_DOCUMENTATION.md
+
+# Uploaded user content
+uploads/avatars/
 
 # OS files
 .DS_Store
 Thumbs.db
+/Code/Server/uploads

@@ -1,149 +1,40 @@
 package com.server.handler.changeavatar;
 
+import com.google.gson.JsonObject;
 import com.server.service.AvatarService;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
+import com.server.tcp.ClientConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.UUID;
-
-public class AvatarHandler implements HttpHandler {
+public class AvatarHandler {
     private static final Logger logger = LoggerFactory.getLogger(AvatarHandler.class);
     private final AvatarService avatarService = new AvatarService();
 
-    private static final String UPLOAD_DIR = "uploads/avatars";
-    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-
-    @Override
-    public void handle(HttpExchange exchange) throws IOException {
+    public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
+        JsonObject response = new JsonObject();
         try {
-            logger.info("Received request for change-avatar");
-            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, "{\"error\": \"Method Not Allowed\"}");
-                return;
+            if (!request.has("userId") || !request.has("avatarUrl")) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Missing userId or avatarUrl");
+                return response;
             }
 
-            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
-            if (contentType == null || !contentType.startsWith("multipart/form-data")) {
-                sendResponse(exchange, 400,
-                        "{\"status\": \"error\", \"message\": \"Content-Type phải là multipart/form-data\"}");
-                return;
-            }
+            int userId = request.get("userId").getAsInt();
+            String avatarUrl = request.get("avatarUrl").getAsString();
 
-        // Lấy boundary từ Content-Type header
-        String boundary = null;
-        for (String part : contentType.split(";")) {
-            part = part.trim();
-            if (part.startsWith("boundary=")) {
-                boundary = part.substring("boundary=".length()).trim();
-                if (boundary.startsWith("\"") && boundary.endsWith("\"")) {
-                    boundary = boundary.substring(1, boundary.length() - 1);
-                }
-                break;
-            }
-        }
-
-        if (boundary == null) {
-            sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Thiếu boundary\"}");
-            return;
-        }
-
-        try {
-            logger.info("Reading body bytes...");
-            byte[] bodyBytes = exchange.getRequestBody().readAllBytes();
-            logger.info("Read {} bytes from body", bodyBytes.length);
-
-            // Kiểm tra kích thước file
-            if (bodyBytes.length > MAX_FILE_SIZE) {
-                sendResponse(exchange, 400,
-                        "{\"status\": \"error\", \"message\": \"File quá lớn. Tối đa 5MB\"}");
-                return;
-            }
-
-            MultipartParser parser = new MultipartParser(bodyBytes, boundary);
-            String userIdStr = parser.getField("userId");
-            MultipartParser.FilePart filePart = parser.getFile("avatar");
-
-            // Validate input
-            if (userIdStr == null || userIdStr.isEmpty()) {
-                sendResponse(exchange, 400,
-                        "{\"status\": \"error\", \"message\": \"Thiếu trường userId\"}");
-                return;
-            }
-            if (filePart == null || filePart.data.length == 0) {
-                sendResponse(exchange, 400,
-                        "{\"status\": \"error\", \"message\": \"Thiếu file avatar\"}");
-                return;
-            }
-
-            // Kiểm tra đuôi file hợp lệ
-            String ext = getExtension(filePart.filename);
-            if (!ext.matches("\\.(jpg|jpeg|png|gif|webp)")) {
-                sendResponse(exchange, 400,
-                        "{\"status\": \"error\", \"message\": \"Chỉ hỗ trợ: jpg, jpeg, png, gif, webp\"}");
-                return;
-            }
-
-            int userId = Integer.parseInt(userIdStr);
-
-            // Tạo thư mục nếu chưa có
-            Path uploadPath = Paths.get(UPLOAD_DIR);
-            Files.createDirectories(uploadPath);
-
-            // Tạo tên file ngẫu nhiên để tránh trùng
-            String newFilename = UUID.randomUUID() + ext;
-            Path filePath = uploadPath.resolve(newFilename);
-
-            // Lưu file xuống disk
-            Files.write(filePath, filePart.data);
-
-            // Cập nhật DB
-            String avatarUrl = "/" + UPLOAD_DIR + "/" + newFilename;
-            boolean success = avatarService.changeAvatar(userId, avatarUrl);
-
-            if (success) {
-                logger.info("Avatar updated cho userId={}, file={}", userId, newFilename);
-                sendResponse(exchange, 200,
-                        "{\"status\": \"success\", \"message\": \"Cập nhật avatar thành công\", \"avatarUrl\": \"" + avatarUrl + "\"}");
+            if (avatarService.changeAvatar(userId, avatarUrl)) {
+                response.addProperty("status", "success");
+                response.addProperty("message", "Avatar updated successfully");
+                response.addProperty("avatarUrl", avatarUrl);
             } else {
-                // Xóa file vừa lưu nếu DB thất bại
-                Files.deleteIfExists(filePath);
-                sendResponse(exchange, 400,
-                        "{\"status\": \"error\", \"message\": \"Không tìm thấy userId\"}");
+                response.addProperty("status", "error");
+                response.addProperty("message", "Failed to update avatar");
             }
-
-            } catch (NumberFormatException e) {
-                logger.error("Lỗi number format", e);
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"userId phải là số nguyên\"}");
-            }
-        } catch (Throwable e) { // Catch both Exception and Error for the entire method
-            logger.error("Lỗi chưa bắt được trong handle change avatar", e);
-            
-            // Temporary: Send stack trace to client for debugging
-            java.io.StringWriter sw = new java.io.StringWriter();
-            e.printStackTrace(new java.io.PrintWriter(sw));
-            String stackTrace = sw.toString().replace("\"", "'").replace("\n", "\\n").replace("\r", "");
-            
-            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\", \"details\": \"" + stackTrace + "\"}");
+        } catch (Exception e) {
+            logger.error("Change avatar error", e);
+            response.addProperty("status", "error");
+            response.addProperty("message", "Internal Server Error");
         }
-    }
-
-    private String getExtension(String filename) {
-        if (filename == null) return ".jpg";
-        int dot = filename.lastIndexOf('.');
-        return (dot >= 0) ? filename.substring(dot).toLowerCase() : ".jpg";
-    }
-
-    private void sendResponse(HttpExchange exchange, int status, String body) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        byte[] response = body.getBytes("UTF-8");
-        exchange.sendResponseHeaders(status, response.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(response);
-        }
+        return response;
     }
 }

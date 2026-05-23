@@ -1,42 +1,37 @@
 package com.server.handler.message;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.server.service.ConversationService;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
+import com.server.tcp.ClientConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.sql.SQLException;
-
-public class ConversationHandle implements HttpHandler {
-    private final Gson gson = new Gson();
+/**
+ * TCP handler for creating or retrieving a private conversation between two users.
+ */
+public class ConversationHandle {
+    private static final Logger logger = LoggerFactory.getLogger(ConversationHandle.class);
     private final ConversationService conversationService = new ConversationService();
-    @Override
-    public void handle(HttpExchange exchange) throws IOException {
-        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1);
-            return;
-        }
-        try (InputStreamReader reader = new InputStreamReader(exchange.getRequestBody())) {
-            JsonObject json = gson.fromJson(reader, JsonObject.class);
-            long user1Id = json.get("user1Id").getAsLong();
-            long user2Id = json.get("user2Id").getAsLong();
-            long conversationId = conversationService.getOrCreatePrivateConversation(user1Id, user2Id);
 
-            String response = "{\"status\": \"success\", \"conversationId\": " + conversationId + "}";
-            sendResponse(exchange, 200, response);
+    public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
+        JsonObject response = new JsonObject();
+        try {
+            if (!request.has("user1Id") || !request.has("user2Id")) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Missing user1Id or user2Id");
+                return response;
+            }
+            long user1Id = request.get("user1Id").getAsLong();
+            long user2Id = request.get("user2Id").getAsLong();
+
+            long convId = conversationService.getOrCreatePrivateConversation(user1Id, user2Id);
+            response.addProperty("status", "success");
+            response.addProperty("conversationId", convId);
         } catch (Exception e) {
-            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\"}");
+            logger.error("Conversation handle error", e);
+            response.addProperty("status", "error");
+            response.addProperty("message", "Internal Server Error");
         }
-    }
-    private void sendResponse(HttpExchange exchange, int status, String body) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        byte[] bytes = body.getBytes();
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.getResponseBody().close();
+        return response;
     }
 }

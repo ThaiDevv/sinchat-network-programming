@@ -1,66 +1,47 @@
 package com.server.handler.auth;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.server.service.AuthService;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
+import com.server.tcp.ClientConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-
-public class RegisterHandler implements HttpHandler {
+/**
+ * TCP handler for the registration endpoint.
+ */
+public class RegisterHandler {
     private static final Logger logger = LoggerFactory.getLogger(RegisterHandler.class);
-    private final Gson gson = new Gson();
     private final AuthService authService = new AuthService();
 
-    @Override
-    public void handle(HttpExchange exchange) throws IOException {
-        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            sendResponse(exchange, 405, "{\"error\": \"Method Not Allowed\"}");
-            return;
-        }
-
-        try (InputStreamReader reader = new InputStreamReader(exchange.getRequestBody())) {
-            JsonObject json = gson.fromJson(reader, JsonObject.class);
-
-            if (json == null || !json.has("username") || !json.has("password") || !json.has("email")) {
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Missing required fields: username, password, email\"}");
-                return;
+    public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
+        JsonObject response = new JsonObject();
+        try {
+            if (!request.has("username") || !request.has("password") || !request.has("email")) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Missing required fields: username, password, email");
+                return response;
             }
 
-            String username = json.get("username").getAsString();
-            String password = json.get("password").getAsString();
-            String email = json.get("email").getAsString();
+            String username = request.get("username").getAsString();
+            String password = request.get("password").getAsString();
+            String email = request.get("email").getAsString();
 
-            try {
-                // Gọi logic từ Service
-                if (authService.register(username, password, email)) {
-                    sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Registration successful\"}");
-                } else {
-                    sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"Registration failed\"}");
-                }
-            } catch (Exception dbEx) {
-                logger.error("Registration error", dbEx);
-                String errMsg = dbEx.getMessage() != null ? dbEx.getMessage().replace("\"", "'") : "Unknown Error";
-                sendResponse(exchange, 400, "{\"status\": \"error\", \"message\": \"" + errMsg + "\"}");
+            if (authService.register(username, password, email)) {
+                response.addProperty("status", "success");
+                response.addProperty("message", "Registration successful");
+            } else {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Registration failed");
             }
-        } catch (Exception e) {
-            logger.error("Registration processing error", e);
-            sendResponse(exchange, 500, "{\"error\": \"Internal Server Error\"}");
+        } catch (Exception dbEx) {
+            logger.error("Registration error", dbEx);
+            String errMsg = "Registration failed";
+            if (dbEx.getMessage() != null && dbEx.getMessage().contains("Duplicate")) {
+                errMsg = "Username or email already exists";
+            }
+            response.addProperty("status", "error");
+            response.addProperty("message", errMsg);
         }
-    }
-
-    private void sendResponse(HttpExchange exchange, int status, String body) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        byte[] response = body.getBytes();
-        exchange.sendResponseHeaders(status, response.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(response);
-        }
+        return response;
     }
 }

@@ -14,7 +14,12 @@ public class Database {
     private static final HikariDataSource dataSource;
 
     static {
-        Dotenv dotenv = Dotenv.configure().directory("./Code/Server").ignoreIfMissing().load();
+        Dotenv dotenv;
+        if (new java.io.File("./Code/Server/.env").exists()) {
+            dotenv = Dotenv.configure().directory("./Code/Server").ignoreIfMissing().load();
+        } else {
+            dotenv = Dotenv.configure().directory("./").ignoreIfMissing().load();
+        }
 
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(dotenv.get("DB_URL"));

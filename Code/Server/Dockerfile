@@ -1,4 +1,4 @@
-# Build stage — use Java 25 JDK + install Maven manually
+# Build stage — use Java 25 LTS JDK + install Maven manually
 FROM eclipse-temurin:25-jdk-jammy AS build
 RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
