@@ -6,17 +6,10 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
-
-        LoginView loginView =
-                new LoginView(stage);
-
-        Scene scene =
-                loginView.createScene();
-
+        ChatView chatView = new ChatView(stage, 1);
+        Scene scene = chatView.createScene();
         stage.setTitle("SinChat");
-
         stage.setScene(scene);
-
         stage.show();
     }
 
