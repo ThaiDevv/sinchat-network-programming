@@ -44,9 +44,6 @@ public class LoginHandler implements HttpHandler {
                     user.getId(), user.getUsername()
                 );
                 sendResponse(exchange, 200, body);
-            User user = authService.login(username, password);
-            if (user != null) {
-                sendResponse(exchange, 200, "{\"status\": \"success\", \"message\": \"Login successful\", \"userId\": " + user.getId() + "}");
             } else {
                 sendResponse(exchange, 401, "{\"status\": \"error\", \"message\": \"Invalid username or password\"}");
             }

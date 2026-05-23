@@ -20,6 +20,11 @@
       <artifactId>javafx-fxml</artifactId>
       <version>${javafx.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.openjfx</groupId>
+      <artifactId>javafx-swing</artifactId>
+      <version>${javafx.version}</version>
+    </dependency>
     <!-- WebSocket client để kết nối realtime với server -->
     <dependency>
       <groupId>org.java-websocket</groupId>
