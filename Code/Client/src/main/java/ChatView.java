@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import javax.imageio.ImageIO;
 import java.util.concurrent.CompletableFuture;
 
 import javafx.application.Platform;
@@ -720,9 +719,6 @@ private Label avatarToast;
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
                 // Gửi qua TCP → server lưu DB → broadcast về cho mọi người
                 tcpClient.sendMessage(currentConversationId, currentUserId, text);
-            } else {
-                // Fallback: hiển thị cục bộ nếu chưa kết nối TCP
-                addSentMessage(text);
             }
         messageInput.clear();
         }
@@ -845,8 +841,6 @@ private Label avatarToast;
     // ═══════════════════════════════════════════════════════════
     //  AVATAR MODAL — tích hợp từ changeAvatarTest
     // ═══════════════════════════════════════════════════════════
-
-<<<<<<< feature/AI-changeAvatar
     private ContextMenu createAvatarContextMenu() {
         ContextMenu contextMenu = new ContextMenu();
         
@@ -1045,17 +1039,6 @@ private Label avatarToast;
         oldAvatarList.setHgap(14);
         oldAvatarList.setVgap(14);
 
-<<<<<<< feature/AI-changeAvatar
-=======
-        String[] oldAvatars = {
-                "https://i.pravatar.cc/300?img=1",
-                "https://i.pravatar.cc/300?img=2",
-                "https://i.pravatar.cc/300?img=3",
-                "https://i.pravatar.cc/300?img=4",
-                "https://i.pravatar.cc/300?img=5"
-        };
-
->>>>>>> main
         String containerDefaultStyle = """
                 -fx-border-color: transparent;
                 -fx-border-width: 3px;
@@ -1075,7 +1058,6 @@ private Label avatarToast;
 
         activeOldAvatarContainer = null;
 
-<<<<<<< feature/AI-changeAvatar
         for (Image img : previouslyUsedAvatars) {
             ImageView oldAvatarView = new ImageView(img);
             oldAvatarView.setFitWidth(90);
@@ -1164,7 +1146,10 @@ private Label avatarToast;
                     activeOldAvatarContainer.setStyle(containerDefaultStyle);
                     activeOldAvatarContainer = null;
                 }
-                Image img = new Image(file.toURI().toString());
+               Image img = new Image(
+                    file.toURI().toString(),
+                    true
+                );
                 selectedAvatarImage = img;
                 previewImage.setImage(img);
                 updatePreviewFit(previewImage, img);
@@ -1331,48 +1316,57 @@ private Label avatarToast;
     }
 
     private Image createDefaultAvatarImage() {
-        try {
-            File file = new File("avatarMacDinh.jpg");
-            if (file.exists()) {
-<<<<<<< feature/AI-changeAvatar
-                // Load file cục bộ đồng bộ (không dùng background thread)
-                Image img = new Image(file.toURI().toString(), false);
-                if (!img.isError()) return img;
-=======
-                return new Image(file.toURI().toString());
->>>>>>> main
+    try {
+        File file = new File("avatarMacDinh.jpg");
+
+        if (file.exists()) {
+            // Load file local
+            Image img = new Image(file.toURI().toString(), false);
+            if (!img.isError()) {
+                return img;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-<<<<<<< feature/AI-changeAvatar
-        // Load URL đồng bộ để tránh lỗi "Image not yet loaded"
-        try {
-            Image img = new Image("https://i.pravatar.cc/300?img=0", false);
-            if (!img.isError()) return img;
-        } catch (Exception ignored) {}
-        // Fallback cuối: tạo ảnh màu trơn bằng Canvas
-        javafx.scene.canvas.Canvas canvas = new javafx.scene.canvas.Canvas(110, 110);
-        javafx.scene.canvas.GraphicsContext gc = canvas.getGraphicsContext2D();
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+
+    // Fallback avatar online
+    try {
+        Image img = new Image("https://i.pravatar.cc/300?img=0", false);
+
+        if (!img.isError()) {
+            return img;
+        }
+    } catch (Exception ignored) {
+    }
+
+        // Fallback cuối cùng: avatar màu
+        javafx.scene.canvas.Canvas canvas =
+                new javafx.scene.canvas.Canvas(110, 110);
+    
+        javafx.scene.canvas.GraphicsContext gc =
+                canvas.getGraphicsContext2D();
+    
         gc.setFill(javafx.scene.paint.Color.web(ACCENT));
         gc.fillOval(0, 0, 110, 110);
-        javafx.scene.SnapshotParameters params = new javafx.scene.SnapshotParameters();
-        params.setFill(javafx.scene.paint.Color.TRANSPARENT);
+    
+        SnapshotParameters params = new SnapshotParameters();
+        params.setFill(Color.TRANSPARENT);
+    
         return canvas.snapshot(params, null);
     }
 
     private byte[] imageToPngBytes(Image image) {
-=======
-        return new Image("https://i.pravatar.cc/300?img=0", true);
-    }
-
-    private byte[] writableImageToPngBytes(WritableImage image) {
->>>>>>> main
         try {
-            java.awt.image.BufferedImage bImage = SwingFXUtils.fromFXImage(image, null);
+            java.awt.image.BufferedImage bImage =
+                    SwingFXUtils.fromFXImage(image, null);
+    
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    
             ImageIO.write(bImage, "png", baos);
+    
             return baos.toByteArray();
+    
         } catch (Exception e) {
             e.printStackTrace();
             return new byte[0];
@@ -1405,9 +1399,10 @@ private Label avatarToast;
         toastStage.show();
 
         // Auto-close after 2.5 seconds
-        new Thread(() -> {
-            try { Thread.sleep(2500); } catch (Exception ignored) {}
-            Platform.runLater(toastStage::close);
-        }).start();
+        scheduler.schedule(
+            () -> Platform.runLater(toastStage::close),
+            2500,
+            TimeUnit.MILLISECONDS
+        );
     }
 }
