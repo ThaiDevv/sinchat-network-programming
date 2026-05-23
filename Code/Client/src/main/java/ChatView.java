@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import javax.imageio.ImageIO;
 import java.util.concurrent.CompletableFuture;
 
 import javafx.application.Platform;
@@ -46,6 +47,7 @@ public class ChatView {
     private final long currentUserId;
     private long currentConversationId;
     private final ChatTcpClient apiClient = ChatTcpClient.getInstance();
+    private final ChatApiClient restClient = new ChatApiClient();
     private final Gson gson = new Gson();
     private final java.util.Map<Long, Label> contactLastMsgLabels = new java.util.HashMap<>();
 
@@ -67,7 +69,6 @@ public class ChatView {
     private Slider zoomSlider;
     private double mouseAnchorX, mouseAnchorY;
     private double translateAnchorX, translateAnchorY;
-    private Label avatarToast;
 
     private static final String BG_BLACK = "#000000";
     private static final String PANEL_DARK = "#111111";
@@ -120,11 +121,6 @@ public class ChatView {
 
         tcpClient.setOnDisconnected(reason -> {
             System.out.println("TCP socket disconnected: " + reason);
-        });
-
-
-        tcpClient.setOnError(error -> {
-            System.err.println("TCP socket error: " + error);
         });
 
         tcpClient.join(currentUserId);
@@ -299,7 +295,7 @@ public class ChatView {
                 """.formatted(TEXT_WHITE));
 
         TextField searchField = new TextField();
-        searchField.setPromptText("T\u00ecm ki\u1ebfm cu\u1ed9c tr\u00f2 chuy\u1ec7n...");
+        searchField.setPromptText("T\u00ecm ki\u1ebfm...");
         searchField.setStyle("""
                 -fx-background-color: %s;
                 -fx-border-color: %s;
@@ -311,6 +307,111 @@ public class ChatView {
                 -fx-font-size: 14px;
                 -fx-padding: 10px 16px;
                 """.formatted(BG_BLACK, INPUT_BORDER, TEXT_WHITE, TEXT_DIM));
+
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            String query = newVal.trim();
+            if (query.isEmpty()) {
+                loadConversations();
+            } else {
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return apiClient.searchUsers(query);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return null;
+                    }
+                }).thenAccept(response -> {
+                    if (response != null && response.isSuccess()) {
+                        Platform.runLater(() -> {
+                            contactList.getChildren().clear();
+                            contactLastMsgLabels.clear();
+                            try {
+                                JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+                                JsonArray users = json.getAsJsonArray("users");
+                                for (JsonElement element : users) {
+                                    JsonObject user = element.getAsJsonObject();
+                                    long uId = user.get("userId").getAsLong();
+                                    String username = user.get("username").getAsString();
+                                    
+                                    // Tạo item hiển thị cho user tìm được
+                                    HBox contact = new HBox(12);
+                                    contact.setAlignment(Pos.CENTER_LEFT);
+                                    contact.setPadding(new Insets(12, 14, 12, 14));
+                                    String radius = "16px";
+                                    contact.setStyle("""
+                                            -fx-background-color: transparent;
+                                            -fx-background-radius: %s;
+                                            -fx-cursor: hand;
+                                            """.formatted(radius));
+
+                                    Circle avatar = new Circle(22);
+                                    avatar.setFill(Color.web("#444"));
+                                    avatar.setStroke(Color.web(BORDER_COLOR));
+
+                                    VBox info = new VBox(3);
+                                    Label nameLabel = new Label(username);
+                                    nameLabel.setStyle("""
+                                            -fx-font-size: 15px;
+                                            -fx-font-weight: bold;
+                                            -fx-text-fill: %s;
+                                            """.formatted(TEXT_WHITE));
+                                    Label msgLabel = new Label("Nh\u1ea5p \u0111\u1ec3 nh\u1eafn tin");
+                                    msgLabel.setStyle("""
+                                            -fx-font-size: 12px;
+                                            -fx-text-fill: %s;
+                                            """.formatted(TEXT_MUTED));
+
+                                    info.getChildren().addAll(nameLabel, msgLabel);
+                                    contact.getChildren().addAll(avatar, info);
+
+                                    contact.setOnMouseEntered(e ->
+                                            contact.setStyle("""
+                                                    -fx-background-color: #1e1e1e;
+                                                    -fx-background-radius: %s;
+                                                    -fx-cursor: hand;
+                                                    """.formatted(radius)));
+                                    contact.setOnMouseExited(e ->
+                                            contact.setStyle("""
+                                                    -fx-background-color: transparent;
+                                                    -fx-background-radius: %s;
+                                                    -fx-cursor: hand;
+                                                    """.formatted(radius)));
+
+                                    contact.setOnMouseClicked(e -> {
+                                        CompletableFuture.supplyAsync(() -> {
+                                            try {
+                                                return apiClient.getOrCreateConversation(currentUserId, uId);
+                                            } catch (Exception ex) {
+                                                ex.printStackTrace();
+                                                return null;
+                                            }
+                                        }).thenAccept(convResp -> {
+                                            if (convResp != null && convResp.isSuccess()) {
+                                                Platform.runLater(() -> {
+                                                    try {
+                                                        JsonObject convJson = gson.fromJson(convResp.rawBody(), JsonObject.class);
+                                                        long conversationId = convJson.get("conversationId").getAsLong();
+                                                        searchField.clear();
+                                                        loadConversations();
+                                                        setCurrentConversation(conversationId, username);
+                                                    } catch (Exception ex) {
+                                                        ex.printStackTrace();
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    });
+
+                                    contactList.getChildren().add(contact);
+                                }
+                            } catch (Exception e) {
+                                System.err.println("Failed to parse search users JSON");
+                            }
+                        });
+                    }
+                });
+            }
+        });
 
         contactList = new VBox(4);
         ScrollPane scrollContacts = new ScrollPane(contactList);
@@ -501,7 +602,7 @@ public class ChatView {
                 long now = System.currentTimeMillis();
                 if (now - lastTypingSentTime >= TYPING_THROTTLE_MS) {
                     lastTypingSentTime = now;
-                    tcpClient.sendTyping(currentConversationId, currentUserId, true);
+                    tcpClient.sendTyping(currentConversationId, -1, true);
                 }
             }
         });
@@ -1053,7 +1154,7 @@ public class ChatView {
             CompletableFuture.supplyAsync(() -> {
                 try {
                     byte[] pngBytes = writableImageToPngBytes(croppedImage);
-                    return apiClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
+                    return restClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
                 } catch (Exception e) {
                     e.printStackTrace();
                     return null;

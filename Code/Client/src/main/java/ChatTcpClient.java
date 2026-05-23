@@ -39,13 +39,11 @@ public class ChatTcpClient {
     private Consumer<JsonObject> onUserStatusChange;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
-    private Consumer<String> onError;
 
     private final AtomicBoolean reconnecting = new AtomicBoolean(false);
     private volatile long userId = -1; // last joined userId for re-join after reconnect
 
     private ScheduledExecutorService heartbeatScheduler;
-    private volatile long lastPingTime = 0;
     private volatile boolean pongReceived = true;
 
     private ChatTcpClient() {}
@@ -138,7 +136,6 @@ public class ChatTcpClient {
             return;
         }
         pongReceived = false;
-        lastPingTime = System.currentTimeMillis();
         JsonObject ping = new JsonObject();
         ping.addProperty("action", "PING");
         ping.addProperty("requestId", "ping-" + UUID.randomUUID());
@@ -223,7 +220,6 @@ public class ChatTcpClient {
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
-    public void setOnError(Consumer<String> callback) { this.onError = callback; }
 
     // ── Request/response ──────────────────────────────────────────────────────
 
@@ -294,6 +290,21 @@ public class ChatTcpClient {
         return sendRequestSync(req);
     }
 
+    public ApiResponse searchUsers(String query) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SEARCH_USERS");
+        req.addProperty("query", query);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse getOrCreateConversation(long user1Id, long user2Id) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_OR_CREATE_CONVERSATION");
+        req.addProperty("user1Id", user1Id);
+        req.addProperty("user2Id", user2Id);
+        return sendRequestSync(req);
+    }
+
     public ApiResponse getMessages(long conversationId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "GET_MESSAGES");
@@ -322,7 +333,9 @@ public class ChatTcpClient {
         JsonObject req = new JsonObject();
         req.addProperty("action", "TYPING");
         req.addProperty("conversationId", conversationId);
-        req.addProperty("memberId", memberId);
+        if (memberId > 0) {
+            req.addProperty("memberId", memberId);
+        }
         req.addProperty("isTyping", isTyping);
         if (isConnected()) writeLine(gson.toJson(req));
     }

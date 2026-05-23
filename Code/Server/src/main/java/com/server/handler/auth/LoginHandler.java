@@ -31,14 +31,6 @@ public class LoginHandler {
                 response.addProperty("status", "success");
                 response.addProperty("userId", user.getId());
                 response.addProperty("username", user.getUsername());
-            // Gọi logic từ Service
-            com.server.model.User user = authService.login(username, password);
-            if (user != null) {
-                String body = String.format(
-                    "{\"status\": \"success\", \"userId\": %d, \"username\": \"%s\"}",
-                    user.getId(), user.getUsername()
-                );
-                sendResponse(exchange, 200, body);
             } else {
                 response.addProperty("status", "error");
                 response.addProperty("message", "Invalid username or password");

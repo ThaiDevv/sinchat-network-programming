@@ -20,6 +20,7 @@ public class Router {
     private static SendMessageHandler sendMessageHandler = new SendMessageHandler();
     private static ConversationHandle conversationHandle = new ConversationHandle();
     private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
+    private static SearchUserHandler searchUserHandler = new SearchUserHandler();
     private static AvatarHandler avatarHandler = new AvatarHandler();
     private static final PresenceService presenceService = PresenceService.getInstance();
 
@@ -61,6 +62,9 @@ public class Router {
                 case "GET_USER_CONVERSATIONS":
                     response = getConversationsHandler.handleTcp(request, conn);
                     break;
+                case "SEARCH_USERS":
+                    response = searchUserHandler.handleTcp(request, conn);
+                    break;
                 case "CHANGE_AVATAR":
                     response = avatarHandler.handleTcp(request, conn);
                     break;
@@ -92,9 +96,8 @@ public class Router {
                     conn.send(response);
                     return;
                 case "TYPING":
-                    // Broadcast typing status to the target member in real-time.
-                    // Expected by AdditionalEndpointsIntegrationTest.typingEventBroadcastSuccess.
-                    if (!request.has("conversationId") || !request.has("memberId") || !request.has("isTyping")) {
+                    // Broadcast typing status to the target member or members in the conversation in real-time.
+                    if (!request.has("conversationId") || !request.has("isTyping")) {
                         conn.sendError("Missing required fields for TYPING");
                         return;
                     }
@@ -106,7 +109,6 @@ public class Router {
                     }
 
                     long conversationId = request.get("conversationId").getAsLong();
-                    long memberId = request.get("memberId").getAsLong();
                     boolean isTyping = request.get("isTyping").getAsBoolean();
 
                     JsonObject evt = new JsonObject();
@@ -115,7 +117,18 @@ public class Router {
                     evt.addProperty("userId", fromUserId);
                     evt.addProperty("isTyping", isTyping);
 
-                    TcpConnectionManager.getInstance().broadcastToUser(memberId, evt);
+                    if (request.has("memberId")) {
+                        long memberId = request.get("memberId").getAsLong();
+                        TcpConnectionManager.getInstance().broadcastToUser(memberId, evt);
+                    } else {
+                        // Find all other members in the conversation and broadcast to them
+                        java.util.List<Long> memberIds = new com.server.repository.ConversationRepository().getMemberIds(conversationId);
+                        for (Long memberId : memberIds) {
+                            if (!memberId.equals(fromUserId)) {
+                                TcpConnectionManager.getInstance().broadcastToUser(memberId, evt);
+                            }
+                        }
+                    }
 
                     // Send a lightweight ACK (sender side typically ignores it; safe for clients that expect a response).
                     response = new JsonObject();

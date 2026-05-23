@@ -2,7 +2,6 @@ package com.server.service;
 
 import com.server.config.Database;
 import com.server.model.User;
-import org.mindrot.jbcrypt.BCrypt;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
