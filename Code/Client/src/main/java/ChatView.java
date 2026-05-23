@@ -61,26 +61,18 @@ public class ChatView {
     private long lastTypingSentTime = 0;
     private static final long TYPING_THROTTLE_MS = 1000; // Chỉ gửi typing tối đa 1 lần/giây
 
-    // ── Avatar state ──
-    private Image currentAvatarImage;
-    private Circle profileAvatarCircle;
-    private Image selectedAvatarImage;
-    private StackPane activeOldAvatarContainer = null;
-    private Slider zoomSlider;
-    private double mouseAnchorX, mouseAnchorY;
-    private double translateAnchorX, translateAnchorY;
+// ── Avatar state ──
+private Image currentAvatarImage;
+private Image initialAvatarImage;
+private final java.util.List<Image> previouslyUsedAvatars = new java.util.ArrayList<>();
+private Circle profileAvatarCircle;
+private Image selectedAvatarImage;
 
-    // ── Avatar state ──
-    private Image currentAvatarImage;
-    private Image initialAvatarImage;
-    private final java.util.List<Image> previouslyUsedAvatars = new java.util.ArrayList<>();
-    private Circle profileAvatarCircle;
-    private Image selectedAvatarImage;
-    private StackPane activeOldAvatarContainer = null;
-    private Slider zoomSlider;
-    private double mouseAnchorX, mouseAnchorY;
-    private double translateAnchorX, translateAnchorY;
-    private Label avatarToast;
+private StackPane activeOldAvatarContainer = null;
+private Slider zoomSlider;
+private double mouseAnchorX, mouseAnchorY;
+private double translateAnchorX, translateAnchorY;
+private Label avatarToast;
 
     private static final String BG_BLACK = "#000000";
     private static final String PANEL_DARK = "#111111";
@@ -748,7 +740,6 @@ public class ChatView {
                 """.formatted(PANEL_DARK, BORDER_COLOR));
 
         currentAvatarImage = createDefaultAvatarImage();
-<<<<<<< feature/AI-changeAvatar
         initialAvatarImage = currentAvatarImage;
         profileAvatarCircle = new Circle(55);
         // Chỉ dùng ImagePattern khi ảnh load xong và không bị lỗi
@@ -769,12 +760,6 @@ public class ChatView {
             ContextMenu menu = createAvatarContextMenu();
             menu.show(profileAvatarCircle, e.getScreenX(), e.getScreenY());
         });
-=======
-        profileAvatarCircle = new Circle(55);
-        profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
-        profileAvatarCircle.setStroke(Color.web(ACCENT));
-        profileAvatarCircle.setStrokeWidth(3);
->>>>>>> main
 
         Label nameLabel = new Label("Sinh vi\u00ean");
         nameLabel.setStyle("""
@@ -785,14 +770,11 @@ public class ChatView {
         VBox.setMargin(nameLabel, new Insets(8, 0, 12, 0));
 
         Button avatarBtn = createProfileButton("\u0110\u1ed5i avatar", true);
-<<<<<<< feature/AI-changeAvatar
         avatarBtn.setOnAction(e -> {
             ContextMenu menu = createAvatarContextMenu();
             menu.show(avatarBtn, javafx.geometry.Side.BOTTOM, 0, 0);
         });
-=======
-        avatarBtn.setOnAction(e -> openAvatarModal(stage));
->>>>>>> main
+
         Button nameBtn = createProfileButton("\u0110\u1ed5i t\u00ean ng\u01b0\u1eddi d\u00f9ng", false);
         Button passBtn = createProfileButton("\u0110\u1ed5i m\u1eadt kh\u1ea9u", false);
 
@@ -926,8 +908,6 @@ public class ChatView {
         return contextMenu;
     }
 
-=======
->>>>>>> main
     private void openAvatarModal(Stage owner) {
         Stage modal = new Stage();
         modal.initOwner(owner);
@@ -1097,10 +1077,6 @@ public class ChatView {
 
 <<<<<<< feature/AI-changeAvatar
         for (Image img : previouslyUsedAvatars) {
-=======
-        for (String url : oldAvatars) {
-            Image img = new Image(url, true);
->>>>>>> main
             ImageView oldAvatarView = new ImageView(img);
             oldAvatarView.setFitWidth(90);
             oldAvatarView.setFitHeight(90);
@@ -1272,25 +1248,17 @@ public class ChatView {
             currentAvatarImage = croppedImage;
             profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
 
-<<<<<<< feature/AI-changeAvatar
             // Thêm ảnh vừa đổi vào danh sách ảnh đại diện đã từng sử dụng
             previouslyUsedAvatars.add(0, croppedImage);
 
-=======
->>>>>>> main
             // Upload to server in background
             saveBtn.setDisable(true);
             saveBtn.setText("Đang lưu...");
 
             CompletableFuture.supplyAsync(() -> {
                 try {
-<<<<<<< feature/AI-changeAvatar
                     byte[] pngBytes = imageToPngBytes(croppedImage);
                     return apiClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
-=======
-                    byte[] pngBytes = writableImageToPngBytes(croppedImage);
-                    return restClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
->>>>>>> main
                 } catch (Exception e) {
                     e.printStackTrace();
                     return null;
