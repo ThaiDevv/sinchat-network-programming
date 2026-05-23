@@ -1,5 +1,3 @@
-cho tôi xin full code sau khi sửa của cái thứ 2:
-đây là code bị conflict
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -7,10 +5,7 @@ import com.google.gson.JsonObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-<<<<<<< feature/AI-changeAvatar
-=======
 import javax.imageio.ImageIO;
->>>>>>> main
 import java.util.concurrent.CompletableFuture;
 
 import javafx.application.Platform;
@@ -32,15 +27,11 @@ import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
-<<<<<<< feature/AI-changeAvatar
 import javax.imageio.ImageIO;
-=======
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
->>>>>>> main
-
 
 public class ChatView {
 
