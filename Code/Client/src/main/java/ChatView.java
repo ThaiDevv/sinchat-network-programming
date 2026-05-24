@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import javax.imageio.ImageIO;
 import java.util.concurrent.CompletableFuture;
 
 import javafx.application.Platform;
@@ -27,11 +26,11 @@ import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import javax.imageio.ImageIO;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-
 
 public class ChatView {
 
@@ -61,14 +60,18 @@ public class ChatView {
     private long lastTypingSentTime = 0;
     private static final long TYPING_THROTTLE_MS = 1000; // Chỉ gửi typing tối đa 1 lần/giây
 
-    // ── Avatar state ──
-    private Image currentAvatarImage;
-    private Circle profileAvatarCircle;
-    private Image selectedAvatarImage;
-    private StackPane activeOldAvatarContainer = null;
-    private Slider zoomSlider;
-    private double mouseAnchorX, mouseAnchorY;
-    private double translateAnchorX, translateAnchorY;
+// ── Avatar state ──
+private Image currentAvatarImage;
+private Image initialAvatarImage;
+private final java.util.List<Image> previouslyUsedAvatars = new java.util.ArrayList<>();
+private Circle profileAvatarCircle;
+private Image selectedAvatarImage;
+
+private StackPane activeOldAvatarContainer = null;
+private Slider zoomSlider;
+private double mouseAnchorX, mouseAnchorY;
+private double translateAnchorX, translateAnchorY;
+private Label avatarToast;
 
     private static final String BG_BLACK = "#000000";
     private static final String PANEL_DARK = "#111111";
@@ -84,6 +87,18 @@ public class ChatView {
         this.stage = stage;
         this.currentUserId = currentUserId;
         this.currentConversationId = -1; // chưa chọn conversation nào
+
+        // Khởi tạo danh sách avatar đã từng sử dụng bằng các ảnh placeholder mặc định
+        String[] defaultOldAvatars = {
+                "https://i.pravatar.cc/300?img=1",
+                "https://i.pravatar.cc/300?img=2",
+                "https://i.pravatar.cc/300?img=3",
+                "https://i.pravatar.cc/300?img=4",
+                "https://i.pravatar.cc/300?img=5"
+        };
+        for (String url : defaultOldAvatars) {
+            previouslyUsedAvatars.add(new Image(url, true));
+        }
 
         root = new BorderPane();
         root.setStyle("-fx-background-color: " + BG_BLACK + ";");
@@ -704,11 +719,8 @@ public class ChatView {
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
                 // Gửi qua TCP → server lưu DB → broadcast về cho mọi người
                 tcpClient.sendMessage(currentConversationId, currentUserId, text);
-            } else {
-                // Fallback: hiển thị cục bộ nếu chưa kết nối TCP
-                addSentMessage(text);
             }
-            messageInput.clear();
+        messageInput.clear();
         }
     }
 
@@ -724,10 +736,26 @@ public class ChatView {
                 """.formatted(PANEL_DARK, BORDER_COLOR));
 
         currentAvatarImage = createDefaultAvatarImage();
+        initialAvatarImage = currentAvatarImage;
         profileAvatarCircle = new Circle(55);
-        profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+        // Chỉ dùng ImagePattern khi ảnh load xong và không bị lỗi
+        if (!currentAvatarImage.isError() && currentAvatarImage.getProgress() >= 1.0) {
+            profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+        } else {
+            profileAvatarCircle.setFill(Color.web(ACCENT));
+            currentAvatarImage.progressProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal.doubleValue() >= 1.0 && !currentAvatarImage.isError()) {
+                    profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                }
+            });
+        }
         profileAvatarCircle.setStroke(Color.web(ACCENT));
         profileAvatarCircle.setStrokeWidth(3);
+        profileAvatarCircle.setCursor(javafx.scene.Cursor.HAND);
+        profileAvatarCircle.setOnMouseClicked(e -> {
+            ContextMenu menu = createAvatarContextMenu();
+            menu.show(profileAvatarCircle, e.getScreenX(), e.getScreenY());
+        });
 
         Label nameLabel = new Label("Sinh vi\u00ean");
         nameLabel.setStyle("""
@@ -738,7 +766,11 @@ public class ChatView {
         VBox.setMargin(nameLabel, new Insets(8, 0, 12, 0));
 
         Button avatarBtn = createProfileButton("\u0110\u1ed5i avatar", true);
-        avatarBtn.setOnAction(e -> openAvatarModal(stage));
+        avatarBtn.setOnAction(e -> {
+            ContextMenu menu = createAvatarContextMenu();
+            menu.show(avatarBtn, javafx.geometry.Side.BOTTOM, 0, 0);
+        });
+
         Button nameBtn = createProfileButton("\u0110\u1ed5i t\u00ean ng\u01b0\u1eddi d\u00f9ng", false);
         Button passBtn = createProfileButton("\u0110\u1ed5i m\u1eadt kh\u1ea9u", false);
 
@@ -809,6 +841,66 @@ public class ChatView {
     // ═══════════════════════════════════════════════════════════
     //  AVATAR MODAL — tích hợp từ changeAvatarTest
     // ═══════════════════════════════════════════════════════════
+    private ContextMenu createAvatarContextMenu() {
+        ContextMenu contextMenu = new ContextMenu();
+        
+        contextMenu.setStyle("""
+                -fx-background-color: #222222;
+                -fx-border-color: #333333;
+                -fx-border-width: 1px;
+                -fx-background-radius: 10px;
+                -fx-border-radius: 10px;
+                -fx-padding: 6px;
+                """);
+        
+        MenuItem changeItem = new MenuItem("Đổi avatar");
+        changeItem.setStyle("""
+                -fx-text-fill: white;
+                -fx-font-size: 14px;
+                -fx-font-weight: bold;
+                -fx-padding: 8px 16px;
+                """);
+        changeItem.setOnAction(e -> openAvatarModal(stage));
+        
+        MenuItem restoreItem = new MenuItem("Khôi phục lại avatar ban đầu");
+        restoreItem.setStyle("""
+                -fx-text-fill: #cccccc;
+                -fx-font-size: 14px;
+                -fx-font-weight: bold;
+                -fx-padding: 8px 16px;
+                """);
+        restoreItem.setOnAction(e -> {
+            if (currentAvatarImage == initialAvatarImage) {
+                showAvatarToast("Ảnh đại diện đã là ảnh ban đầu!", "#555555");
+                return;
+            }
+            if (initialAvatarImage != null) {
+                currentAvatarImage = initialAvatarImage;
+                profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                
+                // Upload restored avatar to server in background
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        byte[] pngBytes = imageToPngBytes(initialAvatarImage);
+                        return apiClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        return null;
+                    }
+                }).thenAccept(response -> Platform.runLater(() -> {
+                    if (response != null && response.isSuccess()) {
+                        showAvatarToast("Đã khôi phục avatar ban đầu!", "#1f883d");
+                    } else {
+                        String errMsg = response != null ? response.message() : "Lỗi kết nối server";
+                        showAvatarToast("Lỗi khi đồng bộ: " + errMsg, "#cc3333");
+                    }
+                }));
+            }
+        });
+        
+        contextMenu.getItems().addAll(changeItem, restoreItem);
+        return contextMenu;
+    }
 
     private void openAvatarModal(Stage owner) {
         Stage modal = new Stage();
@@ -947,14 +1039,6 @@ public class ChatView {
         oldAvatarList.setHgap(14);
         oldAvatarList.setVgap(14);
 
-        String[] oldAvatars = {
-                "https://i.pravatar.cc/300?img=1",
-                "https://i.pravatar.cc/300?img=2",
-                "https://i.pravatar.cc/300?img=3",
-                "https://i.pravatar.cc/300?img=4",
-                "https://i.pravatar.cc/300?img=5"
-        };
-
         String containerDefaultStyle = """
                 -fx-border-color: transparent;
                 -fx-border-width: 3px;
@@ -974,8 +1058,7 @@ public class ChatView {
 
         activeOldAvatarContainer = null;
 
-        for (String url : oldAvatars) {
-            Image img = new Image(url, true);
+        for (Image img : previouslyUsedAvatars) {
             ImageView oldAvatarView = new ImageView(img);
             oldAvatarView.setFitWidth(90);
             oldAvatarView.setFitHeight(90);
@@ -1063,7 +1146,10 @@ public class ChatView {
                     activeOldAvatarContainer.setStyle(containerDefaultStyle);
                     activeOldAvatarContainer = null;
                 }
-                Image img = new Image(file.toURI().toString());
+               Image img = new Image(
+                    file.toURI().toString(),
+                    true
+                );
                 selectedAvatarImage = img;
                 previewImage.setImage(img);
                 updatePreviewFit(previewImage, img);
@@ -1147,14 +1233,17 @@ public class ChatView {
             currentAvatarImage = croppedImage;
             profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
 
+            // Thêm ảnh vừa đổi vào danh sách ảnh đại diện đã từng sử dụng
+            previouslyUsedAvatars.add(0, croppedImage);
+
             // Upload to server in background
             saveBtn.setDisable(true);
             saveBtn.setText("Đang lưu...");
 
             CompletableFuture.supplyAsync(() -> {
                 try {
-                    byte[] pngBytes = writableImageToPngBytes(croppedImage);
-                    return restClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
+                    byte[] pngBytes = imageToPngBytes(croppedImage);
+                    return apiClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
                 } catch (Exception e) {
                     e.printStackTrace();
                     return null;
@@ -1227,23 +1316,57 @@ public class ChatView {
     }
 
     private Image createDefaultAvatarImage() {
-        try {
-            File file = new File("avatarMacDinh.jpg");
-            if (file.exists()) {
-                return new Image(file.toURI().toString());
+    try {
+        File file = new File("avatarMacDinh.jpg");
+
+        if (file.exists()) {
+            // Load file local
+            Image img = new Image(file.toURI().toString(), false);
+            if (!img.isError()) {
+                return img;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-        return new Image("https://i.pravatar.cc/300?img=0", true);
+    } catch (Exception e) {
+        e.printStackTrace();
     }
 
-    private byte[] writableImageToPngBytes(WritableImage image) {
+    // Fallback avatar online
+    try {
+        Image img = new Image("https://i.pravatar.cc/300?img=0", false);
+
+        if (!img.isError()) {
+            return img;
+        }
+    } catch (Exception ignored) {
+    }
+
+        // Fallback cuối cùng: avatar màu
+        javafx.scene.canvas.Canvas canvas =
+                new javafx.scene.canvas.Canvas(110, 110);
+    
+        javafx.scene.canvas.GraphicsContext gc =
+                canvas.getGraphicsContext2D();
+    
+        gc.setFill(javafx.scene.paint.Color.web(ACCENT));
+        gc.fillOval(0, 0, 110, 110);
+    
+        SnapshotParameters params = new SnapshotParameters();
+        params.setFill(Color.TRANSPARENT);
+    
+        return canvas.snapshot(params, null);
+    }
+
+    private byte[] imageToPngBytes(Image image) {
         try {
-            java.awt.image.BufferedImage bImage = SwingFXUtils.fromFXImage(image, null);
+            java.awt.image.BufferedImage bImage =
+                    SwingFXUtils.fromFXImage(image, null);
+    
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    
             ImageIO.write(bImage, "png", baos);
+    
             return baos.toByteArray();
+    
         } catch (Exception e) {
             e.printStackTrace();
             return new byte[0];
@@ -1276,9 +1399,10 @@ public class ChatView {
         toastStage.show();
 
         // Auto-close after 2.5 seconds
-        new Thread(() -> {
-            try { Thread.sleep(2500); } catch (Exception ignored) {}
-            Platform.runLater(toastStage::close);
-        }).start();
+        scheduler.schedule(
+            () -> Platform.runLater(toastStage::close),
+            2500,
+            TimeUnit.MILLISECONDS
+        );
     }
 }
