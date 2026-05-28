@@ -1,5 +1,6 @@
 package com.server.tcp;
 
+import com.server.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,6 +9,7 @@ import javax.net.ServerSocketFactory;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -20,12 +22,14 @@ public class TcpServer {
     private ServerSocket serverSocket;
     private volatile boolean running = false;
     private IdleConnectionSweeper idleConnectionSweeper;
+    private final UserRepository userRepository;
 
     public TcpServer(int port, boolean tlsEnabled, long idleTimeoutMillis) {
         this.port = port;
         this.tlsEnabled = tlsEnabled;
         this.idleTimeoutMillis = idleTimeoutMillis;
         this.threadPool = Executors.newVirtualThreadPerTaskExecutor();
+        this.userRepository = new UserRepository();
     }
 
     public TcpServer(int port) {
@@ -33,10 +37,12 @@ public class TcpServer {
     }
 
     public void start() {
+        // Reset all stale online statuses from previous crashes / unclean shutdowns
+        userRepository.resetAllOffline();
+
         running = true;
         idleConnectionSweeper = new IdleConnectionSweeper(
                 TcpConnectionManager.getInstance(),
-                PresenceService.getInstance(),
                 idleTimeoutMillis
         );
         idleConnectionSweeper.start();
@@ -80,6 +86,7 @@ public class TcpServer {
     }
 
     public void stop() {
+        logger.info("[TcpServer] Stopping server...");
         running = false;
         if (idleConnectionSweeper != null) {
             idleConnectionSweeper.stop();
@@ -91,6 +98,20 @@ public class TcpServer {
                 // ignore
             }
         }
+
+        // Close all active connections so PresenceService.onUserOffline() is triggered
+        TcpConnectionManager cm = TcpConnectionManager.getInstance();
+        Set<ClientConnection> active = cm.getActiveConnectionsSnapshot();
+        logger.info("[TcpServer] Closing {} active connections...", active.size());
+        for (ClientConnection conn : active) {
+            try {
+                conn.close();
+            } catch (Exception e) {
+                logger.warn("[TcpServer] Error closing connection {}: {}", conn.getRemoteAddress(), e.getMessage());
+            }
+        }
+
         threadPool.shutdownNow();
+        logger.info("[TcpServer] Server stopped.");
     }
 }

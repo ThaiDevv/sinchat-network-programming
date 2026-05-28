@@ -22,4 +22,8 @@ public class MessageService {
     public List<Message> getMessages(long conversationId) {
         return messageRepository.getByConversationId(conversationId);
     }
+
+    public List<Message> getMessages(long conversationId, int limit, int offset) {
+        return messageRepository.getByConversationId(conversationId, limit, offset);
+    }
 }

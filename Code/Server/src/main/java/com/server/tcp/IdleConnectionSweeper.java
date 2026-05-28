@@ -15,7 +15,6 @@ public class IdleConnectionSweeper {
     private static final Logger logger = LoggerFactory.getLogger(IdleConnectionSweeper.class);
 
     private final TcpConnectionManager connectionManager;
-    private final PresenceService presenceService;
     private final long idleTimeoutMillis;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -25,10 +24,8 @@ public class IdleConnectionSweeper {
     });
 
     public IdleConnectionSweeper(TcpConnectionManager connectionManager,
-                                PresenceService presenceService,
                                 long idleTimeoutMillis) {
         this.connectionManager = connectionManager;
-        this.presenceService = presenceService;
         this.idleTimeoutMillis = idleTimeoutMillis;
     }
 
@@ -58,12 +55,8 @@ public class IdleConnectionSweeper {
             }
             long idleFor = now - conn.getLastActiveAt();
             if (idleFor > idleTimeoutMillis) {
-                Long userId = conn.getUserId();
                 logger.info("Closing idle connection (idle {} ms) from {}", idleFor, conn.getRemoteAddress());
                 conn.close();
-                if (userId != null && !connectionManager.hasOnlineConnection(userId)) {
-                    presenceService.onUserOffline(userId);
-                }
             }
         }
     }

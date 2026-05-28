@@ -30,4 +30,4 @@ if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [ERROR] Server stopped with an error code.
 )
-pause
+exit /b 0

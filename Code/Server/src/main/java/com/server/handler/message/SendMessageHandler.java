@@ -17,6 +17,8 @@ public class SendMessageHandler {
         JsonObject response = new JsonObject();
         try {
             if (!request.has("conversationId") || !request.has("senderId")) {
+                logger.warn("[SEND_MESSAGE] Remote={} | Missing conversationId or senderId",
+                        conn.getRemoteAddress());
                 response.addProperty("status", "error");
                 response.addProperty("message", "Missing conversationId or senderId");
                 return response;
@@ -26,13 +28,30 @@ public class SendMessageHandler {
             long senderId = request.get("senderId").getAsLong();
             String content = request.has("content") ? request.get("content").getAsString() : "";
 
+            // Security check: verify senderId matches the authenticated user
+            Long connectedUserId = conn.getUserId();
+            if (connectedUserId == null || senderId != connectedUserId) {
+                logger.warn("[SEND_MESSAGE UNAUTHORIZED] Remote={} | ConnectedUserId={} | ClaimedSenderId={} | senderId mismatch or not joined",
+                        conn.getRemoteAddress(), connectedUserId, senderId);
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized: senderId mismatch");
+                return response;
+            }
+
             if (content.trim().isEmpty()) {
+                logger.warn("[SEND_MESSAGE] Remote={} | UserId={} | ConversationId={} | Empty message content rejected",
+                        conn.getRemoteAddress(), senderId, conversationId);
                 response.addProperty("status", "error");
                 response.addProperty("message", "Message content is required");
                 return response;
             }
 
+            logger.info("[SEND_MESSAGE ATTEMPT] Remote={} | UserId={} | ConversationId={} | ContentLength={}",
+                    conn.getRemoteAddress(), senderId, conversationId, content.length());
+
             long msgId = messageService.sendMessage(conversationId, senderId, content);
+            logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored",
+                    conn.getRemoteAddress(), senderId, conversationId, msgId);
             response.addProperty("status", "success");
             response.addProperty("messageId", msgId);
             response.addProperty("conversationId", conversationId);
@@ -41,7 +60,10 @@ public class SendMessageHandler {
 
             // Broadcast new message to all members in the conversation
             java.util.List<Long> memberIds = getMemberIds(conversationId);
-            
+
+            logger.info("[SEND_MESSAGE BROADCAST] Remote={} | UserId={} | ConversationId={} | MessageId={} | Broadcasting to {} members",
+                    conn.getRemoteAddress(), senderId, conversationId, msgId, memberIds.size());
+
             JsonObject broadcastMsg = new JsonObject();
             broadcastMsg.addProperty("action", "NEW_MESSAGE");
             broadcastMsg.addProperty("conversationId", conversationId);
@@ -50,10 +72,13 @@ public class SendMessageHandler {
             broadcastMsg.addProperty("messageId", msgId);
 
             for (Long memberId : memberIds) {
+                logger.info("[SEND_MESSAGE BROADCAST] MessageId={} | Broadcasting to memberId={}",
+                        msgId, memberId);
                 com.server.tcp.TcpConnectionManager.getInstance().broadcastToUser(memberId, broadcastMsg);
             }
         } catch (Exception e) {
-            logger.error("Send message error", e);
+            logger.error("[SEND_MESSAGE ERROR] Remote={} | Error sending message: {}",
+                    conn.getRemoteAddress(), e.getMessage(), e);
             response.addProperty("status", "error");
             response.addProperty("message", "Internal Server Error");
         }

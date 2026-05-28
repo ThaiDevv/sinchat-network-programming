@@ -26,5 +26,11 @@ public class Main {
         TcpServer server = new TcpServer(port);
         server.start();
         logger.info("Main Server started TCP on port {}", port);
+
+        // Register shutdown hook for graceful cleanup on Ctrl+C / SIGTERM
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            logger.info("[Main] Shutdown hook triggered - stopping server...");
+            server.stop();
+        }, "shutdown-hook"));
     }
 }

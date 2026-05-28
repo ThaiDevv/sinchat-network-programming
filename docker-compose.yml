@@ -3,33 +3,29 @@ version: "3.8"
 
 services:
   app:
-    build: .
-    container_name: java_app
+    build: ./Code/Server
+    container_name: sinchat_server
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "3000:3000"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/mydb
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=root
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - DB_URL=jdbc:mysql://db:3306/sinchat
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - PORT=3000
 
   db:
     image: mysql:8
-    container_name: mysql_db
+    container_name: sinchat_mysql
     environment:
       - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=mydb
+      - MYSQL_DATABASE=sinchat
     ports:
       - "3306:3306"
     volumes:
-      - ./sql.txt:/docker-entrypoint-initdb.d/init.sql
+      - ./Code/Database/dump-roacqgfa_ltm-202605132325.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s

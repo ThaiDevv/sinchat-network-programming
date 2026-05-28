@@ -1,5 +1,7 @@
 package com.server.repository;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.server.config.Database;
 import com.server.model.User;
 import org.slf4j.Logger;
@@ -132,6 +134,46 @@ public class UserRepository {
         return null;
     }
 
+    /** Lấy đường dẫn avatar từ DB */
+    public String getAvatarPath(long userId) {
+        String query = "SELECT avatar_url FROM users WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("avatar_url");
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error getting avatar path for user: {}", userId, e);
+        }
+        return null;
+    }
+
+    /** Tìm user theo từ khóa (dùng cho search) */
+    public JsonArray searchUsers(String keyword, long excludeUserId) {
+        JsonArray results = new JsonArray();
+        String query = "SELECT id, username, avatar_url FROM users WHERE username LIKE ? AND id != ? LIMIT 15";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, "%" + keyword + "%");
+            pstmt.setLong(2, excludeUserId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    JsonObject userObj = new JsonObject();
+                    userObj.addProperty("userId", rs.getLong("id"));
+                    userObj.addProperty("username", rs.getString("username"));
+                    userObj.addProperty("avatarUrl", rs.getString("avatar_url"));
+                    results.add(userObj);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error searching users with keyword: {}", keyword, e);
+        }
+        return results;
+    }
+
     private User mapRow(ResultSet rs) throws SQLException {
         return new User(
                 rs.getLong("id"),
@@ -144,5 +186,20 @@ public class UserRepository {
                 rs.getTimestamp("last_seen"),
                 rs.getTimestamp("created_at")
         );
+    }
+
+    /**
+     * Resets all users' online status to offline on server startup.
+     * This cleans up stale statuses from a previous crash or unclean shutdown.
+     */
+    public void resetAllOffline() {
+        String sql = "UPDATE users SET is_online = false, last_seen = NOW() WHERE is_online = true";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            int updated = stmt.executeUpdate();
+            logger.info("[UserRepository] Reset {} stale online users to offline", updated);
+        } catch (SQLException e) {
+            logger.error("[UserRepository] Failed to reset online statuses: {}", e.getMessage());
+        }
     }
 }

@@ -72,7 +72,7 @@ public class ChatTcpClient {
     }
 
     private void connectLoop() {
-        while (true) {
+        while (!shutdownRequested.get()) {
             Socket tempSocket = null;
             try {
                 tempSocket = createSocketFactory().createSocket(HOST, PORT);
@@ -104,8 +104,10 @@ public class ChatTcpClient {
 
             if (onDisconnected != null) Platform.runLater(() -> onDisconnected.accept("Connection closed – reconnecting…"));
 
-            // back-off then retry
-            try { Thread.sleep(2000); } catch (InterruptedException ex) { Thread.currentThread().interrupt(); break; }
+            // Wait 2 seconds before retry, but bail if shutdown requested
+            if (!shutdownRequested.get()) {
+                try { Thread.sleep(2000); } catch (InterruptedException ex) { Thread.currentThread().interrupt(); break; }
+            }
         }
     }
 
@@ -187,6 +189,24 @@ public class ChatTcpClient {
     }
 
     // ── I/O helpers ───────────────────────────────────────────────────────────
+
+    private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+
+    public void shutdown() {
+        shutdownRequested.set(true);
+        disconnect();
+    }
+
+    /**
+     * Shutdown the current instance and reset singleton so that next
+     * {@link #getInstance()} call creates a fresh client.
+     */
+    public static synchronized void resetInstance() {
+        if (instance != null) {
+            instance.shutdown();
+            instance = null;
+        }
+    }
 
     private synchronized void writeLine(String content) {
         if (writer != null) {
@@ -312,6 +332,15 @@ public class ChatTcpClient {
         return sendRequestSync(req);
     }
 
+    public ApiResponse getMessages(long conversationId, int limit, int offset) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_MESSAGES");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("limit", limit);
+        req.addProperty("offset", offset);
+        return sendRequestSync(req);
+    }
+
     public void join(long userId) {
         this.userId = userId;
         JsonObject req = new JsonObject();
@@ -338,6 +367,28 @@ public class ChatTcpClient {
         }
         req.addProperty("isTyping", isTyping);
         if (isConnected()) writeLine(gson.toJson(req));
+    }
+
+    public ApiResponse changeAvatar(long userId, String avatarUrl) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "CHANGE_AVATAR");
+        req.addProperty("userId", userId);
+        req.addProperty("avatarUrl", avatarUrl);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse getUserProfile(long userId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_USER_PROFILE");
+            req.addProperty("userId", userId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse getAvatar(long userId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_AVATAR");
+        req.addProperty("userId", userId);
+        return sendRequestSync(req);
     }
 
     // ── ApiResponse ───────────────────────────────────────────────────────────

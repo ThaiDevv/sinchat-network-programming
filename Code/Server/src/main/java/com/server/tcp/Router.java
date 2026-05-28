@@ -4,6 +4,10 @@ import com.google.gson.JsonObject;
 import com.server.handler.auth.*;
 import com.server.handler.message.*;
 import com.server.handler.changeavatar.*;
+import com.server.handler.avatar.GetAvatarHandler;
+import com.server.handler.JoinHandler;
+import com.server.handler.PingHandler;
+import com.server.handler.TypingHandler;
 import com.server.ProfileHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,10 +26,14 @@ public class Router {
     private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
     private static SearchUserHandler searchUserHandler = new SearchUserHandler();
     private static AvatarHandler avatarHandler = new AvatarHandler();
-    private static final PresenceService presenceService = PresenceService.getInstance();
-
+    private static GetAvatarHandler getAvatarHandler = new GetAvatarHandler();
+    private static final JoinHandler joinHandler = new JoinHandler();
+    private static final PingHandler pingHandler = new PingHandler();
+    private static final TypingHandler typingHandler = new TypingHandler();
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
+            logger.warn("[ROUTER] Remote={} | Missing action field in request: {}",
+                    conn.getRemoteAddress(), request);
             conn.sendError("Missing action field");
             return;
         }
@@ -34,6 +42,8 @@ public class Router {
 
         String action = request.get("action").getAsString();
         String requestId = request.has("requestId") ? request.get("requestId").getAsString() : null;
+        logger.info("[ROUTER] Dispatching action='{}' | Remote={} | UserId={} | requestId={}",
+                action, conn.getRemoteAddress(), conn.getUserId(), requestId);
 
         try {
             JsonObject response = null;
@@ -68,74 +78,38 @@ public class Router {
                 case "CHANGE_AVATAR":
                     response = avatarHandler.handleTcp(request, conn);
                     break;
-                case "JOIN":
-                    if (request.has("userId")) {
-                        long userId = request.get("userId").getAsLong();
-                        Long previousUserId = conn.getUserId();
-                        if (previousUserId != null && previousUserId != userId) {
-                            TcpConnectionManager.getInstance().removeConnection(conn);
-                            if (!TcpConnectionManager.getInstance().hasOnlineConnection(previousUserId)) {
-                                presenceService.onUserOffline(previousUserId);
-                            }
-                        }
-                        conn.setUserId(userId);
-                        TcpConnectionManager.getInstance().addConnection(userId, conn);
-                        presenceService.onUserOnline(userId);
+                case "GET_USER_PROFILE":
+                    long getProfileUserId = request.get("userId").getAsLong();
+                    logger.info("[GET_USER_PROFILE] Remote={} | UserId={} | Fetching user profile",
+                            conn.getRemoteAddress(), getProfileUserId);
+                    JsonObject profile = profileHandler.getUserProfile(request.get("userId").getAsLong());
+                    if (profile != null) {
+                        logger.info("[GET_USER_PROFILE] Remote={} | UserId={} | Profile found",
+                                conn.getRemoteAddress(), getProfileUserId);
+                        response = profile;
+                    } else {
+                        logger.warn("[GET_USER_PROFILE] Remote={} | UserId={} | Profile not found",
+                                conn.getRemoteAddress(), getProfileUserId);
                         response = new JsonObject();
-                        response.addProperty("status", "success");
-                        response.addProperty("message", "Joined successfully");
+                        response.addProperty("status", "error");
+                        response.addProperty("message", "User profile not found");
                     }
+                    break;
+                case "JOIN":
+                    response = joinHandler.handleTcp(request, conn);
+                    break;
+                case "GET_AVATAR":
+                    response = getAvatarHandler.handleTcp(request, conn);
                     break;
                 case "PING":
-                    response = new JsonObject();
-                    response.addProperty("action", "PING_RESPONSE");
-                    response.addProperty("status", "success");
-                    if (requestId != null) {
-                        response.addProperty("requestId", requestId);
-                    }
-                    conn.send(response);
-                    return;
+                    pingHandler.handle(request, conn, requestId);
+                    return; // PING already sent response
                 case "TYPING":
-                    // Broadcast typing status to the target member or members in the conversation in real-time.
-                    if (!request.has("conversationId") || !request.has("isTyping")) {
-                        conn.sendError("Missing required fields for TYPING");
-                        return;
-                    }
-
-                    Long fromUserId = conn.getUserId();
-                    if (fromUserId == null) {
-                        conn.sendError("Not joined (missing userId). Send JOIN first");
-                        return;
-                    }
-
-                    long conversationId = request.get("conversationId").getAsLong();
-                    boolean isTyping = request.get("isTyping").getAsBoolean();
-
-                    JsonObject evt = new JsonObject();
-                    evt.addProperty("action", "TYPING_EVENT");
-                    evt.addProperty("conversationId", conversationId);
-                    evt.addProperty("userId", fromUserId);
-                    evt.addProperty("isTyping", isTyping);
-
-                    if (request.has("memberId")) {
-                        long memberId = request.get("memberId").getAsLong();
-                        TcpConnectionManager.getInstance().broadcastToUser(memberId, evt);
-                    } else {
-                        // Find all other members in the conversation and broadcast to them
-                        java.util.List<Long> memberIds = new com.server.repository.ConversationRepository().getMemberIds(conversationId);
-                        for (Long memberId : memberIds) {
-                            if (!memberId.equals(fromUserId)) {
-                                TcpConnectionManager.getInstance().broadcastToUser(memberId, evt);
-                            }
-                        }
-                    }
-
-                    // Send a lightweight ACK (sender side typically ignores it; safe for clients that expect a response).
-                    response = new JsonObject();
-                    response.addProperty("status", "success");
-                    response.addProperty("message", "Typing event broadcasted");
+                    response = typingHandler.handleTcp(request, conn);
                     break;
                 default:
+                    logger.warn("[ROUTER] Unknown action='{}' from Remote={} | UserId={}",
+                            action, conn.getRemoteAddress(), conn.getUserId());
                     conn.sendError("Unknown action: " + action);
                     return;
             }
@@ -148,9 +122,16 @@ public class Router {
                     response.addProperty("requestId", requestId);
                 }
                 conn.send(response);
+                logger.info("[ROUTER] Response sent for action='{}' | Remote={} | UserId={} | Status={}",
+                        action, conn.getRemoteAddress(), conn.getUserId(),
+                        response.has("status") ? response.get("status").getAsString() : "unknown");
+            } else {
+                logger.warn("[ROUTER] No response for action='{}' | Remote={} | UserId={}",
+                        action, conn.getRemoteAddress(), conn.getUserId());
             }
         } catch (Throwable e) {
-            logger.error("Error handling action " + action, e);
+            logger.error("[ROUTER] Error handling action='{}' | Remote={} | UserId={} | Error: {}",
+                    action, conn.getRemoteAddress(), conn.getUserId(), e.getMessage(), e);
             JsonObject err = new JsonObject();
             err.addProperty("action", action + "_RESPONSE");
             if (requestId != null) err.addProperty("requestId", requestId);

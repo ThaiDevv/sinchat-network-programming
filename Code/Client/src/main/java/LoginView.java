@@ -13,7 +13,7 @@ public class LoginView {
 
     private final BorderPane root;
     private final Stage stage;
-    private final ChatTcpClient apiClient = ChatTcpClient.getInstance();
+    private final ChatTcpClient tcpClient = ChatTcpClient.getInstance();
 
     private String resetCode;
     private String resetAccount;
@@ -60,7 +60,7 @@ public class LoginView {
                     loginButton,
                     message,
                     "\u0110ang \u0111\u0103ng nh\u1eadp...",
-                    () -> apiClient.login(account, password),
+                    () -> tcpClient.login(account, password),
                     response -> {
                         if (response.isSuccess()) {
                             long userId = response.userId() != null ? response.userId() : 0;
@@ -136,7 +136,7 @@ public class LoginView {
                     registerButton,
                     message,
                     "\u0110ang \u0111\u0103ng k\u00fd...",
-                    () -> apiClient.register(account, password, email),
+                    () -> tcpClient.register(account, password, email),
                     response -> {
                         if (response.isSuccess()) {
                             setMessage(message, response.message(), "#4ade80");
@@ -191,7 +191,7 @@ public class LoginView {
                     createCodeButton,
                     message,
                     "\u0110ang t\u1ea1o m\u00e3...",
-                    () -> apiClient.requestPasswordResetCode(account),
+                    () -> tcpClient.requestPasswordResetCode(account),
                     response -> {
                         if (response.isSuccess()) {
                             resetAccount = account;
@@ -297,7 +297,7 @@ public class LoginView {
                     saveButton,
                     message,
                     "\u0110ang \u0111\u1ed5i m\u1eadt kh\u1ea9u...",
-                    () -> apiClient.resetPassword(code, newPassword),
+                    () -> tcpClient.resetPassword(code, newPassword),
                     response -> {
                         if (response.isSuccess()) {
                             resetCode = null;

@@ -18,16 +18,29 @@ public class GetConversationsHandler {
         JsonObject response = new JsonObject();
         try {
             if (!request.has("userId")) {
+                logger.warn("[GET_USER_CONVERSATIONS] Remote={} | Missing userId",
+                        conn.getRemoteAddress());
                 response.addProperty("status", "error");
                 response.addProperty("message", "Missing userId");
                 return response;
             }
             long userId = request.get("userId").getAsLong();
+
+            logger.info("[GET_USER_CONVERSATIONS] Remote={} | UserId={} | Fetching conversations",
+                    conn.getRemoteAddress(), userId);
+
             JsonArray convs = conversationService.getConversationsWithDetails(userId);
+
+            logger.info("[GET_USER_CONVERSATIONS] Remote={} | UserId={} | Found {} conversations",
+                    conn.getRemoteAddress(), userId, convs.size());
+
             response.addProperty("status", "success");
             response.add("conversations", convs);
         } catch (Exception e) {
-            logger.error("Get conversations error", e);
+            logger.error("[GET_USER_CONVERSATIONS ERROR] Remote={} | userId={} | Error: {}",
+                    conn.getRemoteAddress(),
+                    request.has("userId") ? request.get("userId").getAsLong() : "?",
+                    e.getMessage(), e);
             response.addProperty("status", "error");
             response.addProperty("message", "Internal Server Error");
         }
