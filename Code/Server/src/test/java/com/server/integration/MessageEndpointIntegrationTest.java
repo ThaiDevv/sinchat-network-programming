@@ -114,7 +114,7 @@ class MessageEndpointIntegrationTest {
         field.set(null, value);
     }
 
-    // ──────────────── Helpers ─────────────────────────
+    // Helper methods
 
     /**
      * Sends a request on a new socket and closes it immediately.
@@ -171,7 +171,7 @@ class MessageEndpointIntegrationTest {
         }
     }
 
-    // ──────────────── GET_MESSAGES Action ────────────────
+    // GET_MESSAGES action
 
     @Test
     void getMessagesSuccess() throws Exception {
@@ -218,7 +218,7 @@ class MessageEndpointIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("Missing"));
     }
 
-    // ──────────────── SEND_MESSAGE Action ────────────────
+    // SEND_MESSAGE action
 
     @Test
     void sendMessageSuccess() throws Exception {
@@ -268,7 +268,7 @@ class MessageEndpointIntegrationTest {
         }
     }
 
-    // ──────────── GET_OR_CREATE_CONVERSATION Action ────────────
+    // GET_OR_CREATE_CONVERSATION action
 
     @Test
     void getOrCreateConversationSuccess() throws Exception {
@@ -297,7 +297,7 @@ class MessageEndpointIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("Missing"));
     }
 
-    // ──────────── GET_USER_CONVERSATIONS Action ────────────
+    // GET_USER_CONVERSATIONS action
 
     @Test
     void getUserConversationsSuccess() throws Exception {
@@ -346,7 +346,7 @@ class MessageEndpointIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("Missing"));
     }
 
-    // ──────────── Full Client Message Flow ────────────
+    // Full client message flow
 
     @Test
     void fullSendAndRetrieveMessageFlow() throws Exception {

@@ -44,7 +44,7 @@ public class Database {
         config.setUsername(dotenv.get("DB_USER"));
         config.setPassword(dotenv.get("DB_PASSWORD"));
 
-        // Pool sizing — tuned for Render Free (0.1 CPU, 512MB RAM)
+        // Pool size nay vua du cho Render Free (0.1 CPU, 512MB RAM).
         config.setMaximumPoolSize(5);
         config.setMinimumIdle(1);
 

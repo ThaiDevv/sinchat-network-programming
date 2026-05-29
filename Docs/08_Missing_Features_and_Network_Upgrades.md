@@ -30,7 +30,7 @@ Dưới đây là bảng phân tích chi tiết các chức năng thiếu và gi
 *   **Đề xuất bổ sung:**
     *   **Truyền file dạng Binary Stream hoặc Base64 Chunking:** Vì TCP Socket truyền JSON kết thúc bằng `\n`, việc gửi file lớn trực tiếp trong JSON sẽ làm phình gói tin và dễ gây crash bộ nhớ (OOM). 
     *   **Giải pháp 1 (Khuyên dùng cho TCP thuần):** Thiết kế cổng TCP thứ hai (File Port - ví dụ 3001) chuyên để truyền nhận luồng byte file trực tiếp. Khi Client muốn gửi file, nó sẽ yêu cầu Server cấp một File ID qua cổng 3000, sau đó kết nối đến cổng 3001, gửi header chứa `[File ID][File Size]` tiếp theo là ghi trực tiếp Byte Stream của file.
-    *   **Giải pháp 2 (Tích hợp HTTP):** Server dựng một endpoint HTTP nhỏ chuyên dùng để upload/download file. Client tải file lên qua HTTP, nhận về URL tĩnh, rồi gửi URL này làm nội dung tin nhắn qua cổng TCP 3000.
+    *   **Giải pháp 2 (Chia gói qua TCP):** Giữ nguyên cổng TCP 3000 nhưng chia file thành nhiều chunk Base64 nhỏ, gắn `fileId`, `chunkIndex`, `totalChunks`, sau đó Server ghép lại file và lưu metadata attachment.
 
 ### 2.3. Mã hóa Bảo mật đường truyền (SSL/TLS Socket)
 *   **Vấn đề hiện tại:** Dữ liệu truyền trên đường truyền TCP (bao gồm cả mật khẩu đăng nhập, nội dung tin nhắn) đều là văn bản JSON thuần túy (Plaintext). Kẻ tấn công trên cùng mạng LAN có thể dễ dàng sử dụng các công cụ như Wireshark để bắt gói tin và đọc trộm toàn bộ thông tin (Eavesdropping).

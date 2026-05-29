@@ -6,7 +6,7 @@ This document details the code structure, UI layouts, network communications, an
 
 ## 1. Client Architecture Overview
 
-SinChat Client is a JavaFX-based desktop application. It maintains a stateful TCP connection to the server for authentication, profile updates, and real-time chatting, fully replacing the old HTTP API REST and WebSocket client wrappers.
+SinChat Client is a JavaFX-based desktop application. It maintains a stateful TCP connection to the server for authentication, profile updates, and real-time chatting through the `ChatTcpClient` network wrapper.
 
 ### GUI Layout & Network Threading Model
 

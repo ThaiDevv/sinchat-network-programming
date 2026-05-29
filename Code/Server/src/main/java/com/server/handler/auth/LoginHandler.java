@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * TCP handler for the login endpoint.
+ * Xu ly action LOGIN gui qua TCP socket.
  */
 public class LoginHandler {
 
