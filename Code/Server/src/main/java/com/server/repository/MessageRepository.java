@@ -18,28 +18,55 @@ public class MessageRepository {
      */
     public long save(Message message) throws SQLException {
         String query = "INSERT INTO messages (conversation_id, sender_id, type, content) VALUES (?, ?, ?, ?)";
-        try (Connection conn = Database.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
-            pstmt.setLong(1, message.getConversationId());
-            pstmt.setLong(2, message.getSenderId());
-            pstmt.setString(3, message.getType() != null ? message.getType().name() : Message.MessageType.TEXT.name());
-            pstmt.setString(4, message.getContent());
-            pstmt.executeUpdate();
+        String updateConvQuery = "UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?";
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement pstmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+                 PreparedStatement updateStmt = conn.prepareStatement(updateConvQuery)) {
+                pstmt.setLong(1, message.getConversationId());
+                pstmt.setLong(2, message.getSenderId());
+                pstmt.setString(3, message.getType() != null ? message.getType().name() : Message.MessageType.TEXT.name());
+                pstmt.setString(4, message.getContent());
+                pstmt.executeUpdate();
 
-            try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
-                if (generatedKeys.next()) return generatedKeys.getLong(1);
+                long generatedId = -1;
+                try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
+                    if (generatedKeys.next()) {
+                        generatedId = generatedKeys.getLong(1);
+                    }
+                }
+
+                updateStmt.setLong(1, message.getConversationId());
+                updateStmt.executeUpdate();
+
+                conn.commit();
+                return generatedId;
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         }
-        return -1;
     }
 
     public List<Message> getByConversationId(long conversationId) {
+        return getByConversationId(conversationId, 0, 0);
+    }
+
+    public List<Message> getByConversationId(long conversationId, int limit, int offset) {
         List<Message> messages = new ArrayList<>();
-        String query = "SELECT id, conversation_id, sender_id, type, content, created_at " +
-                       "FROM messages WHERE conversation_id = ? ORDER BY created_at ASC";
+        StringBuilder query = new StringBuilder(
+                "SELECT id, conversation_id, sender_id, type, content, created_at " +
+                "FROM messages WHERE conversation_id = ? ORDER BY created_at ASC");
+        if (limit > 0) query.append(" LIMIT ?");
+        if (offset > 0) query.append(" OFFSET ?");
         try (Connection conn = Database.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(query)) {
+             PreparedStatement pstmt = conn.prepareStatement(query.toString())) {
             pstmt.setLong(1, conversationId);
+            int idx = 2;
+            if (limit > 0) pstmt.setInt(idx++, limit);
+            if (offset > 0) pstmt.setInt(idx, offset);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) messages.add(mapRow(rs));
             }

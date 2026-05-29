@@ -34,7 +34,7 @@ class ForgotPasswordHandlerTest {
         JsonObject resp = handler.handleTcp(req, null);
         assertNotNull(resp);
         assertEquals("success", resp.get("status").getAsString());
-        assertEquals("123456", resp.get("code").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Reset code generated."));
     }
 
     @Test

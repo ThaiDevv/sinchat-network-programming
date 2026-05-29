@@ -17,6 +17,8 @@ public class ConversationHandle {
         JsonObject response = new JsonObject();
         try {
             if (!request.has("user1Id") || !request.has("user2Id")) {
+                logger.warn("[GET_OR_CREATE_CONVERSATION] Remote={} | Missing user1Id or user2Id",
+                        conn.getRemoteAddress());
                 response.addProperty("status", "error");
                 response.addProperty("message", "Missing user1Id or user2Id");
                 return response;
@@ -24,11 +26,22 @@ public class ConversationHandle {
             long user1Id = request.get("user1Id").getAsLong();
             long user2Id = request.get("user2Id").getAsLong();
 
+            logger.info("[GET_OR_CREATE_CONVERSATION] Remote={} | UserId={} | user1Id={} | user2Id={} | Getting or creating private conversation",
+                    conn.getRemoteAddress(), conn.getUserId(), user1Id, user2Id);
+
             long convId = conversationService.getOrCreatePrivateConversation(user1Id, user2Id);
+
+            logger.info("[GET_OR_CREATE_CONVERSATION] Remote={} | UserId={} | ConversationId={} | Success (users: {}, {})",
+                    conn.getRemoteAddress(), conn.getUserId(), convId, user1Id, user2Id);
+
             response.addProperty("status", "success");
             response.addProperty("conversationId", convId);
         } catch (Exception e) {
-            logger.error("Conversation handle error", e);
+            logger.error("[GET_OR_CREATE_CONVERSATION ERROR] Remote={} | user1Id={} | user2Id={} | Error: {}",
+                    conn.getRemoteAddress(),
+                    request.has("user1Id") ? request.get("user1Id").getAsLong() : "?",
+                    request.has("user2Id") ? request.get("user2Id").getAsLong() : "?",
+                    e.getMessage(), e);
             response.addProperty("status", "error");
             response.addProperty("message", "Internal Server Error");
         }

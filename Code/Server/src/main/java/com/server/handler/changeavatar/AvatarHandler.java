@@ -14,24 +14,37 @@ public class AvatarHandler {
         JsonObject response = new JsonObject();
         try {
             if (!request.has("userId") || !request.has("avatarUrl")) {
+                logger.warn("[CHANGE_AVATAR] Remote={} | Missing userId or avatarUrl",
+                        conn.getRemoteAddress());
                 response.addProperty("status", "error");
                 response.addProperty("message", "Missing userId or avatarUrl");
                 return response;
             }
 
-            int userId = request.get("userId").getAsInt();
+            long userId = request.get("userId").getAsLong();
             String avatarUrl = request.get("avatarUrl").getAsString();
 
+            logger.info("[CHANGE_AVATAR] Remote={} | UserId={} | avatarUrl={} | Attempting avatar change",
+                    conn.getRemoteAddress(), userId,
+                    avatarUrl.substring(0, Math.min(30, avatarUrl.length())) + "...");
+
             if (avatarService.changeAvatar(userId, avatarUrl)) {
+                logger.info("[CHANGE_AVATAR] Remote={} | UserId={} | Avatar updated successfully",
+                        conn.getRemoteAddress(), userId);
                 response.addProperty("status", "success");
                 response.addProperty("message", "Avatar updated successfully");
                 response.addProperty("avatarUrl", avatarUrl);
             } else {
+                logger.warn("[CHANGE_AVATAR] Remote={} | UserId={} | Failed to update avatar",
+                        conn.getRemoteAddress(), userId);
                 response.addProperty("status", "error");
                 response.addProperty("message", "Failed to update avatar");
             }
         } catch (Exception e) {
-            logger.error("Change avatar error", e);
+            logger.error("[CHANGE_AVATAR ERROR] Remote={} | UserId={} | Error: {}",
+                    conn.getRemoteAddress(),
+                    request.has("userId") ? request.get("userId").getAsLong() : "?",
+                    e.getMessage(), e);
             response.addProperty("status", "error");
             response.addProperty("message", "Internal Server Error");
         }

@@ -18,41 +18,61 @@ public class ProfileHandler {
         try {
             if (request.has("subAction") && request.get("subAction").getAsString().equals("GET_PROFILE")) {
                 if (!request.has("userId")) {
+                    logger.warn("[PROFILE GET] Remote={} | Missing userId for GET_PROFILE",
+                            conn.getRemoteAddress());
                     response.addProperty("status", "error");
                     response.addProperty("message", "Missing userId");
                     return response;
                 }
-                int userId = request.get("userId").getAsInt();
+                long userId = request.get("userId").getAsLong();
+                logger.info("[PROFILE GET] Remote={} | UserId={} | Fetching profile",
+                        conn.getRemoteAddress(), userId);
                 JsonObject profile = getUserProfile(userId);
                 if (profile != null) {
+                    logger.info("[PROFILE GET] Remote={} | UserId={} | Profile found",
+                            conn.getRemoteAddress(), userId);
                     return profile;
                 } else {
+                    logger.warn("[PROFILE GET] Remote={} | UserId={} | Profile not found",
+                            conn.getRemoteAddress(), userId);
                     response.addProperty("status", "error");
                     response.addProperty("message", "User profile not found");
                 }
             } else if (request.has("subAction") && request.get("subAction").getAsString().equals("UPDATE_PROFILE")) {
                 if (!request.has("userId")) {
+                    logger.warn("[PROFILE UPDATE] Remote={} | Missing userId for UPDATE_PROFILE",
+                            conn.getRemoteAddress());
                     response.addProperty("status", "error");
                     response.addProperty("message", "Missing userId");
                     return response;
                 }
-                int userId = request.get("userId").getAsInt();
+                long userId = request.get("userId").getAsLong();
                 String email = request.has("email") && !request.get("email").isJsonNull() ? request.get("email").getAsString() : null;
                 String avatarUrl = request.has("avatar_url") && !request.get("avatar_url").isJsonNull() ? request.get("avatar_url").getAsString() : null;
 
+                logger.info("[PROFILE UPDATE] Remote={} | UserId={} | email={} | avatar={} | Updating profile",
+                        conn.getRemoteAddress(), userId, email, avatarUrl != null ? avatarUrl.substring(0, Math.min(30, avatarUrl.length())) + "..." : null);
+
                 if (updateUserProfile(userId, email, avatarUrl)) {
+                    logger.info("[PROFILE UPDATE] Remote={} | UserId={} | Profile updated successfully",
+                            conn.getRemoteAddress(), userId);
                     response.addProperty("status", "success");
                     response.addProperty("message", "Profile updated successfully");
                 } else {
+                    logger.warn("[PROFILE UPDATE] Remote={} | UserId={} | Failed to update profile or no changes made",
+                            conn.getRemoteAddress(), userId);
                     response.addProperty("status", "error");
                     response.addProperty("message", "Failed to update profile or no changes were made");
                 }
             } else {
+                logger.warn("[PROFILE] Remote={} | Invalid or missing subAction: {}",
+                        conn.getRemoteAddress(), request.has("subAction") ? request.get("subAction").getAsString() : "null");
                 response.addProperty("status", "error");
                 response.addProperty("message", "Invalid or missing subAction");
             }
         } catch (Exception e) {
-            logger.error("Profile handler error", e);
+            logger.error("[PROFILE ERROR] Remote={} | Profile handler error: {}",
+                    conn.getRemoteAddress(), e.getMessage(), e);
             response.addProperty("status", "error");
             response.addProperty("message", "Internal Server Error");
         }
@@ -63,10 +83,10 @@ public class ProfileHandler {
         return Database.getConnection();
     }
 
-    public JsonObject getUserProfile(int userId) {
+    public JsonObject getUserProfile(long userId) {
         String query = "SELECT username, email, avatar_url FROM users WHERE id = ?";
         try (Connection c = getConnection(); PreparedStatement pstmt = c.prepareStatement(query)) {
-            pstmt.setInt(1, userId);
+            pstmt.setLong(1, userId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     JsonObject profile = new JsonObject();
@@ -83,7 +103,7 @@ public class ProfileHandler {
         return null;
     }
 
-    public boolean updateUserProfile(int userId, String email, String avatarUrl) {
+    public boolean updateUserProfile(long userId, String email, String avatarUrl) {
         StringBuilder queryBuilder = new StringBuilder("UPDATE users SET ");
         java.util.List<Object> params = new java.util.ArrayList<>();
         if (email != null) { queryBuilder.append("email = ?, "); params.add(email); }
@@ -98,6 +118,7 @@ public class ProfileHandler {
                 Object param = params.get(i);
                 if (param instanceof String) pstmt.setString(i + 1, (String) param);
                 else if (param instanceof Integer) pstmt.setInt(i + 1, (Integer) param);
+                else if (param instanceof Long) pstmt.setLong(i + 1, (Long) param);
             }
             return pstmt.executeUpdate() > 0;
         } catch (Exception e) {

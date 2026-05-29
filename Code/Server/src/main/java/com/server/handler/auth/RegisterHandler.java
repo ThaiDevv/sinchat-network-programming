@@ -17,6 +17,8 @@ public class RegisterHandler {
         JsonObject response = new JsonObject();
         try {
             if (!request.has("username") || !request.has("password") || !request.has("email")) {
+                logger.warn("[REGISTER] Remote={} | Missing required fields (username, password, email)",
+                        conn.getRemoteAddress());
                 response.addProperty("status", "error");
                 response.addProperty("message", "Missing required fields: username, password, email");
                 return response;
@@ -26,18 +28,31 @@ public class RegisterHandler {
             String password = request.get("password").getAsString();
             String email = request.get("email").getAsString();
 
+            logger.info("[REGISTER ATTEMPT] Remote={} | Username={} | Email={} | Registration attempt",
+                    conn.getRemoteAddress(), username, email);
+
             if (authService.register(username, password, email)) {
+                logger.info("[REGISTER SUCCESS] Remote={} | Username={} | Email={} | Registration successful",
+                        conn.getRemoteAddress(), username, email);
                 response.addProperty("status", "success");
                 response.addProperty("message", "Registration successful");
             } else {
+                logger.warn("[REGISTER FAILED] Remote={} | Username={} | Email={} | Registration failed (service returned false)",
+                        conn.getRemoteAddress(), username, email);
                 response.addProperty("status", "error");
                 response.addProperty("message", "Registration failed");
             }
         } catch (Exception dbEx) {
-            logger.error("Registration error", dbEx);
+            logger.error("[REGISTER ERROR] Remote={} | Username={} | Email={} | Database error: {}",
+                    conn.getRemoteAddress(),
+                    request.has("username") ? request.get("username").getAsString() : "?",
+                    request.has("email") ? request.get("email").getAsString() : "?",
+                    dbEx.getMessage(), dbEx);
             String errMsg = "Registration failed";
             if (dbEx.getMessage() != null && dbEx.getMessage().contains("Duplicate")) {
                 errMsg = "Username or email already exists";
+                logger.warn("[REGISTER DUPLICATE] Remote={} | Duplicate username or email detected",
+                        conn.getRemoteAddress());
             }
             response.addProperty("status", "error");
             response.addProperty("message", errMsg);

@@ -218,7 +218,7 @@ class AuthEndpointIntegrationTest {
         JsonObject resp = sendTcpRequest(req);
         assertNotNull(resp);
         assertEquals("success", resp.get("status").getAsString());
-        assertEquals("123456", resp.get("code").getAsString());
+        assertTrue(resp.get("message").getAsString().contains("Reset code generated."));
     }
 
     @Test
@@ -310,7 +310,7 @@ class AuthEndpointIntegrationTest {
         JsonObject codeResp = sendTcpRequest(codeReq);
         assertNotNull(codeResp);
         assertEquals("success", codeResp.get("status").getAsString());
-        assertEquals("112233", codeResp.get("code").getAsString());
+        assertTrue(codeResp.get("message").getAsString().contains("Reset code generated."));
 
         // Step 2: Reset password
         when(mockAuthService.resetPassword("112233", "brandnewpw")).thenReturn(true);

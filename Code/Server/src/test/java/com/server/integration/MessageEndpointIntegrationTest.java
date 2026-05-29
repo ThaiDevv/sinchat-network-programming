@@ -114,6 +114,12 @@ class MessageEndpointIntegrationTest {
         field.set(null, value);
     }
 
+    // ──────────────── Helpers ─────────────────────────
+
+    /**
+     * Sends a request on a new socket and closes it immediately.
+     * Suitable for stateless actions (e.g. GET_MESSAGES).
+     */
     private JsonObject sendTcpRequest(JsonObject requestJson) throws IOException {
         try (Socket socket = new Socket("localhost", port);
              PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
@@ -125,6 +131,43 @@ class MessageEndpointIntegrationTest {
                 return null;
             }
             return JsonParser.parseString(responseLine).getAsJsonObject();
+        }
+    }
+
+    /**
+     * A persistent TCP session that authenticates via JOIN on creation.
+     * Use for actions that require an authenticated connection (e.g. SEND_MESSAGE).
+     */
+    private static class TcpSession implements AutoCloseable {
+        final Socket socket;
+        final PrintWriter out;
+        final BufferedReader in;
+
+        TcpSession(long userId) throws IOException {
+            this.socket = new Socket("localhost", port);
+            this.out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+            this.in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+
+            JsonObject joinReq = new JsonObject();
+            joinReq.addProperty("action", "JOIN");
+            joinReq.addProperty("userId", userId);
+            out.println(joinReq.toString());
+            String joinResp = in.readLine();
+            if (joinResp == null) {
+                throw new IOException("No JOIN response received");
+            }
+        }
+
+        JsonObject send(JsonObject request) throws IOException {
+            out.println(request.toString());
+            String responseLine = in.readLine();
+            if (responseLine == null) return null;
+            return JsonParser.parseString(responseLine).getAsJsonObject();
+        }
+
+        @Override
+        public void close() throws IOException {
+            socket.close();
         }
     }
 
@@ -187,10 +230,12 @@ class MessageEndpointIntegrationTest {
         req.addProperty("senderId", 5);
         req.addProperty("content", "Hello world");
 
-        JsonObject resp = sendTcpRequest(req);
-        assertNotNull(resp);
-        assertEquals("success", resp.get("status").getAsString());
-        assertEquals(100, resp.get("messageId").getAsLong());
+        try (TcpSession session = new TcpSession(5L)) {
+            JsonObject resp = session.send(req);
+            assertNotNull(resp);
+            assertEquals("success", resp.get("status").getAsString());
+            assertEquals(100, resp.get("messageId").getAsLong());
+        }
     }
 
     @Test
@@ -199,10 +244,12 @@ class MessageEndpointIntegrationTest {
         req.addProperty("action", "SEND_MESSAGE");
         req.addProperty("conversationId", 1);
 
-        JsonObject resp = sendTcpRequest(req);
-        assertNotNull(resp);
-        assertEquals("error", resp.get("status").getAsString());
-        assertTrue(resp.get("message").getAsString().contains("Missing"));
+        try (TcpSession session = new TcpSession(1L)) {
+            JsonObject resp = session.send(req);
+            assertNotNull(resp);
+            assertEquals("error", resp.get("status").getAsString());
+            assertTrue(resp.get("message").getAsString().contains("Missing"));
+        }
     }
 
     @Test
@@ -213,10 +260,12 @@ class MessageEndpointIntegrationTest {
         req.addProperty("senderId", 5);
         req.addProperty("content", "   ");
 
-        JsonObject resp = sendTcpRequest(req);
-        assertNotNull(resp);
-        assertEquals("error", resp.get("status").getAsString());
-        assertTrue(resp.get("message").getAsString().contains("Message content is required"));
+        try (TcpSession session = new TcpSession(5L)) {
+            JsonObject resp = session.send(req);
+            assertNotNull(resp);
+            assertEquals("error", resp.get("status").getAsString());
+            assertTrue(resp.get("message").getAsString().contains("Message content is required"));
+        }
     }
 
     // ──────────── GET_OR_CREATE_CONVERSATION Action ────────────
@@ -313,7 +362,7 @@ class MessageEndpointIntegrationTest {
         assertEquals("success", convResp.get("status").getAsString());
         assertEquals(10, convResp.get("conversationId").getAsLong());
 
-        // Step 2: Send message in conversation
+        // Step 2: Send message in conversation (requires authenticated session)
         when(mockMsgService.sendMessage(10L, 1L, "Test message")).thenReturn(50L);
         JsonObject sendReq = new JsonObject();
         sendReq.addProperty("action", "SEND_MESSAGE");
@@ -321,10 +370,12 @@ class MessageEndpointIntegrationTest {
         sendReq.addProperty("senderId", 1);
         sendReq.addProperty("content", "Test message");
 
-        JsonObject sendResp = sendTcpRequest(sendReq);
-        assertNotNull(sendResp);
-        assertEquals("success", sendResp.get("status").getAsString());
-        assertEquals(50, sendResp.get("messageId").getAsLong());
+        try (TcpSession session = new TcpSession(1L)) {
+            JsonObject sendResp = session.send(sendReq);
+            assertNotNull(sendResp);
+            assertEquals("success", sendResp.get("status").getAsString());
+            assertEquals(50, sendResp.get("messageId").getAsLong());
+        }
 
         // Step 3: Retrieve messages
         Timestamp now = new Timestamp(System.currentTimeMillis());

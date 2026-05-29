@@ -2,9 +2,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-
+import com.google.gson.JsonParser;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 
 import javafx.application.Platform;
@@ -41,14 +42,17 @@ public class ChatView {
     private TextField messageInput;
     private ScrollPane scrollMessages;
     private Label headerChatName;
+    private Label chatStatus;
 
     private ChatTcpClient tcpClient;
     private final long currentUserId;
     private long currentConversationId;
-    private final ChatTcpClient apiClient = ChatTcpClient.getInstance();
-    private final ChatApiClient restClient = new ChatApiClient();
     private final Gson gson = new Gson();
     private final java.util.Map<Long, Label> contactLastMsgLabels = new java.util.HashMap<>();
+    private final java.util.Map<Long, Circle> statusDotsByPeerId = new java.util.HashMap<>();
+    private final java.util.Map<Long, Long> conversationIdByPeerId = new java.util.HashMap<>();
+    private final java.util.Map<Long, Long> peerIdByConversationId = new java.util.HashMap<>();
+    private final java.util.Map<Long, String> peerLastSeenByPeerId = new java.util.HashMap<>();
 
     private Label typingLabel;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -60,18 +64,29 @@ public class ChatView {
     private long lastTypingSentTime = 0;
     private static final long TYPING_THROTTLE_MS = 1000; // Chỉ gửi typing tối đa 1 lần/giây
 
-// ── Avatar state ──
-private Image currentAvatarImage;
-private Image initialAvatarImage;
-private final java.util.List<Image> previouslyUsedAvatars = new java.util.ArrayList<>();
-private Circle profileAvatarCircle;
-private Image selectedAvatarImage;
+    // ── Pagination state ──
+    private int currentMessageOffset = 0;
+    private boolean hasMoreMessages = true;
+    private boolean isLoadingMore = false;
+    private static final int PAGE_SIZE = 50;
 
-private StackPane activeOldAvatarContainer = null;
-private Slider zoomSlider;
-private double mouseAnchorX, mouseAnchorY;
-private double translateAnchorX, translateAnchorY;
-private Label avatarToast;
+    private final javafx.beans.value.ChangeListener<Number> scrollListener = (obs, oldVal, newVal) -> {
+        // Khi scroll lên đầu (vvalue gần 0), load thêm tin nhắn cũ
+        if (newVal.doubleValue() < 0.05 && hasMoreMessages && !isLoadingMore && currentConversationId > 0) {
+            loadMessagesForCurrentConversation(false);
+        }
+    };
+
+    private Image currentAvatarImage;
+    private Image initialAvatarImage;
+    private final java.util.List<Image> previouslyUsedAvatars = new java.util.ArrayList<>();
+    private Circle profileAvatarCircle;
+    private Image selectedAvatarImage;
+
+    private StackPane activeOldAvatarContainer = null;
+    private Slider zoomSlider;
+    private double mouseAnchorX, mouseAnchorY;
+    private double translateAnchorX, translateAnchorY;
 
     private static final String BG_BLACK = "#000000";
     private static final String PANEL_DARK = "#111111";
@@ -129,6 +144,9 @@ private Label avatarToast;
         tcpClient.setOnUserTyping(this::onUserTyping);
 
 
+        tcpClient.setOnUserStatusChange(this::onUserStatusChange);
+
+
         tcpClient.setOnConnected(() -> {
             System.out.println("TCP socket connected for user " + currentUserId);
         });
@@ -139,6 +157,59 @@ private Label avatarToast;
         });
 
         tcpClient.join(currentUserId);
+        loadUserAvatar();
+    }
+
+    /**
+     * Load user avatar from server when connecting
+     */
+    private void loadUserAvatar() {
+        ChatTcpClient.ApiResponse response = tcpClient.getUserProfile(currentUserId);
+        if (response.isSuccess() && response.rawBody() != null) {
+            try {
+                JsonObject profile = JsonParser.parseString(response.rawBody()).getAsJsonObject();
+                if (profile.has("avatar_url") && !profile.get("avatar_url").isJsonNull()) {
+                    String avatarUrl = profile.get("avatar_url").getAsString();
+                    if (avatarUrl != null && !avatarUrl.isEmpty() && !avatarUrl.equals("uploads/avatars/avatar_default.png")) {
+                        if (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://") || avatarUrl.startsWith("file://")) {
+                            Image newAvatar = new Image(avatarUrl, true);
+                            newAvatar.progressProperty().addListener((obs, oldVal, newVal) -> {
+                                if (newVal.doubleValue() >= 1.0 && !newAvatar.isError()) {
+                                    Platform.runLater(() -> {
+                                        currentAvatarImage = newAvatar;
+                                        if (profileAvatarCircle != null) {
+                                            profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                                        }
+                                    });
+                                }
+                            });
+                        } else {
+                            // Relative path — fetch avatar bytes via TCP
+                            ChatTcpClient.ApiResponse avatarResponse = tcpClient.getAvatar(currentUserId);
+                            if (avatarResponse.isSuccess() && avatarResponse.rawBody() != null) {
+                                JsonObject avatarData = JsonParser.parseString(avatarResponse.rawBody()).getAsJsonObject();
+                                if (avatarData.has("avatarUrl") && !avatarData.get("avatarUrl").isJsonNull()) {
+                                    String dataUrl = avatarData.get("avatarUrl").getAsString();
+                                    Image newAvatar = new Image(dataUrl, true);
+                                    newAvatar.progressProperty().addListener((obs, oldVal, newVal) -> {
+                                        if (newVal.doubleValue() >= 1.0 && !newAvatar.isError()) {
+                                            Platform.runLater(() -> {
+                                                currentAvatarImage = newAvatar;
+                                                if (profileAvatarCircle != null) {
+                                                    profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                                                }
+                                            });
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to load user avatar: " + e.getMessage());
+            }
+        }
     }
 
     /**
@@ -165,13 +236,8 @@ private Label avatarToast;
             scrollToBottom();
         }
 
-        // Cập nhật last message preview trên contact list
-        Platform.runLater(() -> {
-            Label msgLabel = contactLastMsgLabels.get(conversationId);
-            if (msgLabel != null) {
-                msgLabel.setText(content);
-            }
-        });
+        // Cập nhật và load lại danh sách các conversation để sắp xếp và hiển thị chính xác
+        Platform.runLater(this::loadConversations);
     }
 
     /**
@@ -179,21 +245,59 @@ private Label avatarToast;
      */
     private void onUserTyping(JsonObject json) {
         long conversationId = json.get("conversationId").getAsLong();
-        if (conversationId == currentConversationId && typingLabel != null) {
-            typingLabel.setText("Đang gõ...");
-            typingLabel.setVisible(true);
+        if (conversationId != currentConversationId || typingLabel == null) return;
 
-            // Hủy task ẩn cũ nếu có
-            if (typingHideTask != null && !typingHideTask.isDone()) {
-                typingHideTask.cancel(false);
+        // Không hiển thị trạng thái gõ của chính mình
+        long userId = json.has("userId") ? json.get("userId").getAsLong() : -1;
+        if (userId == currentUserId) return;
+
+        boolean isTyping = json.has("isTyping") && json.get("isTyping").getAsBoolean();
+        if (!isTyping) {
+            Platform.runLater(() -> typingLabel.setVisible(false));
+            return;
+        }
+
+        String username = json.has("username") ? json.get("username").getAsString() : "Ai đó";
+        Platform.runLater(() -> {
+            typingLabel.setText(username + " đang gõ...");
+            typingLabel.setVisible(true);
+        });
+
+        // Hủy task ẩn cũ nếu có
+        if (typingHideTask != null && !typingHideTask.isDone()) {
+            typingHideTask.cancel(false);
+        }
+
+        // Tự ẩn sau 3 giây (nếu không có sự kiện tắt typing gửi về)
+        typingHideTask = scheduler.schedule(() ->
+            javafx.application.Platform.runLater(() -> typingLabel.setVisible(false)),
+            3, TimeUnit.SECONDS
+        );
+    }
+
+    private void onUserStatusChange(JsonObject json) {
+        if (!json.has("userId") || !json.has("status")) return;
+        long peerId = json.get("userId").getAsLong();
+        String status = json.get("status").getAsString();
+        boolean isOnline = "online".equals(status);
+        String lastSeenStr = json.has("lastSeen") ? json.get("lastSeen").getAsString() : null;
+        if (lastSeenStr != null) {
+            peerLastSeenByPeerId.put(peerId, lastSeenStr);
+        }
+
+        Platform.runLater(() -> {
+            // Update status dot in contact list
+            Circle dot = statusDotsByPeerId.get(peerId);
+            if (dot != null) {
+                dot.setFill(Color.web(isOnline ? "#4ade80" : "#888888"));
             }
 
-            // Tự ẩn sau 3 giây (dùng scheduler thay vì tạo Thread mới)
-            typingHideTask = scheduler.schedule(() ->
-                javafx.application.Platform.runLater(() -> typingLabel.setVisible(false)),
-                3, TimeUnit.SECONDS
-            );
-        }
+            // Update header if this peer's conversation is currently selected
+            Long convId = conversationIdByPeerId.get(peerId);
+            if (convId != null && convId == currentConversationId) {
+                updateHeaderPresence(isOnline, isOnline ? null : lastSeenStr);
+            }
+        });
     }
 
     /**
@@ -212,16 +316,46 @@ private Label avatarToast;
         this.currentConversationId = conversationId;
         // Xóa tin nhắn cũ trên UI
         messagesBox.getChildren().clear();
+        // Reset pagination state for the new conversation
+        currentMessageOffset = 0;
+        hasMoreMessages = true;
+        isLoadingMore = false;
         
         // Update header name
         if (headerChatName != null) {
             headerChatName.setText(name);
         }
+
+        // Tải lại danh sách conversation bên trái để làm nổi bật item đang được chọn
+        loadConversations();
         
-        // Load lịch sử tin nhắn từ TCP connection
+        // Load lịch sử tin nhắn using pagination system
+        loadMessagesForCurrentConversation(true);
+    }
+
+    /**
+     * Load messages for the current conversation with pagination support.
+     * @param reset if true, resets pagination offset and loads from the beginning;
+     *              if false, loads older messages (pagination / scroll-up).
+     */
+    private void loadMessagesForCurrentConversation(boolean reset) {
+        if (currentConversationId <= 0) return;
+        if (isLoadingMore) return;
+        if (!reset && !hasMoreMessages) return;
+
+        isLoadingMore = true;
+
+        if (reset) {
+            currentMessageOffset = 0;
+            hasMoreMessages = true;
+        }
+
+        long capturedConversationId = currentConversationId;
+        int offset = currentMessageOffset;
+
         CompletableFuture.supplyAsync(() -> {
             try {
-                return apiClient.getMessages(conversationId);
+                return tcpClient.getMessages(capturedConversationId, PAGE_SIZE, offset);
             } catch (Exception e) {
                 e.printStackTrace();
                 return null;
@@ -230,34 +364,71 @@ private Label avatarToast;
             if (response != null && response.isSuccess()) {
                 Platform.runLater(() -> {
                     try {
-                        // Đảm bảo không ghi đè nếu người dùng đã click sang phòng khác
-                        if (this.currentConversationId == conversationId) {
-                            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
-                            JsonArray messages = json.getAsJsonArray("messages");
-                            for (JsonElement element : messages) {
-                                JsonObject msg = element.getAsJsonObject();
-                                long senderId = msg.get("senderId").getAsLong();
-                                String content = msg.get("content").getAsString();
-                                if (senderId == currentUserId) {
-                                    addSentMessage(content);
-                                } else {
-                                    addReceivedMessage(content);
-                                }
+                        // Guard: nếu người dùng đã chuyển conversation khác, bỏ qua
+                        if (this.currentConversationId != capturedConversationId) {
+                            isLoadingMore = false;
+                            return;
+                        }
+
+                        JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+                        JsonArray messages = json.getAsJsonArray("messages");
+
+                        if (reset) {
+                            messagesBox.getChildren().clear();
+                        }
+
+                        // Insert older messages at the top
+                        int insertIndex = 0;
+                        for (JsonElement element : messages) {
+                            JsonObject msg = element.getAsJsonObject();
+                            long senderId = msg.get("senderId").getAsLong();
+                            String content = msg.get("content").getAsString();
+
+                            HBox wrapper = new HBox();
+                            if (senderId == currentUserId) {
+                                wrapper.setAlignment(Pos.CENTER_RIGHT);
+                                Label bubble = createMessageBubble(content, ACCENT, "18px 18px 4px 18px");
+                                wrapper.getChildren().add(bubble);
+                            } else {
+                                wrapper.setAlignment(Pos.CENTER_LEFT);
+                                Label bubble = createMessageBubble(content, "#1e1e1e", "18px 18px 18px 4px");
+                                wrapper.getChildren().add(bubble);
                             }
+                            messagesBox.getChildren().add(insertIndex++, wrapper);
+                        }
+
+                        // Update pagination state based on server's hasMore flag
+                        int msgCount = messages.size();
+                        currentMessageOffset = offset + msgCount;
+                        if (json.has("hasMore")) {
+                            hasMoreMessages = json.get("hasMore").getAsBoolean();
+                        } else {
+                            hasMoreMessages = msgCount >= PAGE_SIZE;
+                        }
+
+                        // Scroll to bottom on fresh load, stay at top on pagination
+                        if (reset) {
                             scrollToBottom();
                         }
                     } catch (Exception e) {
-                        System.err.println("Failed to parse messages JSON");
+                        System.err.println("Failed to parse messages JSON: " + e.getMessage());
+                    } finally {
+                        isLoadingMore = false;
                     }
                 });
+            } else {
+                isLoadingMore = false;
             }
         });
     }
 
     private void loadConversations() {
+        statusDotsByPeerId.clear();
+        conversationIdByPeerId.clear();
+        peerIdByConversationId.clear();
         CompletableFuture.supplyAsync(() -> {
             try {
-                return apiClient.getConversations(currentUserId);
+                return tcpClient.getConversations(currentUserId);
             } catch (Exception e) {
                 e.printStackTrace();
                 return null;
@@ -270,12 +441,23 @@ private Label avatarToast;
                     try {
                         JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
                         JsonArray data = json.getAsJsonArray("conversations");
+                        boolean activeConvStillExists = false;
                         for (JsonElement element : data) {
                             JsonObject conv = element.getAsJsonObject();
                             long id = conv.get("conversationId").getAsLong();
                             String name = conv.get("displayName").getAsString();
                             String lastMsg = conv.get("lastMessage").getAsString();
-                            addContact(id, name, lastMsg, false);
+                            boolean isSelected = (id == currentConversationId);
+                            if (isSelected) {
+                                activeConvStillExists = true;
+                                boolean isPeerOnline = conv.has("isOnline") && conv.get("isOnline").getAsBoolean();
+                                String lastSeen = conv.has("lastSeen") ? conv.get("lastSeen").getAsString() : null;
+                                updateHeaderPresence(isPeerOnline, lastSeen);
+                            }
+                            addContactWithPresence(id, name, lastMsg, isSelected, conv);
+                        }
+                        if (!activeConvStillExists && chatStatus != null) {
+                            updateHeaderPresence(false, null);
                         }
                     } catch (Exception e) {
                         System.err.println("Failed to parse conversations JSON");
@@ -285,11 +467,117 @@ private Label avatarToast;
         });
     }
 
-    /**
-     * Xác định WebSocket URL dựa trên env hoặc mặc định localhost.
-     */
-    
+    private void updateHeaderPresence(boolean isOnline, String lastSeen) {
+        if (chatStatus != null) {
+            if (isOnline) {
+                chatStatus.setText("Online");
+                chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #4ade80;");
+            } else {
+                String statusText = "Offline";
+                if (lastSeen != null && !lastSeen.isEmpty()) {
+                    statusText = "Offline • seen " + lastSeen;
+                }
+                chatStatus.setText(statusText);
+                chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #888888;");
+            }
+        }
+    }
 
+    private void addContactWithPresence(long conversationId, String name, String lastMsg, boolean selected, JsonObject conv) {
+        HBox contact = new HBox(12);
+        contact.setAlignment(Pos.CENTER_LEFT);
+        contact.setPadding(new Insets(12, 14, 12, 14));
+
+        String radius = "16px";
+        contact.setStyle("""
+                -fx-background-color: %s;
+                -fx-background-radius: %s;
+                -fx-cursor: hand;
+                """.formatted(selected ? ACCENT : "transparent", radius));
+
+        StackPane avatarContainer = new StackPane();
+        Circle avatar = new Circle(22);
+        avatar.setFill(Color.web("#444"));
+        avatar.setStroke(Color.web(BORDER_COLOR));
+        avatarContainer.getChildren().add(avatar);
+
+        if (conv.has("peerId")) {
+            long peerId = conv.get("peerId").getAsLong();
+            conversationIdByPeerId.put(peerId, conversationId);
+            peerIdByConversationId.put(conversationId, peerId);
+        }
+
+        if (conv.has("isOnline")) {
+            boolean isOnline = conv.get("isOnline").getAsBoolean();
+            Circle statusDot = new Circle(6);
+            statusDot.setFill(Color.web(isOnline ? "#4ade80" : "#888888"));
+            statusDot.setStroke(Color.web(BG_BLACK));
+            statusDot.setStrokeWidth(1.5);
+            StackPane.setAlignment(statusDot, Pos.BOTTOM_RIGHT);
+            avatarContainer.getChildren().add(statusDot);
+
+            // Register dot for targeted updates
+            if (conv.has("peerId")) {
+                long peerId = conv.get("peerId").getAsLong();
+                statusDotsByPeerId.put(peerId, statusDot);
+            }
+        }
+
+        VBox info = new VBox(3);
+
+        Label nameLabel = new Label(name);
+        nameLabel.setStyle("""
+                -fx-font-size: 15px;
+                -fx-font-weight: bold;
+                -fx-text-fill: %s;
+                """.formatted(TEXT_WHITE));
+
+        String formattedLastMsg = lastMsg;
+        if (lastMsg != null && !lastMsg.isEmpty()) {
+            if (conv.has("lastMessageSenderId")) {
+                long senderId = conv.get("lastMessageSenderId").getAsLong();
+                if (senderId == currentUserId) {
+                    formattedLastMsg = lastMsg;
+                } else {
+                    formattedLastMsg = name + ": " + lastMsg;
+                }
+            }
+        }
+
+        Label msgLabel = new Label(formattedLastMsg);
+        msgLabel.setMaxWidth(160);
+        msgLabel.setWrapText(true);
+        msgLabel.setStyle("""
+                -fx-font-size: 12px;
+                -fx-text-fill: %s;
+                """.formatted(selected ? "#dddddd" : TEXT_MUTED));
+
+        contactLastMsgLabels.put(conversationId, msgLabel);
+
+        info.getChildren().addAll(nameLabel, msgLabel);
+        contact.getChildren().addAll(avatarContainer, info);
+
+        if (!selected) {
+            contact.setOnMouseEntered(e ->
+                    contact.setStyle("""
+                            -fx-background-color: #1e1e1e;
+                            -fx-background-radius: %s;
+                            -fx-cursor: hand;
+                            """.formatted(radius)));
+            contact.setOnMouseExited(e ->
+                    contact.setStyle("""
+                            -fx-background-color: transparent;
+                            -fx-background-radius: %s;
+                            -fx-cursor: hand;
+                            """.formatted(radius)));
+        }
+
+        contact.setOnMouseClicked(e -> {
+            setCurrentConversation(conversationId, name);
+        });
+
+        contactList.getChildren().add(contact);
+    }
     // ─────────────────── UI Components (giữ nguyên giao diện cũ) ───────────────────
 
     private VBox createLeftPanel() {
@@ -330,7 +618,7 @@ private Label avatarToast;
             } else {
                 CompletableFuture.supplyAsync(() -> {
                     try {
-                        return apiClient.searchUsers(query);
+                        return tcpClient.searchUsers(query);
                     } catch (Exception e) {
                         e.printStackTrace();
                         return null;
@@ -370,7 +658,7 @@ private Label avatarToast;
                                             -fx-font-weight: bold;
                                             -fx-text-fill: %s;
                                             """.formatted(TEXT_WHITE));
-                                    Label msgLabel = new Label("Nh\u1ea5p \u0111\u1ec3 nh\u1eafn tin");
+                                    Label msgLabel = new Label("Nh\u1eadp \u0111\u1ec3 nh\u1eafn tin");
                                     msgLabel.setStyle("""
                                             -fx-font-size: 12px;
                                             -fx-text-fill: %s;
@@ -395,7 +683,7 @@ private Label avatarToast;
                                     contact.setOnMouseClicked(e -> {
                                         CompletableFuture.supplyAsync(() -> {
                                             try {
-                                                return apiClient.getOrCreateConversation(currentUserId, uId);
+                                                return tcpClient.getOrCreateConversation(currentUserId, uId);
                                             } catch (Exception ex) {
                                                 ex.printStackTrace();
                                                 return null;
@@ -439,71 +727,8 @@ private Label avatarToast;
         VBox.setVgrow(scrollContacts, Priority.ALWAYS);
 
         // Không dùng dữ liệu ảo nữa
-        // addContact("Github", "Đang nhập...", true);
-        // addContact("Bob", "You: Canongocsthang", false);
-
         panel.getChildren().addAll(header, searchField, scrollContacts);
         return panel;
-    }
-
-    private void addContact(long conversationId, String name, String lastMsg, boolean selected) {
-        HBox contact = new HBox(12);
-        contact.setAlignment(Pos.CENTER_LEFT);
-        contact.setPadding(new Insets(12, 14, 12, 14));
-
-        String radius = "16px";
-        contact.setStyle("""
-                -fx-background-color: %s;
-                -fx-background-radius: %s;
-                -fx-cursor: hand;
-                """.formatted(selected ? ACCENT : "transparent", radius));
-
-        Circle avatar = new Circle(22);
-        avatar.setFill(Color.web("#444"));
-        avatar.setStroke(Color.web(BORDER_COLOR));
-
-        VBox info = new VBox(3);
-
-        Label nameLabel = new Label(name);
-        nameLabel.setStyle("""
-                -fx-font-size: 15px;
-                -fx-font-weight: bold;
-                -fx-text-fill: %s;
-                """.formatted(TEXT_WHITE));
-
-        Label msgLabel = new Label(lastMsg);
-        msgLabel.setMaxWidth(160);
-        msgLabel.setWrapText(true);
-        msgLabel.setStyle("""
-                -fx-font-size: 12px;
-                -fx-text-fill: %s;
-                """.formatted(selected ? "#dddddd" : TEXT_MUTED));
-
-        contactLastMsgLabels.put(conversationId, msgLabel);
-
-        info.getChildren().addAll(nameLabel, msgLabel);
-        contact.getChildren().addAll(avatar, info);
-
-        if (!selected) {
-            contact.setOnMouseEntered(e ->
-                    contact.setStyle("""
-                            -fx-background-color: #1e1e1e;
-                            -fx-background-radius: %s;
-                            -fx-cursor: hand;
-                            """.formatted(radius)));
-            contact.setOnMouseExited(e ->
-                    contact.setStyle("""
-                            -fx-background-color: transparent;
-                            -fx-background-radius: %s;
-                            -fx-cursor: hand;
-                            """.formatted(radius)));
-        }
-
-        contact.setOnMouseClicked(e -> {
-            setCurrentConversation(conversationId, name);
-        });
-
-        contactList.getChildren().add(contact);
     }
 
     private VBox createCenterPanel() {
@@ -530,10 +755,10 @@ private Label avatarToast;
                 -fx-text-fill: %s;
                 """.formatted(TEXT_WHITE));
 
-        Label chatStatus = new Label("Online");
+        chatStatus = new Label("Offline");
         chatStatus.setStyle("""
                 -fx-font-size: 12px;
-                -fx-text-fill: #4ade80;
+                -fx-text-fill: #888888;
                 """);
         headerInfo.getChildren().addAll(headerChatName, chatStatus);
 
@@ -562,6 +787,9 @@ private Label avatarToast;
                 -fx-border-color: transparent;
                 """.formatted(BG_BLACK, BG_BLACK));
         VBox.setVgrow(scrollMessages, Priority.ALWAYS);
+
+        // Register pagination scroll listener
+        scrollMessages.vvalueProperty().addListener(scrollListener);
 
         // Typing indicator
         typingLabel = new Label("Đang gõ...");
@@ -614,10 +842,15 @@ private Label avatarToast;
         // Gửi typing indicator khi người dùng đang gõ (throttled: tối đa 1 lần/giây)
         messageInput.textProperty().addListener((obs, oldVal, newVal) -> {
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
-                long now = System.currentTimeMillis();
-                if (now - lastTypingSentTime >= TYPING_THROTTLE_MS) {
-                    lastTypingSentTime = now;
-                    tcpClient.sendTyping(currentConversationId, -1, true);
+                if (newVal.trim().isEmpty()) {
+                    // Nếu xoá hết chữ thì gửi ngay sự kiện dừng gõ (isTyping = false)
+                    tcpClient.sendTyping(currentConversationId, -1, false);
+                } else {
+                    long now = System.currentTimeMillis();
+                    if (now - lastTypingSentTime >= TYPING_THROTTLE_MS) {
+                        lastTypingSentTime = now;
+                        tcpClient.sendTyping(currentConversationId, -1, true);
+                    }
                 }
             }
         });
@@ -708,9 +941,9 @@ private Label avatarToast;
     }
 
     /**
-     * Gửi tin nhắn — giờ dùng TCP thay vì chỉ hiển thị cục bộ.
-     * Tin nhắn sẽ được server lưu vào DB rồi broadcast lại cho tất cả
-     * thành viên (bao gồm cả sender), nên KHÔNG thêm vào UI ở đây.
+     * Gửi tin nhắn qua TCP.
+     * Server lưu vào DB rồi broadcast lại cho tất cả thành viên (gồm cả sender).
+     * UI được cập nhật khi nhận được broadcast NEW_MESSAGE từ server.
      */
     private void sendMessage() {
         String text = messageInput.getText().trim();
@@ -719,6 +952,9 @@ private Label avatarToast;
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
                 // Gửi qua TCP → server lưu DB → broadcast về cho mọi người
                 tcpClient.sendMessage(currentConversationId, currentUserId, text);
+                
+                // Ngay lập tức gửi trạng thái ngừng gõ (isTyping = false) cho người kia
+                tcpClient.sendTyping(currentConversationId, -1, false);
             }
         messageInput.clear();
         }
@@ -783,10 +1019,9 @@ private Label avatarToast;
                 -fx-text-fill: #cc3333;
                 """);
         logoutBtn.setOnAction(e -> {
-            // Ngắt TCP khi logout
-            if (tcpClient != null) {
-                tcpClient.disconnect();
-            }
+            // Dùng resetInstance() để dừng hẳn connectLoop và
+            // tạo instance mới khi login lại
+            ChatTcpClient.resetInstance();
             LoginView loginView = new LoginView(stage);
             stage.setScene(loginView.createScene());
         });
@@ -878,23 +1113,16 @@ private Label avatarToast;
                 currentAvatarImage = initialAvatarImage;
                 profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
                 
-                // Upload restored avatar to server in background
-                CompletableFuture.supplyAsync(() -> {
-                    try {
-                        byte[] pngBytes = imageToPngBytes(initialAvatarImage);
-                        return apiClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                        return null;
-                    }
-                }).thenAccept(response -> Platform.runLater(() -> {
-                    if (response != null && response.isSuccess()) {
-                        showAvatarToast("Đã khôi phục avatar ban đầu!", "#1f883d");
-                    } else {
-                        String errMsg = response != null ? response.message() : "Lỗi kết nối server";
-                        showAvatarToast("Lỗi khi đồng bộ: " + errMsg, "#cc3333");
-                    }
-                }));
+                // Đồng bộ avatar qua TCP (server hiện tại không chạy HTTP REST)
+                CompletableFuture.supplyAsync(() -> uploadAvatarViaTcp(initialAvatarImage))
+                        .thenAccept(response -> Platform.runLater(() -> {
+                            if (response != null && response.isSuccess()) {
+                                showAvatarToast("Đã khôi phục avatar ban đầu!", "#1f883d");
+                            } else {
+                                String errMsg = response != null ? response.message() : "Lỗi kết nối server";
+                                showAvatarToast("Lỗi khi đồng bộ: " + errMsg, "#cc3333");
+                            }
+                        }));
             }
         });
         
@@ -1240,15 +1468,7 @@ private Label avatarToast;
             saveBtn.setDisable(true);
             saveBtn.setText("Đang lưu...");
 
-            CompletableFuture.supplyAsync(() -> {
-                try {
-                    byte[] pngBytes = imageToPngBytes(croppedImage);
-                    return apiClient.uploadAvatar(currentUserId, pngBytes, "avatar.png");
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    return null;
-                }
-            }).thenAccept(response -> Platform.runLater(() -> {
+            CompletableFuture.supplyAsync(() -> uploadAvatarViaTcp(croppedImage)).thenAccept(response -> Platform.runLater(() -> {
                 saveBtn.setDisable(false);
                 saveBtn.setText("Lưu");
                 if (response != null && response.isSuccess()) {
@@ -1371,6 +1591,16 @@ private Label avatarToast;
             e.printStackTrace();
             return new byte[0];
         }
+    }
+
+    private ChatTcpClient.ApiResponse uploadAvatarViaTcp(Image image) {
+        byte[] pngBytes = imageToPngBytes(image);
+        if (pngBytes.length == 0) {
+            return new ChatTcpClient.ApiResponse(400, "error", "Không thể đọc dữ liệu ảnh", null, null, "");
+        }
+
+        String avatarDataUrl = "data:image/png;base64," + Base64.getEncoder().encodeToString(pngBytes);
+        return tcpClient.changeAvatar(currentUserId, avatarDataUrl);
     }
 
     private void showAvatarToast(String text, String bgColor) {

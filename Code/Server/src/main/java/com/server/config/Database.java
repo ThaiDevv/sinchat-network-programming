@@ -22,7 +22,25 @@ public class Database {
         }
 
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl(dotenv.get("DB_URL"));
+            String dbUrl = dotenv.get("DB_URL");
+
+                // Validate database configuration
+                if (dbUrl == null || dbUrl.trim().isEmpty()) {
+                    throw new RuntimeException("DB_URL is not configured in .env file");
+                }
+                if (dotenv.get("DB_USER") == null || dotenv.get("DB_USER").trim().isEmpty()) {
+                    throw new RuntimeException("DB_USER is not configured in .env file");
+                }
+                if (dotenv.get("DB_PASSWORD") == null || dotenv.get("DB_PASSWORD").trim().isEmpty()) {
+                    throw new RuntimeException("DB_PASSWORD is not configured in .env file");
+                }
+            // Add SSL disable parameters to avoid timeout issues
+            if (!dbUrl.contains("?")) {
+                dbUrl += "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+            } else {
+                dbUrl += "&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+            }
+            config.setJdbcUrl(dbUrl);
         config.setUsername(dotenv.get("DB_USER"));
         config.setPassword(dotenv.get("DB_PASSWORD"));
 
@@ -31,9 +49,9 @@ public class Database {
         config.setMinimumIdle(1);
 
         // Timeout settings (ms)
-        config.setConnectionTimeout(10_000); // max wait to get a connection from pool
-        config.setIdleTimeout(300_000); // remove idle connections after 5 min
-        config.setMaxLifetime(600_000); // recycle connections every 10 min
+            config.setConnectionTimeout(30_000); // max wait to get a connection from pool (increased)
+            config.setIdleTimeout(600_000); // remove idle connections after 10 min (increased)
+            config.setMaxLifetime(1_800_000); // recycle connections every 30 min (increased)
 
         // Keep-alive to prevent stale connections being dropped by cloud DB
         config.setKeepaliveTime(60_000); // ping idle connections every 1 min
