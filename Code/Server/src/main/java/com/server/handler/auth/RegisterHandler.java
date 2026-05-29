@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * TCP handler for the registration endpoint.
+ * Xu ly action REGISTER gui qua TCP socket.
  */
 public class RegisterHandler {
     private static final Logger logger = LoggerFactory.getLogger(RegisterHandler.class);

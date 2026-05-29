@@ -7,10 +7,10 @@ public class User {
     private String username;          // varchar(50) NOT NULL UNIQUE
     private String passwordHash;      // varchar(255) NOT NULL
     private String email;             // varchar(100) UNIQUE
-    private String avatarUrl;         // text — URL ảnh đại diện
-    private String statusMessage;     // varchar(255) — dòng trạng thái
+    private String avatarUrl;         // text - URL anh dai dien
+    private String statusMessage;     // varchar(255) - dong trang thai
     private boolean isOnline;         // tinyint(1) DEFAULT 0
-    private Timestamp lastSeen;       // timestamp — lần hoạt động cuối
+    private Timestamp lastSeen;       // timestamp - lan hoat dong cuoi
     private Timestamp createdAt;      // timestamp DEFAULT CURRENT_TIMESTAMP
 
     public User() {}

@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 public class Router {
     private static final Logger logger = LoggerFactory.getLogger(Router.class);
 
-    // Reuse handler instances to optimize GC overhead and facilitate injection in testing
+    // Dung chung handler de giam tao object va de thay mock khi test.
     private static LoginHandler loginHandler = new LoginHandler();
     private static RegisterHandler registerHandler = new RegisterHandler();
     private static ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
@@ -103,7 +103,7 @@ public class Router {
                     break;
                 case "PING":
                     pingHandler.handle(request, conn, requestId);
-                    return; // PING already sent response
+                    return; // PING tu gui response nen khong di qua phan gui chung ben duoi.
                 case "TYPING":
                     response = typingHandler.handleTcp(request, conn);
                     break;

@@ -5,7 +5,7 @@ import javax.net.ssl.SSLServerSocketFactory;
 import java.io.File;
 
 /**
- * Creates either plaintext ServerSocketFactory or TLS ServerSocketFactory based on env/system properties.
+ * Tao ServerSocketFactory thuong hoac TLS tuy theo cau hinh moi truong.
  */
 public final class TcpServerSocketFactory {
     private TcpServerSocketFactory() {}
@@ -15,12 +15,12 @@ public final class TcpServerSocketFactory {
             return ServerSocketFactory.getDefault();
         }
 
-        // Support env/system properties for keystore.
-        // Users can set:
+        // Ho tro cau hinh keystore bang bien moi truong hoac system properties.
+        // Co the set:
         //  - TLS_KEYSTORE_PATH
         //  - TLS_KEYSTORE_PASSWORD
-        //  - TLS_KEYSTORE_TYPE (optional, default JKS)
-        // Or equivalent system properties if preferred.
+        //  - TLS_KEYSTORE_TYPE (khong bat buoc, mac dinh JKS)
+        // Hoac dung system properties tuong duong.
         String ksPath = firstNonBlank(System.getProperty("tls.keystore.path"), System.getenv("TLS_KEYSTORE_PATH"));
         String ksPass = firstNonBlank(System.getProperty("tls.keystore.password"), System.getenv("TLS_KEYSTORE_PASSWORD"));
         String ksType = firstNonBlank(System.getProperty("tls.keystore.type"), System.getenv("TLS_KEYSTORE_TYPE"), "JKS");
@@ -36,7 +36,7 @@ public final class TcpServerSocketFactory {
             }
         }
 
-        // Optional truststore (for mTLS or custom trust)
+        // Truststore tuy chon, dung khi can mTLS hoac custom trust.
         String tsPath = firstNonBlank(System.getProperty("tls.truststore.path"), System.getenv("TLS_TRUSTSTORE_PATH"));
         String tsPass = firstNonBlank(System.getProperty("tls.truststore.password"), System.getenv("TLS_TRUSTSTORE_PASSWORD"));
         String tsType = firstNonBlank(System.getProperty("tls.truststore.type"), System.getenv("TLS_TRUSTSTORE_TYPE"), "JKS");

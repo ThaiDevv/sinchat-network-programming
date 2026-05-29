@@ -18,20 +18,20 @@ public class AvatarService {
 
     public boolean changeAvatar(long userId, String avatarUrl) {
         try {
-            // Kiểm tra format: data:image/png;base64,...
+            // Kiem tra format data:image/png;base64,...
             if (avatarUrl == null || !avatarUrl.startsWith("data:image/")) {
                 logger.warn("Invalid avatar data URI format for userId: {}", userId);
                 return false;
             }
 
-            // Giải mã Base64
+            // Giai ma Base64.
             String[] parts = avatarUrl.split(",");
             if (parts.length < 2 || parts[1].isEmpty()) {
                 logger.warn("Missing base64 data in avatar for userId: {}", userId);
                 return false;
             }
 
-            // Kiểm tra kích thước file (base64 ~ 4/3 kích thước thật)
+            // Uoc luong kich thuoc file tu chuoi base64.
             String base64Data = parts[1];
             long estimatedSize = (long) (base64Data.length() * 0.75);
             if (estimatedSize > MAX_FILE_SIZE_BYTES) {
@@ -41,7 +41,7 @@ public class AvatarService {
 
             byte[] imageBytes = Base64.getDecoder().decode(base64Data);
 
-            // Kiểm tra header PNG (89 50 4E 47)
+            // Kiem tra header PNG (89 50 4E 47).
             if (imageBytes.length < 8 ||
                 imageBytes[0] != (byte) 0x89 ||
                 imageBytes[1] != (byte) 'P' ||
@@ -51,14 +51,14 @@ public class AvatarService {
                 return false;
             }
 
-            // Tạo tên file ngắn gọn
+            // Tao ten file ngan gon.
             String filename = "avatar_" + userId + "_" + System.currentTimeMillis() + ".png";
             Path filePath = Paths.get(UPLOAD_DIR, filename);
             
-            // Lưu file
+            // Luu file xuong thu muc upload.
             Files.write(filePath, imageBytes);
             
-            // Cập nhật DB với đường dẫn ngắn
+            // Luu duong dan ngan vao database.
             String shortPath = UPLOAD_DIR + filename;
             return updateAvatarInDb(userId, shortPath);
             
@@ -78,7 +78,7 @@ public class AvatarService {
             stmt.setLong(2, userId);
 
             int rowsAffected = stmt.executeUpdate();
-            return rowsAffected > 0; // false nếu user không tồn tại
+            return rowsAffected > 0; // false neu user khong ton tai
 
         } catch (Exception e) {
             logger.error("Lỗi khi cập nhật avatar cho userId: {}", userId, e);

@@ -30,9 +30,9 @@ public class AuthService {
     private static final SecureRandom secureRandom = new SecureRandom();
 
     /**
-     * Xác thực user theo username và password.
+     * Kiem tra username va password khi dang nhap.
      * 
-     * @return User nếu đăng nhập thành công, null nếu thất bại.
+     * @return User neu dang nhap thanh cong, null neu that bai.
      */
     public User login(String username, String password) {
         User user = userRepository.findByUsername(username);

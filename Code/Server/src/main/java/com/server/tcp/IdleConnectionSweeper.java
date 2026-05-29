@@ -9,7 +9,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Periodically closes idle TCP connections and triggers presence offline when needed.
+ * Dinh ky dong cac ket noi TCP qua lau khong hoat dong va cap nhat offline.
  */
 public class IdleConnectionSweeper {
     private static final Logger logger = LoggerFactory.getLogger(IdleConnectionSweeper.class);

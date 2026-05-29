@@ -21,7 +21,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Integration tests for all authentication endpoints.
+ * Integration tests for authentication actions over TCP.
  * Spins up a real TcpServer with real handlers but mocked AuthService
  * to test the full TCP request/response JSON cycle.
  */
@@ -94,7 +94,7 @@ class AuthEndpointIntegrationTest {
         }
     }
 
-    // ──────────────────── Login Endpoint Tests ────────────────────
+    // Login action tests
 
     @Test
     void loginMissingFieldsReturnsError() throws Exception {
@@ -142,7 +142,7 @@ class AuthEndpointIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("Invalid"));
     }
 
-    // ──────────────────── Register Endpoint Tests ────────────────────
+    // Register action tests
 
     @Test
     void registerMissingEmailReturnsError() throws Exception {
@@ -205,7 +205,7 @@ class AuthEndpointIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("already exists"));
     }
 
-    // ──────────────────── Forgot Password Endpoint Tests ────────────────────
+    // Forgot password action tests
 
     @Test
     void forgotPasswordRequestCodeSuccess() throws Exception {
@@ -266,7 +266,7 @@ class AuthEndpointIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("Invalid or expired"));
     }
 
-    // ──────────────────── Full Client Flow Simulation ────────────────────
+    // Full client flow simulation
 
     @Test
     void fullRegisterThenLoginFlow() throws Exception {

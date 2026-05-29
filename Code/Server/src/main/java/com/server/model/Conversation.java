@@ -3,16 +3,16 @@ package com.server.model;
 import java.sql.Timestamp;
 
 public class Conversation {
-    // Enum ánh xạ cột `type` ENUM('PRIVATE','GROUP')
+    // Enum map voi cot type trong database.
     public enum ConversationType { PRIVATE, GROUP }
 
     private long id;                        // bigint(20) NOT NULL AUTO_INCREMENT
     private ConversationType type;          // enum NOT NULL
-    private String name;                    // varchar(100) — tên nhóm (null nếu PRIVATE)
-    private String avatarUrl;               // text — ảnh đại diện nhóm
-    private Long createdBy;                 // bigint — ID người tạo (FK → users.id)
+    private String name;                    // varchar(100) - ten nhom, null neu PRIVATE
+    private String avatarUrl;               // text - anh dai dien nhom
+    private Long createdBy;                 // bigint - ID nguoi tao, FK den users.id
     private Timestamp createdAt;            // timestamp DEFAULT CURRENT_TIMESTAMP
-    private Timestamp lastMessageAt;        // timestamp — thời điểm tin nhắn cuối
+    private Timestamp lastMessageAt;        // timestamp - thoi diem tin nhan cuoi
 
     public Conversation() {}
 

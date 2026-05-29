@@ -40,21 +40,21 @@ public class PresenceService {
     }
 
     /**
-     * Broadcast status change to:
-     * 1. All accepted friends
-     * 2. All users who share a conversation with this user (conversation peers)
+     * Gui thay doi trang thai online/offline toi:
+     * 1. Ban be da duoc chap nhan.
+     * 2. Nhung user co chung conversation voi user nay.
      */
     private void broadcastStatusToPeers(long userId, String status, Timestamp lastSeen) {
-        // Collect all target user IDs
+        // Gom toan bo user can nhan event.
         Set<Long> targetIds = new HashSet<>();
 
-        // 1. Friends
+        // Ban be.
         List<Long> friendIds = userRepository.findAcceptedFriendIds(userId);
         if (friendIds != null) {
             targetIds.addAll(friendIds);
         }
 
-        // 2. Conversation peers (users sharing a conversation, excluding self)
+        // Nguoi co chung conversation, khong tinh chinh user hien tai.
         List<Long> conversationPeers = conversationRepository.findConversationPeers(userId);
         if (conversationPeers != null) {
             targetIds.addAll(conversationPeers);
