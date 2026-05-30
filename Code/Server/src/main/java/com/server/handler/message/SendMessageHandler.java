@@ -2,6 +2,7 @@ package com.server.handler.message;
 
 import com.google.gson.JsonObject;
 import com.server.service.MessageService;
+import com.server.service.MessageStatusService;
 import com.server.tcp.ClientConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 public class SendMessageHandler {
     private static final Logger logger = LoggerFactory.getLogger(SendMessageHandler.class);
     private final MessageService messageService = new MessageService();
+    private final MessageStatusService messageStatusService = new MessageStatusService();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
@@ -50,7 +52,8 @@ public class SendMessageHandler {
                     conn.getRemoteAddress(), senderId, conversationId, content.length());
 
             long msgId = messageService.sendMessage(conversationId, senderId, content);
-            logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored",
+            messageStatusService.initializeMessageStatus(msgId, senderId, conversationId);
+            logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored and status initialized",
                     conn.getRemoteAddress(), senderId, conversationId, msgId);
             response.addProperty("status", "success");
             response.addProperty("messageId", msgId);

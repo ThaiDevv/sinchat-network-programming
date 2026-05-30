@@ -42,6 +42,7 @@ public class JoinHandler {
 
         conn.setUserId(userId);
         TcpConnectionManager.getInstance().addConnection(userId, conn);
+        new com.server.service.MessageStatusService().markAllConversationsAsDelivered(userId);
 
         if (previousUserId == null) {
             logger.info("[JOIN] Remote={} | userId={} - New login, broadcasting online status",

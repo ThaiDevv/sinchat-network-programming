@@ -37,6 +37,7 @@ public class ChatTcpClient {
     private Consumer<JsonObject> onNewMessage;
     private Consumer<JsonObject> onUserTyping;
     private Consumer<JsonObject> onUserStatusChange;
+    private Consumer<JsonObject> onMessageStatusUpdate;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -171,6 +172,9 @@ public class ChatTcpClient {
                 case "NEW_MESSAGE":
                     if (onNewMessage != null) Platform.runLater(() -> onNewMessage.accept(json));
                     break;
+                case "MESSAGE_STATUS_UPDATE":
+                    if (onMessageStatusUpdate != null) Platform.runLater(() -> onMessageStatusUpdate.accept(json));
+                    break;
                 case "TYPING_EVENT":
                     if (onUserTyping != null) Platform.runLater(() -> onUserTyping.accept(json));
                     break;
@@ -238,6 +242,7 @@ public class ChatTcpClient {
     public void setOnNewMessage(Consumer<JsonObject> callback) { this.onNewMessage = callback; }
     public void setOnUserTyping(Consumer<JsonObject> callback) { this.onUserTyping = callback; }
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
+    public void setOnMessageStatusUpdate(Consumer<JsonObject> callback) { this.onMessageStatusUpdate = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 
@@ -355,6 +360,15 @@ public class ChatTcpClient {
         req.addProperty("conversationId", conversationId);
         req.addProperty("senderId", senderId);
         req.addProperty("content", content);
+        if (isConnected()) writeLine(gson.toJson(req));
+    }
+
+    public void markAsSeen(long conversationId) {
+        if (userId <= 0) return;
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "MARK_AS_SEEN");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("userId", userId);
         if (isConnected()) writeLine(gson.toJson(req));
     }
 

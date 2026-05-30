@@ -12,6 +12,7 @@ public class Message {
     private MessageType type;           // enum DEFAULT 'TEXT'
     private String content;             // text - noi dung tin nhan
     private Timestamp createdAt;        // timestamp DEFAULT CURRENT_TIMESTAMP
+    private java.util.List<MessageStatus> statuses;
 
     public Message() {}
 
@@ -39,6 +40,9 @@ public class Message {
 
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public java.util.List<MessageStatus> getStatuses() { return statuses; }
+    public void setStatuses(java.util.List<MessageStatus> statuses) { this.statuses = statuses; }
 
     public Timestamp getCreatedAt() { return createdAt; }
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }

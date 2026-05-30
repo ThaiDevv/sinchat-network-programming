@@ -147,6 +147,9 @@ public class ChatView {
         tcpClient.setOnUserStatusChange(this::onUserStatusChange);
 
 
+        tcpClient.setOnMessageStatusUpdate(this::onMessageStatusUpdated);
+
+
         tcpClient.setOnConnected(() -> {
             System.out.println("TCP socket connected for user " + currentUserId);
         });
@@ -248,6 +251,7 @@ public class ChatView {
                 addSentMessage(content);
             } else {
                 addReceivedMessage(content);
+                tcpClient.markAsSeen(conversationId);
             }
             scrollToBottom();
         }
@@ -316,6 +320,51 @@ public class ChatView {
         });
     }
 
+    private void onMessageStatusUpdated(JsonObject json) {
+        long conversationId = json.get("conversationId").getAsLong();
+        if (conversationId == currentConversationId) {
+            // Re-load messages to show new seen/delivered checkmarks.
+            Platform.runLater(() -> loadMessagesForCurrentConversation(true));
+        }
+    }
+
+    private Label createStatusIndicator(JsonObject msg) {
+        Label indicator = new Label();
+        indicator.setStyle("-fx-font-size: 10px; -fx-text-fill: #555555; -fx-padding: 0 4 0 4;");
+        
+        if (msg.has("statuses")) {
+            JsonArray statuses = msg.getAsJsonArray("statuses");
+            String overallStatus = "SENT";
+            for (JsonElement el : statuses) {
+                JsonObject st = el.getAsJsonObject();
+                long uId = st.get("userId").getAsLong();
+                if (uId != currentUserId) {
+                    String s = st.get("status").getAsString();
+                    if ("SEEN".equals(s)) {
+                        overallStatus = "SEEN";
+                        break;
+                    } else if ("DELIVERED".equals(s)) {
+                        overallStatus = "DELIVERED";
+                    }
+                }
+            }
+            
+            if ("SEEN".equals(overallStatus)) {
+                indicator.setText("✓✓");
+                indicator.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ACCENT + "; -fx-padding: 0 4 0 4; -fx-font-weight: bold;");
+            } else if ("DELIVERED".equals(overallStatus)) {
+                indicator.setText("✓✓");
+                indicator.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4 0 4;");
+            } else {
+                indicator.setText("✓");
+                indicator.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4 0 4;");
+            }
+        } else {
+            indicator.setText("✓");
+        }
+        return indicator;
+    }
+
     /**
      * Cuon xuong cuoi danh sach tin nhan.
      */
@@ -347,6 +396,9 @@ public class ChatView {
         
         // Load lich su tin nhan theo phan trang.
         loadMessagesForCurrentConversation(true);
+
+        // Mark as seen!
+        tcpClient.markAsSeen(conversationId);
     }
 
     /**
@@ -399,11 +451,12 @@ public class ChatView {
                             long senderId = msg.get("senderId").getAsLong();
                             String content = msg.get("content").getAsString();
 
-                            HBox wrapper = new HBox();
+                            HBox wrapper = new HBox(6);
                             if (senderId == currentUserId) {
                                 wrapper.setAlignment(Pos.CENTER_RIGHT);
                                 Label bubble = createMessageBubble(content, ACCENT, "18px 18px 4px 18px");
-                                wrapper.getChildren().add(bubble);
+                                Label statusLabel = createStatusIndicator(msg);
+                                wrapper.getChildren().addAll(statusLabel, bubble);
                             } else {
                                 wrapper.setAlignment(Pos.CENTER_LEFT);
                                 Label bubble = createMessageBubble(content, "#1e1e1e", "18px 18px 18px 4px");

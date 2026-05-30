@@ -30,6 +30,7 @@ public class Router {
     private static final JoinHandler joinHandler = new JoinHandler();
     private static final PingHandler pingHandler = new PingHandler();
     private static final TypingHandler typingHandler = new TypingHandler();
+    private static UpdateStatusHandler updateStatusHandler = new UpdateStatusHandler();
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
             logger.warn("[ROUTER] Remote={} | Missing action field in request: {}",
@@ -65,6 +66,9 @@ public class Router {
                     break;
                 case "SEND_MESSAGE":
                     response = sendMessageHandler.handleTcp(request, conn);
+                    break;
+                case "MARK_AS_SEEN":
+                    response = updateStatusHandler.handleTcp(request, conn);
                     break;
                 case "GET_OR_CREATE_CONVERSATION":
                     response = conversationHandle.handleTcp(request, conn);
