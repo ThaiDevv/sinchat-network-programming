@@ -76,6 +76,27 @@ public class MessageRepository {
         return messages;
     }
 
+    public List<Message> searchByConversation(long conversationId, String keyword, int limit, int offset) {
+        List<Message> messages = new ArrayList<>();
+        String query = "SELECT id, conversation_id, sender_id, type, content, created_at " +
+                "FROM messages " +
+                "WHERE conversation_id = ? AND LOWER(content) LIKE LOWER(?) " +
+                "ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, conversationId);
+            pstmt.setString(2, "%" + keyword + "%");
+            pstmt.setInt(3, limit);
+            pstmt.setInt(4, offset);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) messages.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            logger.error("Error searching messages for conversation: {}", conversationId, e);
+        }
+        return messages;
+    }
+
     private Message mapRow(ResultSet rs) throws SQLException {
         return new Message(
                 rs.getLong("id"),
