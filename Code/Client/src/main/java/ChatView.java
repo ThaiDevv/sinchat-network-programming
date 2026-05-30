@@ -41,6 +41,10 @@ public class ChatView {
     private VBox contactList;
     private TextField messageInput;
     private ScrollPane scrollMessages;
+    private TextField messageSearchField;
+    private VBox messageSearchPanel;
+    private VBox messageSearchResults;
+    private Label messageSearchStatus;
     private Label headerChatName;
     private Label chatStatus;
 
@@ -332,6 +336,7 @@ public class ChatView {
         this.currentConversationId = conversationId;
         // Xoa tin nhan cu tren UI.
         messagesBox.getChildren().clear();
+        clearMessageSearchResults();
         // Reset phan trang cho conversation moi.
         currentMessageOffset = 0;
         hasMoreMessages = true;
@@ -782,13 +787,51 @@ public class ChatView {
 
         HBox actions = new HBox(8);
         actions.setAlignment(Pos.CENTER_RIGHT);
+        messageSearchField = new TextField();
+        messageSearchField.setPromptText("Tìm tin nhắn...");
+        messageSearchField.setPrefWidth(190);
+        messageSearchField.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1.2px;
+                -fx-border-radius: 18px;
+                -fx-background-radius: 18px;
+                -fx-text-fill: %s;
+                -fx-prompt-text-fill: %s;
+                -fx-font-size: 13px;
+                -fx-padding: 8px 12px;
+                """.formatted(BG_BLACK, INPUT_BORDER, TEXT_WHITE, TEXT_DIM));
+
+        Button searchMessageBtn = createIconButton("Tìm");
+        searchMessageBtn.setOnAction(e -> searchMessagesInCurrentConversation());
+        messageSearchField.setOnAction(e -> searchMessagesInCurrentConversation());
+
         actions.getChildren().addAll(
+                messageSearchField,
+                searchMessageBtn,
                 createIconButton("Call"),
                 createIconButton("Video"),
                 createIconButton("...")
         );
 
         chatHeader.getChildren().addAll(headerAvatar, headerInfo, spacer, actions);
+
+        messageSearchStatus = new Label("");
+        messageSearchStatus.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                """.formatted(TEXT_MUTED));
+
+        messageSearchResults = new VBox(6);
+        messageSearchPanel = new VBox(8, messageSearchStatus, messageSearchResults);
+        messageSearchPanel.setPadding(new Insets(10, 24, 10, 24));
+        messageSearchPanel.setVisible(false);
+        messageSearchPanel.setManaged(false);
+        messageSearchPanel.setStyle("""
+                -fx-background-color: #0f0f0f;
+                -fx-border-color: %s;
+                -fx-border-width: 0 0 1 0;
+                """.formatted(BORDER_COLOR));
 
         // Vung hien thi tin nhan.
         messagesBox = new VBox(12);
@@ -884,7 +927,7 @@ public class ChatView {
         messageInput.setOnAction(e -> sendMessage());
 
         inputBar.getChildren().addAll(attachBtn, messageInput, sendBtn);
-        panel.getChildren().addAll(chatHeader, scrollMessages, typingLabel, inputBar);
+        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, inputBar);
         return panel;
     }
 
@@ -919,8 +962,140 @@ public class ChatView {
                         -fx-min-height: 38px;
                         -fx-padding: 0 14px;
                         -fx-cursor: hand;
-                        """.formatted(TEXT_WHITE)));
+                """.formatted(TEXT_WHITE)));
         return btn;
+    }
+
+    private void searchMessagesInCurrentConversation() {
+        if (messageSearchField == null) return;
+
+        String keyword = messageSearchField.getText().trim();
+        if (keyword.isEmpty()) {
+            clearMessageSearchResults();
+            return;
+        }
+
+        if (keyword.length() < 2) {
+            showMessageSearchStatus("Nhập ít nhất 2 ký tự để tìm.", true);
+            return;
+        }
+
+        if (currentConversationId <= 0) {
+            showMessageSearchStatus("Hãy chọn một cuộc trò chuyện trước.", true);
+            return;
+        }
+
+        if (tcpClient == null || !tcpClient.isConnected()) {
+            showMessageSearchStatus("Chưa kết nối được server TCP.", true);
+            return;
+        }
+
+        long capturedConversationId = currentConversationId;
+        showMessageSearchStatus("Đang tìm tin nhắn...", false);
+
+        CompletableFuture
+                .supplyAsync(() -> tcpClient.searchMessages(capturedConversationId, keyword, 20, 0))
+                .thenAccept(response -> Platform.runLater(() ->
+                        renderMessageSearchResults(capturedConversationId, keyword, response)));
+    }
+
+    private void renderMessageSearchResults(
+            long capturedConversationId,
+            String keyword,
+            ChatTcpClient.ApiResponse response
+    ) {
+        if (currentConversationId != capturedConversationId) return;
+
+        if (response == null || !response.isSuccess()) {
+            String error = response != null && response.message() != null && !response.message().isBlank()
+                    ? response.message()
+                    : "Không tìm được tin nhắn.";
+            showMessageSearchStatus(error, true);
+            return;
+        }
+
+        try {
+            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+            JsonArray messages = json.getAsJsonArray("messages");
+            messageSearchResults.getChildren().clear();
+
+            if (messages == null || messages.isEmpty()) {
+                showMessageSearchStatus("Không có tin nhắn phù hợp.", false);
+                return;
+            }
+
+            showMessageSearchStatus("Tìm thấy " + messages.size() + " kết quả cho: " + keyword, false);
+            for (JsonElement element : messages) {
+                messageSearchResults.getChildren().add(createMessageSearchResultItem(element.getAsJsonObject()));
+            }
+        } catch (Exception e) {
+            showMessageSearchStatus("Không đọc được kết quả tìm kiếm.", true);
+        }
+    }
+
+    private VBox createMessageSearchResultItem(JsonObject message) {
+        long senderId = message.has("senderId") ? message.get("senderId").getAsLong() : -1;
+        String sender = senderId == currentUserId ? "Bạn" : "User #" + senderId;
+        String content = message.has("content") && !message.get("content").isJsonNull()
+                ? message.get("content").getAsString()
+                : "";
+        String createdAt = message.has("createdAt") && !message.get("createdAt").isJsonNull()
+                ? message.get("createdAt").getAsString()
+                : "";
+
+        Label meta = new Label(sender + (createdAt.isBlank() ? "" : " • " + createdAt));
+        meta.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 11px;
+                """.formatted(TEXT_DIM));
+
+        Label contentLabel = new Label(content);
+        contentLabel.setWrapText(true);
+        contentLabel.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 13px;
+                """.formatted(TEXT_WHITE));
+
+        VBox item = new VBox(3, meta, contentLabel);
+        item.setPadding(new Insets(8, 10, 8, 10));
+        item.setStyle("""
+                -fx-background-color: #181818;
+                -fx-border-color: %s;
+                -fx-border-width: 1px;
+                -fx-border-radius: 8px;
+                -fx-background-radius: 8px;
+                """.formatted(BORDER_COLOR));
+        return item;
+    }
+
+    private void showMessageSearchStatus(String text, boolean error) {
+        if (messageSearchPanel == null || messageSearchStatus == null || messageSearchResults == null) return;
+        messageSearchPanel.setVisible(true);
+        messageSearchPanel.setManaged(true);
+        messageSearchStatus.setText(text);
+        messageSearchStatus.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                """.formatted(error ? "#ff7777" : TEXT_MUTED));
+        if (error) {
+            messageSearchResults.getChildren().clear();
+        }
+    }
+
+    private void clearMessageSearchResults() {
+        if (messageSearchField != null) {
+            messageSearchField.clear();
+        }
+        if (messageSearchResults != null) {
+            messageSearchResults.getChildren().clear();
+        }
+        if (messageSearchStatus != null) {
+            messageSearchStatus.setText("");
+        }
+        if (messageSearchPanel != null) {
+            messageSearchPanel.setVisible(false);
+            messageSearchPanel.setManaged(false);
+        }
     }
 
     private void addReceivedMessage(String text) {

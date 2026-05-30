@@ -22,6 +22,7 @@ public class Router {
     private static ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
     private static ProfileHandler profileHandler = new ProfileHandler();
     private static GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
+    private static SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
     private static SendMessageHandler sendMessageHandler = new SendMessageHandler();
     private static ConversationHandle conversationHandle = new ConversationHandle();
     private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
@@ -66,6 +67,9 @@ public class Router {
                     break;
                 case "GET_MESSAGES":
                     response = getMessagesHandler.handleTcp(request, conn);
+                    break;
+                case "SEARCH_MESSAGES":
+                    response = searchMessagesHandler.handleTcp(request, conn);
                     break;
                 case "SEND_MESSAGE":
                     response = sendMessageHandler.handleTcp(request, conn);

@@ -26,4 +26,8 @@ public class MessageService {
     public List<Message> getMessages(long conversationId, int limit, int offset) {
         return messageRepository.getByConversationId(conversationId, limit, offset);
     }
+
+    public List<Message> searchMessages(long conversationId, String keyword, int limit, int offset) {
+        return messageRepository.searchByConversation(conversationId, keyword, limit, offset);
+    }
 }

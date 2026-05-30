@@ -350,6 +350,16 @@ public class ChatTcpClient {
         return sendRequestSync(req);
     }
 
+    public ApiResponse searchMessages(long conversationId, String keyword, int limit, int offset) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SEARCH_MESSAGES");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("keyword", keyword);
+        req.addProperty("limit", limit);
+        req.addProperty("offset", offset);
+        return sendRequestSync(req);
+    }
+
     public void join(long userId) {
         this.userId = userId;
         JsonObject req = new JsonObject();
