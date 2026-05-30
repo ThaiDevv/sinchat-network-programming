@@ -190,17 +190,33 @@ public class ChatView {
                                 JsonObject avatarData = JsonParser.parseString(avatarResponse.rawBody()).getAsJsonObject();
                                 if (avatarData.has("avatarUrl") && !avatarData.get("avatarUrl").isJsonNull()) {
                                     String dataUrl = avatarData.get("avatarUrl").getAsString();
-                                    Image newAvatar = new Image(dataUrl, true);
-                                    newAvatar.progressProperty().addListener((obs, oldVal, newVal) -> {
-                                        if (newVal.doubleValue() >= 1.0 && !newAvatar.isError()) {
+                                    if (dataUrl.startsWith("data:image/")) {
+                                        try {
+                                            String base64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+                                            byte[] imgBytes = java.util.Base64.getDecoder().decode(base64);
+                                            Image newAvatar = new Image(new java.io.ByteArrayInputStream(imgBytes));
                                             Platform.runLater(() -> {
                                                 currentAvatarImage = newAvatar;
                                                 if (profileAvatarCircle != null) {
-                                                    profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                                                    profileAvatarCircle.setFill(new javafx.scene.paint.ImagePattern(currentAvatarImage));
                                                 }
                                             });
+                                        } catch (Exception e) {
+                                            System.err.println("Error decoding avatar base64: " + e.getMessage());
                                         }
-                                    });
+                                    } else {
+                                        Image newAvatar = new Image(dataUrl, true);
+                                        newAvatar.progressProperty().addListener((obs, oldVal, newVal) -> {
+                                            if (newVal.doubleValue() >= 1.0 && !newAvatar.isError()) {
+                                                Platform.runLater(() -> {
+                                                    currentAvatarImage = newAvatar;
+                                                    if (profileAvatarCircle != null) {
+                                                        profileAvatarCircle.setFill(new javafx.scene.paint.ImagePattern(currentAvatarImage));
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
                                 }
                             }
                         }
