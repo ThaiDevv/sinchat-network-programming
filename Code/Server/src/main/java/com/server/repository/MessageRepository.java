@@ -13,8 +13,8 @@ public class MessageRepository {
     private static final Logger logger = LoggerFactory.getLogger(MessageRepository.class);
 
     /**
-     * Lưu tin nhắn mới vào bảng messages.
-     * Trả về ID được DB tự sinh (AUTO_INCREMENT).
+     * Luu tin nhan moi vao bang messages.
+     * Tra ve ID do database tu sinh.
      */
     public long save(Message message) throws SQLException {
         String query = "INSERT INTO messages (conversation_id, sender_id, type, content) VALUES (?, ?, ?, ?)";

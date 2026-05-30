@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Integration tests for additional TCP actions/endpoints:
+ * Integration tests for additional TCP actions:
  * PROFILE, CHANGE_AVATAR, JOIN, and TYPING broadcast.
  */
 class AdditionalEndpointsIntegrationTest {
@@ -112,7 +112,7 @@ class AdditionalEndpointsIntegrationTest {
         }
     }
 
-    // ──────────────────── PROFILE (GET_PROFILE) Tests ────────────────────
+    // PROFILE get tests
 
     @Test
     void getProfileSuccess() throws Exception {
@@ -146,7 +146,7 @@ class AdditionalEndpointsIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("Missing userId"));
     }
 
-    // ──────────────────── PROFILE (UPDATE_PROFILE) Tests ────────────────────
+    // PROFILE update tests
 
     @Test
     void updateProfileSuccess() throws Exception {
@@ -165,7 +165,7 @@ class AdditionalEndpointsIntegrationTest {
         assertTrue(resp.get("message").getAsString().contains("updated successfully"));
     }
 
-    // ──────────────────── CHANGE_AVATAR Tests ────────────────────
+    // CHANGE_AVATAR tests
 
     @Test
     void changeAvatarSuccess() throws Exception {
@@ -193,7 +193,7 @@ class AdditionalEndpointsIntegrationTest {
         assertEquals("error", resp.get("status").getAsString());
     }
 
-    // ──────────────────── JOIN Endpoint Tests ────────────────────
+    // JOIN action tests
 
     @Test
     void joinSuccess() throws Exception {
@@ -206,7 +206,7 @@ class AdditionalEndpointsIntegrationTest {
         assertEquals("success", resp.get("status").getAsString());
     }
 
-    // ──────────────────── TYPING Broadcast Tests ────────────────────
+    // TYPING broadcast tests
 
     @Test
     void typingEventBroadcastSuccess() throws Exception {

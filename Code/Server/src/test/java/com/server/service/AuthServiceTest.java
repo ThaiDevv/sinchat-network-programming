@@ -164,7 +164,7 @@ class AuthServiceTest {
         String code = authService.generateResetCode("bob");
         assertNotNull(code);
 
-        // DB update fails — code should NOT be removed
+        // DB update fails, so code should NOT be removed.
         boolean result = authService.resetPassword(code, "newpass");
         assertFalse(result);
     }

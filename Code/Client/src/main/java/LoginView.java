@@ -56,7 +56,7 @@ public class LoginView {
                 return;
             }
 
-            runApiCall(
+            runTcpCall(
                     loginButton,
                     message,
                     "\u0110ang \u0111\u0103ng nh\u1eadp...",
@@ -132,7 +132,7 @@ public class LoginView {
                 return;
             }
 
-            runApiCall(
+            runTcpCall(
                     registerButton,
                     message,
                     "\u0110ang \u0111\u0103ng k\u00fd...",
@@ -187,7 +187,7 @@ public class LoginView {
                 return;
             }
 
-            runApiCall(
+            runTcpCall(
                     createCodeButton,
                     message,
                     "\u0110ang t\u1ea1o m\u00e3...",
@@ -293,7 +293,7 @@ public class LoginView {
                 return;
             }
 
-            runApiCall(
+            runTcpCall(
                     saveButton,
                     message,
                     "\u0110ang \u0111\u1ed5i m\u1eadt kh\u1ea9u...",
@@ -511,11 +511,11 @@ public class LoginView {
         BorderPane.setAlignment(content, Pos.CENTER);
     }
 
-    private void runApiCall(
+    private void runTcpCall(
             Button actionButton,
             Label message,
             String loadingText,
-            ApiCall apiCall,
+            TcpCall tcpCall,
             Consumer<ChatTcpClient.ApiResponse> onComplete
     ) {
         actionButton.setDisable(true);
@@ -524,12 +524,12 @@ public class LoginView {
         CompletableFuture
                 .supplyAsync(() -> {
                     try {
-                        return apiCall.execute();
+                        return tcpCall.execute();
                     } catch (Exception exception) {
                         return new ChatTcpClient.ApiResponse(
                                 0,
                                 "error",
-                                "Không kết nối được server. Kiểm tra API base URL hoặc server backend.",
+                                "Không kết nối được server TCP. Kiểm tra host, port hoặc backend.",
                                 "",
                                 null,
                                 exception.getMessage()
@@ -543,7 +543,7 @@ public class LoginView {
     }
 
     @FunctionalInterface
-    private interface ApiCall {
+    private interface TcpCall {
         ChatTcpClient.ApiResponse execute() throws Exception;
     }
 
