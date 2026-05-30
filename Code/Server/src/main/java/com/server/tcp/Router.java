@@ -19,6 +19,7 @@ public class Router {
     private static LoginHandler loginHandler = new LoginHandler();
     private static RegisterHandler registerHandler = new RegisterHandler();
     private static ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
+    private static ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
     private static ProfileHandler profileHandler = new ProfileHandler();
     private static GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
     private static SendMessageHandler sendMessageHandler = new SendMessageHandler();
@@ -56,6 +57,9 @@ public class Router {
                     break;
                 case "FORGOT_PASSWORD":
                     response = forgotPasswordHandler.handleTcp(request, conn);
+                    break;
+                case "CHANGE_PASSWORD":
+                    response = changePasswordHandler.handleTcp(request, conn);
                     break;
                 case "PROFILE":
                     response = profileHandler.handleTcp(request, conn);

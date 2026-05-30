@@ -303,6 +303,15 @@ public class ChatTcpClient {
         return sendRequestSync(req);
     }
 
+    public ApiResponse changePassword(long userId, String oldPassword, String newPassword) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "CHANGE_PASSWORD");
+        req.addProperty("userId", userId);
+        req.addProperty("oldPassword", oldPassword);
+        req.addProperty("newPassword", newPassword);
+        return sendRequestSync(req);
+    }
+
     public ApiResponse getConversations(long userId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "GET_USER_CONVERSATIONS");
