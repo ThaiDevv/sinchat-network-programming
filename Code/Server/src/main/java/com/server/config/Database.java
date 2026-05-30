@@ -31,7 +31,7 @@ public class Database {
                 if (dotenv.get("DB_USER") == null || dotenv.get("DB_USER").trim().isEmpty()) {
                     throw new RuntimeException("DB_USER is not configured in .env file");
                 }
-                if (dotenv.get("DB_PASSWORD") == null || dotenv.get("DB_PASSWORD").trim().isEmpty()) {
+                if (dotenv.get("DB_PASSWORD") == null) {
                     throw new RuntimeException("DB_PASSWORD is not configured in .env file");
                 }
             // Add SSL disable parameters to avoid timeout issues

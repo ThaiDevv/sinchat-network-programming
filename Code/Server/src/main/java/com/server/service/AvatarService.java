@@ -55,6 +55,9 @@ public class AvatarService {
             String filename = "avatar_" + userId + "_" + System.currentTimeMillis() + ".png";
             Path filePath = Paths.get(UPLOAD_DIR, filename);
             
+            // Đảm bảo thư mục tồn tại trước khi lưu
+            Files.createDirectories(Paths.get(UPLOAD_DIR));
+            
             // Lưu file
             Files.write(filePath, imageBytes);
             
