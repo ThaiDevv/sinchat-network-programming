@@ -9,6 +9,13 @@ import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AuthService {
+
+    public enum ChangePasswordResult {
+        SUCCESS,
+        USER_NOT_FOUND,
+        WRONG_OLD_PASSWORD,
+        UPDATE_FAILED
+    }
     
     // In-memory record to store reset state: code, username, expiration timestamp (ms), and attempt counter.
     public static class ResetCodeState {
@@ -107,5 +114,20 @@ public class AuthService {
             passwordResetCodes.remove(code);
         }
         return success;
+    }
+
+    public ChangePasswordResult changePassword(long userId, String oldPassword, String newPassword) {
+        User user = userRepository.findById(userId);
+        if (user == null) {
+            return ChangePasswordResult.USER_NOT_FOUND;
+        }
+
+        if (!BCrypt.checkpw(oldPassword, user.getPasswordHash())) {
+            return ChangePasswordResult.WRONG_OLD_PASSWORD;
+        }
+
+        String newHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+        boolean updated = userRepository.updatePasswordById(userId, newHash);
+        return updated ? ChangePasswordResult.SUCCESS : ChangePasswordResult.UPDATE_FAILED;
     }
 }

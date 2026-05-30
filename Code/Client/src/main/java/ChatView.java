@@ -1024,6 +1024,7 @@ public class ChatView {
 
         Button nameBtn = createProfileButton("\u0110\u1ed5i t\u00ean ng\u01b0\u1eddi d\u00f9ng", false);
         Button passBtn = createProfileButton("\u0110\u1ed5i m\u1eadt kh\u1ea9u", false);
+        passBtn.setOnAction(e -> showChangePasswordDialog());
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
@@ -1051,6 +1052,187 @@ public class ChatView {
         );
 
         return panel;
+    }
+
+    private void showChangePasswordDialog() {
+        Stage dialog = new Stage();
+        dialog.initOwner(stage);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        dialog.setTitle("Đổi mật khẩu");
+
+        VBox content = new VBox(16);
+        content.setPadding(new Insets(26));
+        content.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1px;
+                """.formatted(PANEL_DARK, BORDER_COLOR));
+
+        Label title = new Label("Đổi mật khẩu");
+        title.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 24px;
+                -fx-font-weight: bold;
+                """.formatted(TEXT_WHITE));
+
+        Label subtitle = new Label("Nhập mật khẩu hiện tại trước khi đặt mật khẩu mới.");
+        subtitle.setWrapText(true);
+        subtitle.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 14px;
+                """.formatted(TEXT_MUTED));
+
+        PasswordField oldPasswordField = createPasswordDialogField("Mật khẩu hiện tại");
+        PasswordField newPasswordField = createPasswordDialogField("Mật khẩu mới");
+        PasswordField confirmPasswordField = createPasswordDialogField("Nhập lại mật khẩu mới");
+
+        Label message = new Label("");
+        message.setWrapText(true);
+        message.setMinHeight(24);
+        message.setStyle("""
+                -fx-text-fill: transparent;
+                -fx-font-size: 13px;
+                """);
+
+        Button cancelButton = createPasswordDialogButton("Hủy", false);
+        cancelButton.setOnAction(e -> dialog.close());
+
+        Button saveButton = createPasswordDialogButton("Lưu mật khẩu", true);
+        saveButton.setOnAction(e -> {
+            String oldPassword = oldPasswordField.getText();
+            String newPassword = newPasswordField.getText();
+            String confirmPassword = confirmPasswordField.getText();
+
+            if (oldPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
+                setPasswordDialogMessage(message, "Vui lòng nhập đầy đủ thông tin.", "#ff7777");
+                return;
+            }
+
+            if (newPassword.length() < 6) {
+                setPasswordDialogMessage(message, "Mật khẩu mới phải có ít nhất 6 ký tự.", "#ff7777");
+                return;
+            }
+
+            if (oldPassword.equals(newPassword)) {
+                setPasswordDialogMessage(message, "Mật khẩu mới không được trùng mật khẩu hiện tại.", "#ff7777");
+                return;
+            }
+
+            if (!newPassword.equals(confirmPassword)) {
+                setPasswordDialogMessage(message, "Mật khẩu nhập lại không khớp.", "#ff7777");
+                return;
+            }
+
+            if (tcpClient == null || !tcpClient.isConnected()) {
+                setPasswordDialogMessage(message, "Chưa kết nối được server TCP.", "#ff7777");
+                return;
+            }
+
+            saveButton.setDisable(true);
+            cancelButton.setDisable(true);
+            setPasswordDialogMessage(message, "Đang đổi mật khẩu...", TEXT_MUTED);
+
+            CompletableFuture
+                    .supplyAsync(() -> tcpClient.changePassword(currentUserId, oldPassword, newPassword))
+                    .thenAccept(response -> Platform.runLater(() -> {
+                        saveButton.setDisable(false);
+                        cancelButton.setDisable(false);
+
+                        if (response != null && response.isSuccess()) {
+                            oldPasswordField.clear();
+                            newPasswordField.clear();
+                            confirmPasswordField.clear();
+                            setPasswordDialogMessage(message, "Đổi mật khẩu thành công.", "#4ade80");
+                            return;
+                        }
+
+                        setPasswordDialogMessage(message, mapChangePasswordError(response), "#ff7777");
+                    }));
+        });
+
+        HBox actions = new HBox(10, cancelButton, saveButton);
+        actions.setAlignment(Pos.CENTER_RIGHT);
+
+        content.getChildren().addAll(
+                title,
+                subtitle,
+                oldPasswordField,
+                newPasswordField,
+                confirmPasswordField,
+                message,
+                actions
+        );
+
+        Scene scene = new Scene(content, 460, 390);
+        dialog.setScene(scene);
+        dialog.setResizable(false);
+        dialog.showAndWait();
+    }
+
+    private PasswordField createPasswordDialogField(String prompt) {
+        PasswordField field = new PasswordField();
+        field.setPromptText(prompt);
+        field.setPrefHeight(46);
+        field.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 12px;
+                -fx-background-radius: 12px;
+                -fx-text-fill: %s;
+                -fx-prompt-text-fill: %s;
+                -fx-font-size: 14px;
+                -fx-padding: 12px 14px;
+                """.formatted(BG_BLACK, INPUT_BORDER, TEXT_WHITE, TEXT_DIM));
+        return field;
+    }
+
+    private Button createPasswordDialogButton(String text, boolean accent) {
+        Button button = new Button(text);
+        button.setMinWidth(120);
+        button.setPrefHeight(42);
+        button.setStyle(accent
+                ? """
+                -fx-background-color: %s;
+                -fx-text-fill: %s;
+                -fx-font-size: 14px;
+                -fx-font-weight: bold;
+                -fx-background-radius: 12px;
+                -fx-cursor: hand;
+                """.formatted(ACCENT, TEXT_WHITE)
+                : """
+                -fx-background-color: transparent;
+                -fx-text-fill: %s;
+                -fx-font-size: 14px;
+                -fx-border-color: %s;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 12px;
+                -fx-background-radius: 12px;
+                -fx-cursor: hand;
+                """.formatted(TEXT_MUTED, INPUT_BORDER));
+        return button;
+    }
+
+    private void setPasswordDialogMessage(Label label, String text, String color) {
+        label.setText(text);
+        label.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 13px;
+                """.formatted(color));
+    }
+
+    private String mapChangePasswordError(ChatTcpClient.ApiResponse response) {
+        if (response == null || response.message() == null || response.message().isBlank()) {
+            return "Không nhận được phản hồi từ server.";
+        }
+
+        return switch (response.message()) {
+            case "Current password is incorrect" -> "Mật khẩu hiện tại không đúng.";
+            case "New password must be at least 6 characters" -> "Mật khẩu mới phải có ít nhất 6 ký tự.";
+            case "User not found" -> "Không tìm thấy tài khoản.";
+            case "Unauthorized password change request" -> "Phiên đăng nhập không hợp lệ.";
+            default -> response.message();
+        };
     }
 
     private Button createProfileButton(String text, boolean accent) {

@@ -12,7 +12,7 @@ import java.sql.*;
 public class UserRepository {
     private static final Logger logger = LoggerFactory.getLogger(UserRepository.class);
 
-    /** Tìm user theo username */
+    /** Tim user theo username. */
     public User findByUsername(String username) {
         String query = "SELECT id, username, password_hash, email, avatar_url, status_message, " +
                        "is_online, last_seen, created_at FROM users WHERE username = ?";
@@ -28,7 +28,7 @@ public class UserRepository {
         return null;
     }
 
-    /** Tìm user theo ID */
+    /** Tim user theo ID. */
     public User findById(long id) {
         String query = "SELECT id, username, password_hash, email, avatar_url, status_message, " +
                        "is_online, last_seen, created_at FROM users WHERE id = ?";
@@ -44,7 +44,7 @@ public class UserRepository {
         return null;
     }
 
-    /** Lưu user mới vào DB */
+    /** Luu user moi vao DB. */
     public boolean save(User user) throws SQLException {
         String query = "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)";
         try (Connection conn = Database.getConnection();
@@ -56,7 +56,7 @@ public class UserRepository {
         }
     }
 
-    /** Cập nhật mật khẩu mới */
+    /** Cap nhat mat khau moi bang username. */
     public boolean updatePassword(String username, String newPasswordHash) {
         String query = "UPDATE users SET password_hash = ? WHERE username = ?";
         try (Connection conn = Database.getConnection();
@@ -70,7 +70,21 @@ public class UserRepository {
         return false;
     }
 
-    /** Cập nhật trạng thái online/offline */
+    /** Cap nhat trang thai online/offline. */
+    /** Cap nhat mat khau moi bang userId. */
+    public boolean updatePasswordById(long userId, String newPasswordHash) {
+        String query = "UPDATE users SET password_hash = ? WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, newPasswordHash);
+            pstmt.setLong(2, userId);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            logger.error("Error updating password for userId: {}", userId, e);
+        }
+        return false;
+    }
+
     public void updateOnlineStatus(long userId, boolean isOnline) {
         String query = "UPDATE users SET is_online = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?";
         try (Connection conn = Database.getConnection();
@@ -134,7 +148,7 @@ public class UserRepository {
         return null;
     }
 
-    /** Lấy đường dẫn avatar từ DB */
+    /** Lay duong dan avatar tu DB. */
     public String getAvatarPath(long userId) {
         String query = "SELECT avatar_url FROM users WHERE id = ?";
         try (Connection conn = Database.getConnection();
@@ -151,7 +165,7 @@ public class UserRepository {
         return null;
     }
 
-    /** Tìm user theo từ khóa (dùng cho search) */
+    /** Tim user theo tu khoa, dung cho search. */
     public JsonArray searchUsers(String keyword, long excludeUserId) {
         JsonArray results = new JsonArray();
         String query = "SELECT id, username, avatar_url FROM users WHERE username LIKE ? AND id != ? LIMIT 15";
