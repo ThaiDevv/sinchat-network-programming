@@ -3,7 +3,7 @@ version: "3.8"
 
 services:
   app:
-    build: ./Code/Server
+    build: ../Code/Server
     container_name: sinchat_server
     depends_on:
       db:
@@ -25,7 +25,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./Code/Database/dump-roacqgfa_ltm-202605132325.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../Code/Database/dump-roacqgfa_ltm-202605132325.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
