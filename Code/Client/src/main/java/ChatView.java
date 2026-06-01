@@ -83,6 +83,9 @@ public class ChatView {
     private Circle profileAvatarCircle;
     private Image selectedAvatarImage;
 
+    private final java.util.Map<Long, java.util.List<Circle>> peerAvatarCircles = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<Long, Image> peerAvatarCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     private StackPane activeOldAvatarContainer = null;
     private Slider zoomSlider;
     private double mouseAnchorX, mouseAnchorY;
@@ -145,6 +148,7 @@ public class ChatView {
 
 
         tcpClient.setOnUserStatusChange(this::onUserStatusChange);
+        tcpClient.setOnUserAvatarChanged(this::onUserAvatarChanged);
 
 
         tcpClient.setOnConnected(() -> {
@@ -325,6 +329,45 @@ public class ChatView {
         });
     }
 
+    private void onUserAvatarChanged(JsonObject json) {
+        if (!json.has("userId") || !json.has("avatarUrl")) return;
+        long uId = json.get("userId").getAsLong();
+        String dataUrl = json.get("avatarUrl").getAsString();
+        
+        Image img = null;
+        try {
+            if (dataUrl.startsWith("data:image/")) {
+                String base64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+                byte[] imgBytes = java.util.Base64.getDecoder().decode(base64);
+                img = new Image(new java.io.ByteArrayInputStream(imgBytes));
+            } else {
+                img = new Image(dataUrl, true);
+            }
+            
+            final Image finalImg = img;
+            if (finalImg.getProgress() >= 1.0) {
+                Platform.runLater(() -> updateAvatarCircles(uId, finalImg));
+            } else {
+                finalImg.progressProperty().addListener((obs, oldVal, newVal) -> {
+                    if (newVal.doubleValue() >= 1.0 && !finalImg.isError()) {
+                        Platform.runLater(() -> updateAvatarCircles(uId, finalImg));
+                    }
+                });
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to process USER_AVATAR_CHANGED_EVENT: " + e.getMessage());
+        }
+    }
+
+    private void updateAvatarCircles(long uId, Image img) {
+        peerAvatarCache.put(uId, img);
+        if (peerAvatarCircles.containsKey(uId)) {
+            for (Circle circle : peerAvatarCircles.get(uId)) {
+                circle.setFill(new javafx.scene.paint.ImagePattern(img));
+            }
+        }
+    }
+
     /**
      * Chuyển conversation đang active.
      */
@@ -340,6 +383,19 @@ public class ChatView {
         // Update header name
         if (headerChatName != null) {
             headerChatName.setText(name);
+        }
+
+        // Tải lại avatar cho header
+        Long peerId = peerIdByConversationId.get(conversationId);
+        if (peerId != null) {
+            if (headerChatName != null && headerChatName.getParent() != null && headerChatName.getParent().getParent() instanceof HBox) {
+                HBox header = (HBox) headerChatName.getParent().getParent();
+                if (!header.getChildren().isEmpty() && header.getChildren().get(0) instanceof Circle) {
+                    Circle headerAvatar = (Circle) header.getChildren().get(0);
+                    peerAvatarCircles.computeIfAbsent(peerId, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(headerAvatar);
+                    loadPeerAvatar(peerId, headerAvatar);
+                }
+            }
         }
 
         // Tải lại danh sách conversation bên trái để làm nổi bật item đang được chọn
@@ -438,6 +494,49 @@ public class ChatView {
         });
     }
 
+    private void loadPeerAvatar(long peerId, Circle targetCircle) {
+        if (peerAvatarCache.containsKey(peerId)) {
+            targetCircle.setFill(new javafx.scene.paint.ImagePattern(peerAvatarCache.get(peerId)));
+            return;
+        }
+        CompletableFuture.supplyAsync(() -> tcpClient.getAvatar(peerId)).thenAccept(avatarResp -> {
+            if (avatarResp != null && avatarResp.isSuccess() && avatarResp.rawBody() != null) {
+                try {
+                    JsonObject avatarData = JsonParser.parseString(avatarResp.rawBody()).getAsJsonObject();
+                    if (avatarData.has("avatarUrl") && !avatarData.get("avatarUrl").isJsonNull()) {
+                        String dataUrl = avatarData.get("avatarUrl").getAsString();
+                        Image img = null;
+                        if (dataUrl.startsWith("data:image/")) {
+                            String base64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+                            byte[] imgBytes = java.util.Base64.getDecoder().decode(base64);
+                            img = new Image(new java.io.ByteArrayInputStream(imgBytes));
+                        } else {
+                            img = new Image(dataUrl, true);
+                        }
+                        final Image finalImg = img;
+                        if (finalImg.getProgress() >= 1.0) {
+                            Platform.runLater(() -> {
+                                peerAvatarCache.put(peerId, finalImg);
+                                targetCircle.setFill(new javafx.scene.paint.ImagePattern(finalImg));
+                            });
+                        } else {
+                            finalImg.progressProperty().addListener((obs, oldVal, newVal) -> {
+                                if (newVal.doubleValue() >= 1.0 && !finalImg.isError()) {
+                                    Platform.runLater(() -> {
+                                        peerAvatarCache.put(peerId, finalImg);
+                                        targetCircle.setFill(new javafx.scene.paint.ImagePattern(finalImg));
+                                    });
+                                }
+                            });
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("Failed to load peer avatar: " + e.getMessage());
+                }
+            }
+        });
+    }
+
     private void loadConversations() {
         statusDotsByPeerId.clear();
         conversationIdByPeerId.clear();
@@ -521,6 +620,9 @@ public class ChatView {
             long peerId = conv.get("peerId").getAsLong();
             conversationIdByPeerId.put(peerId, conversationId);
             peerIdByConversationId.put(conversationId, peerId);
+            
+            peerAvatarCircles.computeIfAbsent(peerId, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(avatar);
+            loadPeerAvatar(peerId, avatar);
         }
 
         if (conv.has("isOnline")) {

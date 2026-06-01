@@ -37,6 +37,7 @@ public class ChatTcpClient {
     private Consumer<JsonObject> onNewMessage;
     private Consumer<JsonObject> onUserTyping;
     private Consumer<JsonObject> onUserStatusChange;
+    private Consumer<JsonObject> onUserAvatarChanged;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -177,6 +178,9 @@ public class ChatTcpClient {
                 case "USER_STATUS_EVENT":
                     if (onUserStatusChange != null) Platform.runLater(() -> onUserStatusChange.accept(json));
                     break;
+                case "USER_AVATAR_CHANGED_EVENT":
+                    if (onUserAvatarChanged != null) Platform.runLater(() -> onUserAvatarChanged.accept(json));
+                    break;
                 case "PING_RESPONSE":
                     pongReceived = true;
                     break;
@@ -238,6 +242,7 @@ public class ChatTcpClient {
     public void setOnNewMessage(Consumer<JsonObject> callback) { this.onNewMessage = callback; }
     public void setOnUserTyping(Consumer<JsonObject> callback) { this.onUserTyping = callback; }
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
+    public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 

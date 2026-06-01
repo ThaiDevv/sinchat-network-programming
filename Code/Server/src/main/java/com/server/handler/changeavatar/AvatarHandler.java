@@ -34,6 +34,9 @@ public class AvatarHandler {
                 response.addProperty("status", "success");
                 response.addProperty("message", "Avatar updated successfully");
                 response.addProperty("avatarUrl", avatarUrl);
+                
+                // Broadcast to friends and peers
+                com.server.tcp.PresenceService.getInstance().broadcastAvatarChangeToPeers(userId, avatarUrl);
             } else {
                 logger.warn("[CHANGE_AVATAR] Remote={} | UserId={} | Failed to update avatar",
                         conn.getRemoteAddress(), userId);
