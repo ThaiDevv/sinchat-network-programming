@@ -7,7 +7,7 @@ echo ===================================================
 echo.
 
 :: Navigate to Server directory
-cd /d "%~dp0Code\Server"
+cd /d "%~dp0..\Code\Server"
 
 echo [1/2] Compiling Server code...
 call mvn compile

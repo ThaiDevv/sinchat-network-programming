@@ -36,13 +36,13 @@
 
 ### Conversations
 - [x] Private one-on-one chat
-- [x] Group chat
-- [x] Username search & first-time contact creation
+- [ ] Group chat
+- [ ] Username search & first-time contact creation
 - [x] Last message preview in conversation list
 - [x] Conversation history retrieval
 
 ### Profile & Presence
-- [x] Change avatar (with ImgBB hosting)
+- [x] Change avatar
 - [x] User online/offline status
 - [x] TCP heartbeat keep-alive
 - [x] Idle connection sweeper
@@ -50,11 +50,6 @@
 - [ ] Change username
 
 ### Calls & Screen Sharing *(planned)*
-- [x] Change avatar
-- [x] Send message through TCP socket
-- [x] Receive message from server (via Stateful TCP Sockets)
-- [x] Send message with image, video, voice
-- [x] Chat with multiple users
 - [ ] Voice call
 - [ ] Video call
 - [ ] Screen sharing
@@ -147,8 +142,8 @@ graph TD
 
 | Action | File |
 |--------|------|
-| Start server | Double-click **`run_server.cmd`** |
-| Start client | Double-click **`run_client.cmd`** |
+| Start server | Double-click **`Extra/run_server.cmd`** |
+| Start client | Double-click **`Extra/run_client.cmd`** |
 
 ### Manual Launch with Maven
 
@@ -168,6 +163,7 @@ mvn javafx:run
 
 ### Docker (Full Stack)
 ```powershell
+cd Extra
 docker-compose up --build
 ```
 This starts both the SinChat server (port 3000) and a MySQL 8 database (port 3306) with the schema auto-initialized.
@@ -176,70 +172,14 @@ This starts both the SinChat server (port 3000) and a MySQL 8 database (port 330
 
 ## 👥 Team Members & Work Distribution
 
-| Member | Role | Primary Contributions | Commits |
-|--------|------|----------------------|---------|
-| **[Nguyen Sun Sin](https://github.com/ngnsusinn)** | **Team Lead · Backend Core · DevOps** | Server architecture (TcpServer, Router, ClientConnection), TCP heartbeat/TLS/presence/idle sweeper, forgot-password API, HikariCP connection pooling, BCrypt auth, Docker + Render deployment, Maven build setup, Windows launch scripts, server unit/integration tests, README & documentation, last-message preview UI, username search & contact creation, typing broadcasts | 65 |
-| **[Tran Van Thai](https://github.com/ThaiDevv)** | **Project Owner · Messaging · Database** | Database schema design (8 tables), message models & repositories, send/receive message flow, WebSocket infrastructure (legacy), conversation private checks, dynamic contacts UI, architectural overhaul & message flow optimization, project structure refactoring, .env setup, PR reviews & merges (maintainer) | 52 |
-| **[Nguyen Le Huy Tam](https://github.com/Sleepy2608)** | **UI Developer · Avatar** | JavaFX client GUI (LoginView, ChatView, Main), AI-powered avatar change feature integration, ChatView bug fixes, UI iterative improvements, conflict resolution for avatar feature branch | 40 |
-| **[Nguyen Ngoc Gia Bao](https://github.com/NguyenNgocGiaBao)** | **Endpoint Integration** | Connect backend endpoints with JavaFX UI, ChatAuthApp code, TCP endpoint cleanup & refactoring, message read receipt implementation | 9 |
-| **[Tran Van Ngoc Thang](https://github.com/NgocThang)** | **Auth · Avatar** | Register account feature, change avatar feature, avatar endpoint updates | 8 |
-| **[Huynh Dinh Chan](https://github.com/HuynhDinhChan)** | **Profile Management** | ProfileHandler API (get/update profile, username, status), profile endpoint implementation, message read receipt contributions | 3 |
-
-## 📁 Project Structure
-
-```
-Network-Programming-project/
-├── Code/
-│   ├── Client/                         # JavaFX GUI client
-│   │   └── src/main/java/
-│   │       ├── Main.java               # Application entry point
-│   │       ├── LoginView.java          # Login/Register/Forgot password UI
-│   │       ├── ChatView.java           # Chat interface (conversation list, messages)
-│   │       └── ChatTcpClient.java      # TCP socket client (Singleton, async JSON-RPC)
-│   ├── Server/                         # TCP server backend
-│   │   └── src/main/java/com/server/
-│   │       ├── Main.java               # Server entry point
-│   │       ├── ProfileHandler.java     # User profile management
-│   │       ├── config/Database.java    # HikariCP connection pool config
-│   │       ├── handler/
-│   │       │   ├── JoinHandler.java    # User join conversation
-│   │       │   ├── PingHandler.java    # TCP heartbeat/ping
-│   │       │   ├── TypingHandler.java  # Typing indicator broadcast
-│   │       │   ├── auth/               # Login, Register, ForgotPassword
-│   │       │   ├── avatar/             # Avatar change handler
-│   │       │   └── message/            # Send, Get, Conversation handlers
-│   │       ├── model/                  # User, Message, Conversation, Attachment, etc.
-│   │       ├── repository/             # JDBC data access layer
-│   │       ├── service/                # Business logic (Auth, Message, Conversation, Avatar)
-│   │       └── tcp/                    # Core TCP layer
-│   │           ├── TcpServer.java      # Socket listener + thread pool
-│   │           ├── ClientConnection.java  # Per-client connection handler
-│   │           ├── Router.java         # JSON action routing
-│   │           ├── TcpConnectionManager.java  # Connection state tracking
-│   │           ├── TcpServerSocketFactory.java  # TLS-enabled socket factory
-│   │           ├── PresenceService.java  # Online/offline presence
-│   │           └── IdleConnectionSweeper.java  # Cleanup stale connections
-│   └── Database/
-│       └── dump-roacqgfa_ltm-*.sql     # MySQL schema + seed data
-├── Docs/                               # Architecture & protocol documentation
-│   ├── 01_System_Architecture.md
-│   ├── 02_TCP_API_Protocol.md
-│   ├── 03_Realtime_Message_Flow.md
-│   ├── 04_Server_Guide.md
-│   ├── 05_Client_Guide.md
-│   ├── 06_Forgot_Password_Flow.md
-│   ├── 07_TCP_Activity_Diagrams.md
-│   └── 08_Missing_Features_and_Network_Upgrades.md
-├── docker-compose.yml                  # Full-stack Docker deployment
-├── run_server.cmd                      # Windows one-click server launch
-├── run_client.cmd                      # Windows one-click client launch
-├── project.tex                         # LaTeX project report
-├── CODEBASE_STRUCTURE.md               # Detailed codebase documentation
-├── JAVA_FILES_REFERENCE.md             # Java file reference guide
-└── README.md                           # This file
-```
-
----
+| Member | Role | Primary Contributions |
+|--------|------|----------------------|
+| **[Nguyen Sun Sin](https://github.com/ngnsusinn)** | **Team Lead · Backend Core · DevOps** | Server architecture (TcpServer, Router, ClientConnection), TCP heartbeat/TLS/presence/idle sweeper, forgot-password API, HikariCP connection pooling, BCrypt auth, Docker + Render deployment, Maven build setup, Windows launch scripts, server unit/integration tests, README & documentation, last-message preview UI, username search & contact creation, typing broadcasts |
+| **[Tran Van Thai](https://github.com/ThaiDevv)** | **Project Owner · Messaging · Database** | Database schema design (8 tables), message models & repositories, send/receive message flow, WebSocket infrastructure (legacy), conversation private checks, dynamic contacts UI, architectural overhaul & message flow optimization, project structure refactoring, .env setup, PR reviews & merges (maintainer) |
+| **[Nguyen Le Huy Tam](https://github.com/Sleepy2608)** | **UI Developer · Avatar** | JavaFX client GUI (LoginView, ChatView, Main), AI-powered avatar change feature integration, ChatView bug fixes, UI iterative improvements, conflict resolution for avatar feature branch |
+| **[Nguyen Ngoc Gia Bao](https://github.com/NguyenNgocGiaBao)** | **Endpoint Integration** | Connect backend endpoints with JavaFX UI, ChatAuthApp code, TCP endpoint cleanup & refactoring, message read receipt implementation |
+| **[Tran Van Ngoc Thang](https://github.com/NgocThang)** | **Auth · Avatar** | Register account feature, change avatar feature, avatar endpoint updates |
+| **[Huynh Dinh Chan](https://github.com/HuynhDinhChan)** | **Profile Management** | ProfileHandler API (get/update profile, username, status), profile endpoint implementation, message read receipt contributions |
 
 ## 📚 Documentation
 

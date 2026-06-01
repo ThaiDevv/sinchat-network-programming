@@ -7,7 +7,7 @@ echo ===================================================
 echo.
 
 :: Navigate to Client directory
-cd /d "%~dp0Code\Client"
+cd /d "%~dp0..\Code\Client"
 
 echo [1/2] Compiling Client code...
 call mvn compile
