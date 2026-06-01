@@ -177,9 +177,9 @@ This starts both the SinChat server (port 3000) and a MySQL 8 database (port 330
 | **[Nguyen Sun Sin](https://github.com/ngnsusinn)** | **Team Lead · Backend Core · DevOps** | Server architecture (TcpServer, Router, ClientConnection), TCP heartbeat/TLS/presence/idle sweeper, forgot-password API, HikariCP connection pooling, BCrypt auth, Docker + Render deployment, Maven build setup, Windows launch scripts, server unit/integration tests, README & documentation, last-message preview UI, username search & contact creation, typing broadcasts |
 | **[Tran Van Thai](https://github.com/ThaiDevv)** | **Project Owner · Messaging · Database** | Database schema design (8 tables), message models & repositories, send/receive message flow, conversation private checks, dynamic contacts UI, architectural overhaul & message flow optimization, project structure refactoring, .env setup, PR reviews & merges (maintainer) |
 | **[Nguyen Le Huy Tam](https://github.com/Sleepy2608)** | **UI Developer · Avatar** | JavaFX client GUI (LoginView, ChatView, Main), AI-powered avatar change feature integration, ChatView bug fixes, UI iterative improvements, conflict resolution for avatar feature branch |
-| **[Nguyen Ngoc Gia Bao](https://github.com/NguyenNgocGiaBao)** | **Endpoint Integration** | Connect backend endpoints with JavaFX UI, ChatAuthApp code, TCP endpoint cleanup & refactoring, message read receipt implementation |
-| **[Tran Van Ngoc Thang](https://github.com/NgocThang)** | **Auth · Avatar** | Register account feature, change avatar feature, avatar endpoint updates |
-| **[Huynh Dinh Chan](https://github.com/HuynhDinhChan)** | **Profile Management** | ProfileHandler API (get/update profile, username, status), profile endpoint implementation, message read receipt contributions |
+| **[Nguyen Ngoc Gia Bao](https://github.com/Baon5824)** | **Endpoint Integration** | Connect backend endpoints with JavaFX UI, ChatAuthApp code, TCP endpoint cleanup & refactoring, message read receipt implementation |
+| **[Tran Van Ngoc Thang](https://github.com/Thang414)** | **Auth · Avatar** | Register account feature, change avatar feature, avatar endpoint updates |
+| **[Huynh Dinh Chan](https://github.com/Chan-2006)** | **Profile Management** | ProfileHandler API (get/update profile, username, status), profile endpoint implementation, message read receipt contributions |
 
 ## 📚 Documentation
 
