@@ -76,7 +76,7 @@
 ---
 
 ## 🏗️ Architecture
-
+```mermaid
 graph TD
     %% Client Layer
     subgraph Client [Client - JavaFX GUI]
@@ -131,7 +131,7 @@ graph TD
 - **Thread Pool** — 100 concurrent connections via `ExecutorService`
 - **Observer (Callbacks)** — `onNewMessage`, `onConnected`, `onDisconnected` event listeners
 - **Model/Entity** — Plain Java objects with enums for type safety
-
+```
 ---
 
 ## ⚙️ Running the Application
