@@ -37,7 +37,7 @@ public class TcpServer {
     }
 
     public void start() {
-        // Reset all stale online statuses from previous crashes / unclean shutdowns
+        // Reset trang thai online cu neu lan truoc server bi tat khong sach.
         userRepository.resetAllOffline();
 
         running = true;
@@ -67,7 +67,7 @@ public class TcpServer {
                             try {
                                 socket.close();
                             } catch (IOException ex) {
-                                // ignore
+                                // Bo qua loi dong socket tam vi socket nay chua giao cho ClientConnection.
                             }
                         }
                     }
@@ -95,11 +95,11 @@ public class TcpServer {
             try {
                 serverSocket.close();
             } catch (IOException e) {
-                // ignore
+                // Bo qua loi dong server socket khi shutdown.
             }
         }
 
-        // Close all active connections so PresenceService.onUserOffline() is triggered
+        // Dong toan bo ket noi de PresenceService cap nhat offline cho user.
         TcpConnectionManager cm = TcpConnectionManager.getInstance();
         Set<ClientConnection> active = cm.getActiveConnectionsSnapshot();
         logger.info("[TcpServer] Closing {} active connections...", active.size());

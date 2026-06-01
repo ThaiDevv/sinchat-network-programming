@@ -6,7 +6,7 @@ This document provides a comprehensive guide to the architecture, configuration,
 
 ## 1. Server Architecture Overview
 
-SinChat Server is a high-performance backend written in **Java 21**, operating as a stateful TCP socket server. It removes legacy HTTP/WebSocket servers, directing all communication through a single Raw TCP Socket connection to optimize throughput.
+SinChat Server is a high-performance backend written in **Java 21**, operating as a stateful TCP socket server. All client-server communication goes through a single raw TCP socket connection to optimize throughput.
 
 ### Connection & Routing Pipeline
 

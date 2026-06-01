@@ -9,7 +9,7 @@
 - [ ] Change password from profile
 - [ ] Change username
 - [x] Change avatar
-- [x] Send message in local UI prototype
+- [x] Send message through TCP socket
 - [x] Receive message from server (via Stateful TCP Sockets)
 - [x] Send message with image, video, voice
 - [x] Chat with multiple users

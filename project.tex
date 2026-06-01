@@ -40,15 +40,15 @@ Member 6 Name & Student ID 6 & \href{https://github.com/username6}{username6} \\
 
 \section{Project Overview}
 
-Our team proposes to build \textbf{SinChat}, a Real-time Client-Server Chat Application related to Network Programming. The project will allow users on different devices to communicate directly through a centralized backend via HTTP REST APIs and WebSockets. The client will feature a modern, dark-themed JavaFX desktop graphical user interface, allowing users to register, log in, manage conversations, upload avatars, and send real-time messages.
+Our team proposes to build \textbf{SinChat}, a Real-time Client-Server Chat Application related to Network Programming. The project will allow users on different devices to communicate directly through a centralized backend using a stateful TCP socket protocol. The client will feature a modern, dark-themed JavaFX desktop graphical user interface, allowing users to register, log in, manage conversations, upload avatars, and send real-time messages.
 
-The main goal of this project is to apply network programming concepts such as REST API design, bidirectional WebSocket communication, client-server coordination, multithreading, concurrent data structures, connection pooling, and secure authentication handling.
+The main goal of this project is to apply network programming concepts such as TCP socket programming, newline-delimited JSON message framing, request-response correlation, client-server coordination, multithreading, concurrent data structures, connection pooling, and secure authentication handling.
 
 \section{What We Want to Do}
 
-We want to create a full-stack, desktop-based chat application that supports real-time text messaging between multiple users. The system uses a centralized Java backend consisting of an HTTP server for stateless operations (such as authentication and profile management) and a WebSocket server for stateful, real-time events (such as new messages and typing indicators).
+We want to create a full-stack, desktop-based chat application that supports real-time text messaging between multiple users. The system uses a centralized Java backend with a TCP server for authentication, profile management, conversation queries, message sending, and real-time events such as new messages and typing indicators.
 
-The project will emphasize robust network architecture by implementing custom HTTP handlers and separating RESTful queries from real-time pushes, integrated seamlessly within a JavaFX user interface.
+The project will emphasize robust network architecture by implementing a custom TCP router. Each client sends JSON actions over one socket connection, and the server dispatches those actions to the correct handler before returning JSON responses or pushing real-time events back to connected users.
 
 \section{Main Features}
 
@@ -56,10 +56,10 @@ The features our team plans to add and complete are based directly on our source
 
 \begin{itemize}
     \item \textbf{User Authentication:} Secure registration, login, and a forgot-password flow with generated reset codes. Passwords are cryptographically hashed using BCrypt.
-    \item \textbf{Real-time Messaging:} Instant message delivery through WebSockets without needing to poll the server.
-    \item \textbf{Private Conversations:} 1-on-1 private chats between users with synchronized message history retrieved via REST API.
-    \item \textbf{Typing Indicators:} Real-time visual feedback when another user is typing, implemented via throttled WebSocket broadcasts.
-    \item \textbf{Multipart File Uploads:} Ability for users to change their profile avatars by uploading image files to the server using \texttt{multipart/form-data}.
+    \item \textbf{Real-time Messaging:} Instant message delivery through the TCP socket without needing to poll the server.
+    \item \textbf{Private Conversations:} 1-on-1 private chats between users with synchronized message history retrieved through TCP actions.
+    \item \textbf{Typing Indicators:} Real-time visual feedback when another user is typing, implemented via throttled TCP broadcasts.
+    \item \textbf{Avatar Updates:} Ability for users to change their profile avatars by sending avatar data through the TCP client flow.
     \item \textbf{Async Network Layer:} Non-blocking asynchronous API calls on the client side using \texttt{CompletableFuture} to maintain a responsive GUI.
     \item \textbf{Robust Security \& Error Handling:} Path traversal protection for file serving, CORS preflight handling, strict parameter validation, and SQL injection prevention via Prepared Statements.
 \end{itemize}
@@ -71,19 +71,19 @@ Our team plans to use the following stack for the project:
 \begin{itemize}
     \item \textbf{Programming Language:} Java 21 (LTS) for both Client and Server
     \item \textbf{Client GUI Framework:} JavaFX 21
-    \item \textbf{Server Architecture:} Built-in \texttt{com.sun.net.httpserver.HttpServer} for the REST API
-    \item \textbf{Real-time Protocol:} \texttt{Java-WebSocket} library for both client and server WebSocket connections
+    \item \textbf{Server Architecture:} Java \texttt{ServerSocket} and per-client connection handlers
+    \item \textbf{Network Protocol:} Stateful TCP sockets using newline-delimited JSON actions
     \item \textbf{Database:} MySQL 8.x with \texttt{HikariCP} for high-performance connection pooling
     \item \textbf{Data Format \& Security:} JSON parsing via \texttt{Gson}; password hashing via \texttt{jBCrypt}
     \item \textbf{Deployment:} Multi-stage Docker containerization and Render cloud hosting
-    \item \textbf{Testing Tools:} JUnit 5 and Mockito for API integration and service layer testing
+    \item \textbf{Testing Tools:} JUnit 5 and Mockito for TCP action integration and service layer testing
 \end{itemize}
 
 \section{Expected Final Achievement}
 
-At the end of the project, our team expects to deliver a robust, production-ready client-server chat application. The JavaFX desktop client will feature a polished, user-friendly interface that updates instantly without refreshing. The server will demonstrate efficient handling of both HTTP request-response cycles and continuous WebSocket streams. 
+At the end of the project, our team expects to deliver a robust, production-ready client-server chat application. The JavaFX desktop client will feature a polished, user-friendly interface that updates instantly without refreshing. The server will demonstrate efficient handling of continuous TCP socket connections, request-response messages, and server-pushed chat events.
 
-The final product will show that our team understands how to design, implement, and deploy a complete network programming system using sockets, connection pools, and modern API design. We will also provide full source code, comprehensive Markdown documentation (Client and Server APIs), Docker setup instructions, and integration tests in the GitHub repository.
+The final product will show that our team understands how to design, implement, and deploy a complete network programming system using sockets, connection pools, and a clear JSON action protocol. We will also provide full source code, comprehensive Markdown documentation, Docker setup instructions, and integration tests in the GitHub repository.
 
 \section{Project Planning}
 
@@ -95,13 +95,13 @@ Each phase lasts two weeks. The following plan shows what our team should comple
 \midrule
 Phase 1: Weeks 1--2 & Finalize project topic, create GitHub repository, design system architecture, set up Maven project structures for Client and Server, and prepare initial JavaFX UI wireframes. \\
 \midrule
-Phase 2: Weeks 3--4 & Design MySQL database schema, implement HikariCP connection pooling, build REST API endpoints for user authentication (Login/Register), and integrate BCrypt hashing. \\
+Phase 2: Weeks 3--4 & Design MySQL database schema, implement HikariCP connection pooling, build TCP actions for user authentication (Login/Register), and integrate BCrypt hashing. \\
 \midrule
-Phase 3: Weeks 5--6 & Implement the WebSocket server and client wrapper, establish connection lifecycle (join/disconnect), and develop the JavaFX chat view layout. \\
+Phase 3: Weeks 5--6 & Implement the TCP server and client wrapper, establish connection lifecycle (connect/join/disconnect), and develop the JavaFX chat view layout. \\
 \midrule
-Phase 4: Weeks 7--8 & Complete real-time message broadcasting, implement REST endpoints for fetching conversation history, and add WebSocket typing indicators with client-side throttling. \\
+Phase 4: Weeks 7--8 & Complete real-time message broadcasting, implement TCP actions for fetching conversation history, and add typing indicators with client-side throttling. \\
 \midrule
-Phase 5: Weeks 9--10 & Implement multipart/form-data parsing for avatar uploads, harden security (path traversal, CORS), write integration tests with Mockito, and refine the dark-themed UI. \\
+Phase 5: Weeks 9--10 & Implement avatar update flow, harden validation and error handling, write integration tests with Mockito, and refine the dark-themed UI. \\
 \midrule
 Phase 6: Weeks 11--12 & Final testing, create multi-stage Dockerfile, deploy to Render, write comprehensive documentation, clean GitHub repository, and prepare final presentation. \\
 \bottomrule
@@ -111,15 +111,15 @@ Phase 6: Weeks 11--12 & Final testing, create multi-stage Dockerfile, deploy to 
 
 \begin{itemize}
     \item \textbf{Member 1:} Project leader, database design, connection pooling, and final report coordination.
-    \item \textbf{Member 2:} RESTful HTTP API development, authentication logic, and file upload parsing.
-    \item \textbf{Member 3:} WebSocket server implementation, real-time broadcasting, and concurrent state management.
+    \item \textbf{Member 2:} TCP authentication actions, authentication logic, and request validation.
+    \item \textbf{Member 3:} TCP server implementation, real-time broadcasting, and concurrent state management.
     \item \textbf{Member 4:} JavaFX desktop GUI design, theming, and layout integration.
-    \item \textbf{Member 5:} Client-side network layer (HTTP \& WebSocket clients), async tasks, and UI event binding.
+    \item \textbf{Member 5:} Client-side TCP network layer, async tasks, and UI event binding.
     \item \textbf{Member 6:} Testing (JUnit/Mockito), Docker containerization, Render deployment, and documentation.
 \end{itemize}
 
 \section{Conclusion}
 
-This project is suitable for the Network Programming course because it requires real communication between distributed components, handling multiple protocol paradigms (HTTP and WebSockets), database connection management, multithreading, and asynchronous programming. By completing this project, our team will gain practical experience in building and deploying a complete, network-based, real-time software system from scratch.
+This project is suitable for the Network Programming course because it requires real communication between distributed components, TCP socket design, database connection management, multithreading, and asynchronous programming. By completing this project, our team will gain practical experience in building and deploying a complete, network-based, real-time software system from scratch.
 
 \end{document}

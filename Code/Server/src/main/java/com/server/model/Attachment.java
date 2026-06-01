@@ -2,11 +2,11 @@ package com.server.model;
 
 public class Attachment {
     private long id;            // bigint NOT NULL AUTO_INCREMENT
-    private long messageId;     // bigint — FK → messages.id
-    private String fileUrl;     // text — đường dẫn file
-    private String fileName;    // varchar(255) — tên file gốc
-    private long fileSize;      // bigint — kích thước (bytes)
-    private String mimeType;    // varchar(100) — loại file (image/png, video/mp4...)
+    private long messageId;     // bigint - FK den messages.id
+    private String fileUrl;     // text - duong dan file
+    private String fileName;    // varchar(255) - ten file goc
+    private long fileSize;      // bigint - kich thuoc tinh bang byte
+    private String mimeType;    // varchar(100) - loai file
 
     public Attachment() {}
 

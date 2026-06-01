@@ -75,10 +75,10 @@
 | Friendship.java | `Code/Server/src/main/java/com/server/model/` | Friendship entity: user1Id, user2Id, status (PENDING/ACCEPTED/BLOCKED) |
 | ChangeAvatar.java | `Code/Server/src/main/java/com/server/model/` | DTO for avatar change requests |
 
-### WebSocket Layer
+### Removed Legacy Realtime Layer
 | File | Path | Purpose |
 |------|------|---------|
-| (empty folder) | `Code/Server/src/main/java/com/server/websocket/` | Reserved for real-time WebSocket features (not implemented) |
+| (empty folder) | `Code/Server/src/main/java/com/server/websocket/` | Legacy placeholder only; current real-time traffic uses TCP sockets |
 
 ---
 
@@ -111,10 +111,10 @@
 ### Integration Tests
 | File | Path | Purpose |
 |------|------|---------|
-| AuthEndpointIntegrationTest.java | `Code/Server/src/test/java/com/server/integration/` | End-to-end auth flow: register, login, forgot password |
-| EndpointIntegrationTest.java | `Code/Server/src/test/java/com/server/integration/` | General endpoint integration tests |
+| AuthEndpointIntegrationTest.java | `Code/Server/src/test/java/com/server/integration/` | End-to-end TCP auth flow: register, login, forgot password |
+| EndpointIntegrationTest.java | `Code/Server/src/test/java/com/server/integration/` | General TCP action integration tests |
 | MessageEndpointIntegrationTest.java | `Code/Server/src/test/java/com/server/integration/` | Message send/receive integration tests |
-| AdditionalEndpointsIntegrationTest.java | `Code/Server/src/test/java/com/server/integration/` | Profile, avatar, and misc endpoint tests |
+| AdditionalEndpointsIntegrationTest.java | `Code/Server/src/test/java/com/server/integration/` | Profile, avatar, and misc TCP action tests |
 
 ---
 
@@ -260,7 +260,6 @@
 
 ⏳ **Planned Features (Not Implemented)**
 - Voice/video calls (database schema prepared)
-- WebSocket real-time updates
 - Call participant tracking
 - Media streaming
 
