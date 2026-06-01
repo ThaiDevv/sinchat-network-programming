@@ -3,12 +3,12 @@ package com.server.model;
 import java.sql.Timestamp;
 
 public class MessageStatus {
-    // Enum ánh xạ cột `status` ENUM('SENT','DELIVERED','SEEN')
+    // Enum map voi cot status trong database.
     public enum Status { SENT, DELIVERED, SEEN }
 
-    private long messageId;     // bigint — FK → messages.id
-    private long userId;        // bigint — FK → users.id (người nhận)
-    private Status status;      // trạng thái tin nhắn
+    private long messageId;     // bigint - FK den messages.id
+    private long userId;        // bigint - FK den users.id (nguoi nhan)
+    private Status status;      // trang thai tin nhan
     private Timestamp updatedAt;// timestamp ON UPDATE CURRENT_TIMESTAMP
 
     public MessageStatus() {}

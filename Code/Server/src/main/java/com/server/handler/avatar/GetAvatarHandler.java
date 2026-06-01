@@ -31,7 +31,7 @@ public class GetAvatarHandler {
             logger.info("[GET_AVATAR] Remote={} | UserId={} | Fetching avatar",
                     conn.getRemoteAddress(), userId);
 
-            // Lấy avatar path từ DB
+            // Lay avatar path tu database.
             String avatarPath = userRepository.getAvatarPath(userId);
 
             if (avatarPath == null || avatarPath.isEmpty()) {
@@ -42,7 +42,7 @@ public class GetAvatarHandler {
                 return response;
             }
 
-            // Đọc file ảnh từ disk
+            // Doc file anh tu disk.
             Path filePath = Paths.get(avatarPath);
             if (!Files.exists(filePath)) {
                 logger.warn("[GET_AVATAR] Remote={} | UserId={} | Avatar file not found on disk: {}",
@@ -58,7 +58,7 @@ public class GetAvatarHandler {
             logger.info("[GET_AVATAR] Remote={} | UserId={} | Avatar loaded | path={} | fileSize={} bytes",
                     conn.getRemoteAddress(), userId, avatarPath, fileBytes.length);
 
-            // Xác định MIME type dựa trên extension
+            // Xac dinh MIME type dua tren extension.
             String mimeType = "image/png";
             String fileName = filePath.getFileName().toString().toLowerCase();
             if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {

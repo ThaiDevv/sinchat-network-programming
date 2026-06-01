@@ -13,8 +13,8 @@ public class MessageRepository {
     private static final Logger logger = LoggerFactory.getLogger(MessageRepository.class);
 
     /**
-     * Lưu tin nhắn mới vào bảng messages.
-     * Trả về ID được DB tự sinh (AUTO_INCREMENT).
+     * Luu tin nhan moi vao bang messages.
+     * Tra ve ID do database tu sinh.
      */
     public long save(Message message) throws SQLException {
         String query = "INSERT INTO messages (conversation_id, sender_id, type, content) VALUES (?, ?, ?, ?)";
@@ -72,6 +72,27 @@ public class MessageRepository {
             }
         } catch (SQLException e) {
             logger.error("Error fetching messages for conversation: {}", conversationId, e);
+        }
+        return messages;
+    }
+
+    public List<Message> searchByConversation(long conversationId, String keyword, int limit, int offset) {
+        List<Message> messages = new ArrayList<>();
+        String query = "SELECT id, conversation_id, sender_id, type, content, created_at " +
+                "FROM messages " +
+                "WHERE conversation_id = ? AND LOWER(content) LIKE LOWER(?) " +
+                "ORDER BY created_at DESC LIMIT ? OFFSET ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, conversationId);
+            pstmt.setString(2, "%" + keyword + "%");
+            pstmt.setInt(3, limit);
+            pstmt.setInt(4, offset);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) messages.add(mapRow(rs));
+            }
+        } catch (SQLException e) {
+            logger.error("Error searching messages for conversation: {}", conversationId, e);
         }
         return messages;
     }

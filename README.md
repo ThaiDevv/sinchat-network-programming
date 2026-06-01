@@ -50,6 +50,11 @@
 - [ ] Change username
 
 ### Calls & Screen Sharing *(planned)*
+- [x] Change avatar
+- [x] Send message through TCP socket
+- [x] Receive message from server (via Stateful TCP Sockets)
+- [x] Send message with image, video, voice
+- [x] Chat with multiple users
 - [ ] Voice call
 - [ ] Video call
 - [ ] Screen sharing

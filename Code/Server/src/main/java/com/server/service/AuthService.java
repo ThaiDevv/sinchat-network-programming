@@ -9,6 +9,13 @@ import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AuthService {
+
+    public enum ChangePasswordResult {
+        SUCCESS,
+        USER_NOT_FOUND,
+        WRONG_OLD_PASSWORD,
+        UPDATE_FAILED
+    }
     
     // In-memory record to store reset state: code, username, expiration timestamp (ms), and attempt counter.
     public static class ResetCodeState {
@@ -30,9 +37,9 @@ public class AuthService {
     private static final SecureRandom secureRandom = new SecureRandom();
 
     /**
-     * Xác thực user theo username và password.
+     * Kiem tra username va password khi dang nhap.
      * 
-     * @return User nếu đăng nhập thành công, null nếu thất bại.
+     * @return User neu dang nhap thanh cong, null neu that bai.
      */
     public User login(String username, String password) {
         User user = userRepository.findByUsername(username);
@@ -107,5 +114,20 @@ public class AuthService {
             passwordResetCodes.remove(code);
         }
         return success;
+    }
+
+    public ChangePasswordResult changePassword(long userId, String oldPassword, String newPassword) {
+        User user = userRepository.findById(userId);
+        if (user == null) {
+            return ChangePasswordResult.USER_NOT_FOUND;
+        }
+
+        if (!BCrypt.checkpw(oldPassword, user.getPasswordHash())) {
+            return ChangePasswordResult.WRONG_OLD_PASSWORD;
+        }
+
+        String newHash = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+        boolean updated = userRepository.updatePasswordById(userId, newHash);
+        return updated ? ChangePasswordResult.SUCCESS : ChangePasswordResult.UPDATE_FAILED;
     }
 }

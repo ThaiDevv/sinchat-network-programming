@@ -368,11 +368,11 @@ public class Friendship {
 
 ---
 
-### WebSocket Layer
+### Removed Legacy Realtime Layer
 
 **[websocket/](../Code/Server/src/main/java/com/server/websocket/)**
 - Currently empty folder
-- Planned for real-time features (future enhancement)
+- Legacy placeholder only. Real-time messaging is handled by `TcpServer`, `ClientConnection`, and `Router`.
 
 ---
 
@@ -407,11 +407,11 @@ public class Friendship {
 - [AuthEndpointIntegrationTest.java](../Code/Server/src/test/java/com/server/integration/AuthEndpointIntegrationTest.java)
   - End-to-end authentication flow (register, login, forgot password)
 - [EndpointIntegrationTest.java](../Code/Server/src/test/java/com/server/integration/EndpointIntegrationTest.java)
-  - General endpoint integration tests
+  - General TCP action integration tests
 - [MessageEndpointIntegrationTest.java](../Code/Server/src/test/java/com/server/integration/MessageEndpointIntegrationTest.java)
   - Message sending and retrieval flow
 - [AdditionalEndpointsIntegrationTest.java](../Code/Server/src/test/java/com/server/integration/AdditionalEndpointsIntegrationTest.java)
-  - Profile, avatar, and other endpoint tests
+  - Profile, avatar, and other TCP action tests
 
 ---
 
@@ -829,7 +829,7 @@ This is a well-architected **client-server chat application** with:
 - **Scalable:** Thread pool on server, connection pooling on DB
 - **Secure:** BCrypt password hashing, prepared statements to prevent SQL injection
 - **Testable:** Comprehensive unit and integration tests
-- **Extensible:** Handler pattern allows easy addition of new endpoints
+- **Extensible:** Handler pattern allows easy addition of new TCP actions
 - **Production-Ready:** Logging, error handling, environment configuration
 
 The project demonstrates solid Java enterprise patterns and is suitable for real-world deployment on cloud platforms.

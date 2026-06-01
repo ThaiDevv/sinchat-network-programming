@@ -41,6 +41,10 @@ public class ChatView {
     private VBox contactList;
     private TextField messageInput;
     private ScrollPane scrollMessages;
+    private TextField messageSearchField;
+    private VBox messageSearchPanel;
+    private VBox messageSearchResults;
+    private Label messageSearchStatus;
     private Label headerChatName;
     private Label chatStatus;
 
@@ -62,16 +66,16 @@ public class ChatView {
     });
     private ScheduledFuture<?> typingHideTask;
     private long lastTypingSentTime = 0;
-    private static final long TYPING_THROTTLE_MS = 1000; // Chỉ gửi typing tối đa 1 lần/giây
+    private static final long TYPING_THROTTLE_MS = 1000; // Chi gui typing toi da 1 lan/giay.
 
-    // ── Pagination state ──
+    // Trang thai phan trang tin nhan.
     private int currentMessageOffset = 0;
     private boolean hasMoreMessages = true;
     private boolean isLoadingMore = false;
     private static final int PAGE_SIZE = 50;
 
     private final javafx.beans.value.ChangeListener<Number> scrollListener = (obs, oldVal, newVal) -> {
-        // Khi scroll lên đầu (vvalue gần 0), load thêm tin nhắn cũ
+        // Khi scroll len dau thi load them tin nhan cu.
         if (newVal.doubleValue() < 0.05 && hasMoreMessages && !isLoadingMore && currentConversationId > 0) {
             loadMessagesForCurrentConversation(false);
         }
@@ -101,9 +105,9 @@ public class ChatView {
     public ChatView(Stage stage, long currentUserId) {
         this.stage = stage;
         this.currentUserId = currentUserId;
-        this.currentConversationId = -1; // chưa chọn conversation nào
+        this.currentConversationId = -1; // Chua chon conversation nao.
 
-        // Khởi tạo danh sách avatar đã từng sử dụng bằng các ảnh placeholder mặc định
+        // Tao san vai avatar mau de UI khong bi trong luc moi mo.
         String[] defaultOldAvatars = {
                 "https://i.pravatar.cc/300?img=1",
                 "https://i.pravatar.cc/300?img=2",
@@ -161,7 +165,7 @@ public class ChatView {
     }
 
     /**
-     * Load user avatar from server when connecting
+     * Tai avatar nguoi dung sau khi client ket noi server.
      */
     private void loadUserAvatar() {
         ChatTcpClient.ApiResponse response = tcpClient.getUserProfile(currentUserId);
@@ -184,23 +188,39 @@ public class ChatView {
                                 }
                             });
                         } else {
-                            // Relative path — fetch avatar bytes via TCP
+                            // Neu server tra duong dan tuong doi thi lay anh qua TCP.
                             ChatTcpClient.ApiResponse avatarResponse = tcpClient.getAvatar(currentUserId);
                             if (avatarResponse.isSuccess() && avatarResponse.rawBody() != null) {
                                 JsonObject avatarData = JsonParser.parseString(avatarResponse.rawBody()).getAsJsonObject();
                                 if (avatarData.has("avatarUrl") && !avatarData.get("avatarUrl").isJsonNull()) {
                                     String dataUrl = avatarData.get("avatarUrl").getAsString();
-                                    Image newAvatar = new Image(dataUrl, true);
-                                    newAvatar.progressProperty().addListener((obs, oldVal, newVal) -> {
-                                        if (newVal.doubleValue() >= 1.0 && !newAvatar.isError()) {
+                                    if (dataUrl.startsWith("data:image/")) {
+                                        try {
+                                            String base64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+                                            byte[] imgBytes = java.util.Base64.getDecoder().decode(base64);
+                                            Image newAvatar = new Image(new java.io.ByteArrayInputStream(imgBytes));
                                             Platform.runLater(() -> {
                                                 currentAvatarImage = newAvatar;
                                                 if (profileAvatarCircle != null) {
-                                                    profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                                                    profileAvatarCircle.setFill(new javafx.scene.paint.ImagePattern(currentAvatarImage));
                                                 }
                                             });
+                                        } catch (Exception e) {
+                                            System.err.println("Error decoding avatar base64: " + e.getMessage());
                                         }
-                                    });
+                                    } else {
+                                        Image newAvatar = new Image(dataUrl, true);
+                                        newAvatar.progressProperty().addListener((obs, oldVal, newVal) -> {
+                                            if (newVal.doubleValue() >= 1.0 && !newAvatar.isError()) {
+                                                Platform.runLater(() -> {
+                                                    currentAvatarImage = newAvatar;
+                                                    if (profileAvatarCircle != null) {
+                                                        profileAvatarCircle.setFill(new javafx.scene.paint.ImagePattern(currentAvatarImage));
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -213,17 +233,17 @@ public class ChatView {
     }
 
     /**
-     * Xử lý khi nhận được tin nhắn mới qua TCP.
-     * Chỉ hiển thị nếu tin nhắn thuộc conversation đang mở.
+     * Xu ly tin nhan moi nhan qua TCP.
+     * Chi hien thi neu tin nhan thuoc conversation dang mo.
      */
     private void onNewMessageReceived(JsonObject json) {
         long conversationId = json.get("conversationId").getAsLong();
         long senderId = json.get("senderId").getAsLong();
         String content = json.get("content").getAsString();
 
-        // Chỉ hiển thị nếu đang ở đúng conversation
+        // Chi hien thi neu user dang mo dung conversation.
         if (conversationId == currentConversationId) {
-            // Ẩn typing indicator
+            // An trang thai dang go.
             if (typingLabel != null) {
                 typingLabel.setVisible(false);
             }
@@ -236,18 +256,18 @@ public class ChatView {
             scrollToBottom();
         }
 
-        // Cập nhật và load lại danh sách các conversation để sắp xếp và hiển thị chính xác
+        // Load lai danh sach conversation de item moi nhat duoc day len tren.
         Platform.runLater(this::loadConversations);
     }
 
     /**
-     * Xử lý khi có người đang gõ trong conversation hiện tại.
+     * Xu ly khi nguoi ben kia dang go trong conversation hien tai.
      */
     private void onUserTyping(JsonObject json) {
         long conversationId = json.get("conversationId").getAsLong();
         if (conversationId != currentConversationId || typingLabel == null) return;
 
-        // Không hiển thị trạng thái gõ của chính mình
+        // Khong hien thi trang thai go cua chinh minh.
         long userId = json.has("userId") ? json.get("userId").getAsLong() : -1;
         if (userId == currentUserId) return;
 
@@ -263,12 +283,12 @@ public class ChatView {
             typingLabel.setVisible(true);
         });
 
-        // Hủy task ẩn cũ nếu có
+        // Huy task an cu neu co.
         if (typingHideTask != null && !typingHideTask.isDone()) {
             typingHideTask.cancel(false);
         }
 
-        // Tự ẩn sau 3 giây (nếu không có sự kiện tắt typing gửi về)
+        // Tu an sau 3 giay neu khong co event dung typing gui ve.
         typingHideTask = scheduler.schedule(() ->
             javafx.application.Platform.runLater(() -> typingLabel.setVisible(false)),
             3, TimeUnit.SECONDS
@@ -286,13 +306,13 @@ public class ChatView {
         }
 
         Platform.runLater(() -> {
-            // Update status dot in contact list
+            // Cap nhat cham trang thai o danh sach lien he.
             Circle dot = statusDotsByPeerId.get(peerId);
             if (dot != null) {
                 dot.setFill(Color.web(isOnline ? "#4ade80" : "#888888"));
             }
 
-            // Update header if this peer's conversation is currently selected
+            // Cap nhat header neu dang mo dung cuoc tro chuyen cua user nay.
             Long convId = conversationIdByPeerId.get(peerId);
             if (convId != null && convId == currentConversationId) {
                 updateHeaderPresence(isOnline, isOnline ? null : lastSeenStr);
@@ -301,7 +321,7 @@ public class ChatView {
     }
 
     /**
-     * Cuộn xuống cuối danh sách tin nhắn.
+     * Cuon xuong cuoi danh sach tin nhan.
      */
     private void scrollToBottom() {
         javafx.application.Platform.runLater(() -> {
@@ -310,33 +330,33 @@ public class ChatView {
     }
 
     /**
-     * Chuyển conversation đang active.
+     * Doi conversation dang active.
      */
     public void setCurrentConversation(long conversationId, String name) {
         this.currentConversationId = conversationId;
-        // Xóa tin nhắn cũ trên UI
+        // Xoa tin nhan cu tren UI.
         messagesBox.getChildren().clear();
-        // Reset pagination state for the new conversation
+        clearMessageSearchResults();
+        // Reset phan trang cho conversation moi.
         currentMessageOffset = 0;
         hasMoreMessages = true;
         isLoadingMore = false;
         
-        // Update header name
+        // Cap nhat ten tren header.
         if (headerChatName != null) {
             headerChatName.setText(name);
         }
 
-        // Tải lại danh sách conversation bên trái để làm nổi bật item đang được chọn
+        // Tai lai danh sach ben trai de lam noi bat item dang chon.
         loadConversations();
         
-        // Load lịch sử tin nhắn using pagination system
+        // Load lich su tin nhan theo phan trang.
         loadMessagesForCurrentConversation(true);
     }
 
     /**
-     * Load messages for the current conversation with pagination support.
-     * @param reset if true, resets pagination offset and loads from the beginning;
-     *              if false, loads older messages (pagination / scroll-up).
+     * Load tin nhan cua conversation hien tai theo phan trang.
+     * @param reset true: tai lai tu dau; false: tai them tin nhan cu khi scroll len.
      */
     private void loadMessagesForCurrentConversation(boolean reset) {
         if (currentConversationId <= 0) return;
@@ -364,7 +384,7 @@ public class ChatView {
             if (response != null && response.isSuccess()) {
                 Platform.runLater(() -> {
                     try {
-                        // Guard: nếu người dùng đã chuyển conversation khác, bỏ qua
+                        // Neu user da chuyen conversation thi bo qua ket qua cu.
                         if (this.currentConversationId != capturedConversationId) {
                             isLoadingMore = false;
                             return;
@@ -377,7 +397,7 @@ public class ChatView {
                             messagesBox.getChildren().clear();
                         }
 
-                        // Insert older messages at the top
+                        // Chen tin nhan cu len dau danh sach.
                         int insertIndex = 0;
                         for (JsonElement element : messages) {
                             JsonObject msg = element.getAsJsonObject();
@@ -397,7 +417,7 @@ public class ChatView {
                             messagesBox.getChildren().add(insertIndex++, wrapper);
                         }
 
-                        // Update pagination state based on server's hasMore flag
+                        // Cap nhat phan trang theo hasMore server tra ve.
                         int msgCount = messages.size();
                         currentMessageOffset = offset + msgCount;
                         if (json.has("hasMore")) {
@@ -406,7 +426,7 @@ public class ChatView {
                             hasMoreMessages = msgCount >= PAGE_SIZE;
                         }
 
-                        // Scroll to bottom on fresh load, stay at top on pagination
+                        // Load moi thi cuon xuong cuoi, load them thi giu vi tri.
                         if (reset) {
                             scrollToBottom();
                         }
@@ -516,7 +536,7 @@ public class ChatView {
             StackPane.setAlignment(statusDot, Pos.BOTTOM_RIGHT);
             avatarContainer.getChildren().add(statusDot);
 
-            // Register dot for targeted updates
+            // Luu cham trang thai de cap nhat dung user khi co event online/offline.
             if (conv.has("peerId")) {
                 long peerId = conv.get("peerId").getAsLong();
                 statusDotsByPeerId.put(peerId, statusDot);
@@ -578,7 +598,7 @@ public class ChatView {
 
         contactList.getChildren().add(contact);
     }
-    // ─────────────────── UI Components (giữ nguyên giao diện cũ) ───────────────────
+    // Cac thanh phan UI chinh.
 
     private VBox createLeftPanel() {
         VBox panel = new VBox(10);
@@ -636,7 +656,7 @@ public class ChatView {
                                     long uId = user.get("userId").getAsLong();
                                     String username = user.get("username").getAsString();
                                     
-                                    // Tạo item hiển thị cho user tìm được
+                                    // Tao item hien thi cho user tim duoc.
                                     HBox contact = new HBox(12);
                                     contact.setAlignment(Pos.CENTER_LEFT);
                                     contact.setPadding(new Insets(12, 14, 12, 14));
@@ -726,7 +746,7 @@ public class ChatView {
                 """.formatted(PANEL_DARK, PANEL_DARK));
         VBox.setVgrow(scrollContacts, Priority.ALWAYS);
 
-        // Không dùng dữ liệu ảo nữa
+        // Khong dung du lieu ao nua.
         panel.getChildren().addAll(header, searchField, scrollContacts);
         return panel;
     }
@@ -767,7 +787,28 @@ public class ChatView {
 
         HBox actions = new HBox(8);
         actions.setAlignment(Pos.CENTER_RIGHT);
+        messageSearchField = new TextField();
+        messageSearchField.setPromptText("Tìm tin nhắn...");
+        messageSearchField.setPrefWidth(190);
+        messageSearchField.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1.2px;
+                -fx-border-radius: 18px;
+                -fx-background-radius: 18px;
+                -fx-text-fill: %s;
+                -fx-prompt-text-fill: %s;
+                -fx-font-size: 13px;
+                -fx-padding: 8px 12px;
+                """.formatted(BG_BLACK, INPUT_BORDER, TEXT_WHITE, TEXT_DIM));
+
+        Button searchMessageBtn = createIconButton("Tìm");
+        searchMessageBtn.setOnAction(e -> searchMessagesInCurrentConversation());
+        messageSearchField.setOnAction(e -> searchMessagesInCurrentConversation());
+
         actions.getChildren().addAll(
+                messageSearchField,
+                searchMessageBtn,
                 createIconButton("Call"),
                 createIconButton("Video"),
                 createIconButton("...")
@@ -775,7 +816,24 @@ public class ChatView {
 
         chatHeader.getChildren().addAll(headerAvatar, headerInfo, spacer, actions);
 
-        // Vùng hiển thị tin nhắn
+        messageSearchStatus = new Label("");
+        messageSearchStatus.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                """.formatted(TEXT_MUTED));
+
+        messageSearchResults = new VBox(6);
+        messageSearchPanel = new VBox(8, messageSearchStatus, messageSearchResults);
+        messageSearchPanel.setPadding(new Insets(10, 24, 10, 24));
+        messageSearchPanel.setVisible(false);
+        messageSearchPanel.setManaged(false);
+        messageSearchPanel.setStyle("""
+                -fx-background-color: #0f0f0f;
+                -fx-border-color: %s;
+                -fx-border-width: 0 0 1 0;
+                """.formatted(BORDER_COLOR));
+
+        // Vung hien thi tin nhan.
         messagesBox = new VBox(12);
         messagesBox.setPadding(new Insets(20, 24, 20, 24));
 
@@ -788,10 +846,10 @@ public class ChatView {
                 """.formatted(BG_BLACK, BG_BLACK));
         VBox.setVgrow(scrollMessages, Priority.ALWAYS);
 
-        // Register pagination scroll listener
+        // Gan listener de load them tin nhan khi scroll len dau.
         scrollMessages.vvalueProperty().addListener(scrollListener);
 
-        // Typing indicator
+        // Dong hien thi trang thai dang go.
         typingLabel = new Label("Đang gõ...");
         typingLabel.setVisible(false);
         typingLabel.setPadding(new Insets(4, 24, 4, 24));
@@ -801,7 +859,7 @@ public class ChatView {
                 -fx-font-style: italic;
                 """.formatted(TEXT_MUTED));
 
-        // Thanh nhập tin nhắn
+        // Thanh nhap tin nhan.
         HBox inputBar = new HBox(12);
         inputBar.setAlignment(Pos.CENTER);
         inputBar.setPadding(new Insets(16, 24, 16, 24));
@@ -839,11 +897,11 @@ public class ChatView {
         messageInput.setPrefHeight(48);
         HBox.setHgrow(messageInput, Priority.ALWAYS);
 
-        // Gửi typing indicator khi người dùng đang gõ (throttled: tối đa 1 lần/giây)
+        // Gui typing indicator khi user dang go, gioi han toi da 1 lan/giay.
         messageInput.textProperty().addListener((obs, oldVal, newVal) -> {
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
                 if (newVal.trim().isEmpty()) {
-                    // Nếu xoá hết chữ thì gửi ngay sự kiện dừng gõ (isTyping = false)
+                    // Neu xoa het chu thi bao ngay la da dung go.
                     tcpClient.sendTyping(currentConversationId, -1, false);
                 } else {
                     long now = System.currentTimeMillis();
@@ -869,7 +927,7 @@ public class ChatView {
         messageInput.setOnAction(e -> sendMessage());
 
         inputBar.getChildren().addAll(attachBtn, messageInput, sendBtn);
-        panel.getChildren().addAll(chatHeader, scrollMessages, typingLabel, inputBar);
+        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, inputBar);
         return panel;
     }
 
@@ -904,8 +962,140 @@ public class ChatView {
                         -fx-min-height: 38px;
                         -fx-padding: 0 14px;
                         -fx-cursor: hand;
-                        """.formatted(TEXT_WHITE)));
+                """.formatted(TEXT_WHITE)));
         return btn;
+    }
+
+    private void searchMessagesInCurrentConversation() {
+        if (messageSearchField == null) return;
+
+        String keyword = messageSearchField.getText().trim();
+        if (keyword.isEmpty()) {
+            clearMessageSearchResults();
+            return;
+        }
+
+        if (keyword.length() < 2) {
+            showMessageSearchStatus("Nhập ít nhất 2 ký tự để tìm.", true);
+            return;
+        }
+
+        if (currentConversationId <= 0) {
+            showMessageSearchStatus("Hãy chọn một cuộc trò chuyện trước.", true);
+            return;
+        }
+
+        if (tcpClient == null || !tcpClient.isConnected()) {
+            showMessageSearchStatus("Chưa kết nối được server TCP.", true);
+            return;
+        }
+
+        long capturedConversationId = currentConversationId;
+        showMessageSearchStatus("Đang tìm tin nhắn...", false);
+
+        CompletableFuture
+                .supplyAsync(() -> tcpClient.searchMessages(capturedConversationId, keyword, 20, 0))
+                .thenAccept(response -> Platform.runLater(() ->
+                        renderMessageSearchResults(capturedConversationId, keyword, response)));
+    }
+
+    private void renderMessageSearchResults(
+            long capturedConversationId,
+            String keyword,
+            ChatTcpClient.ApiResponse response
+    ) {
+        if (currentConversationId != capturedConversationId) return;
+
+        if (response == null || !response.isSuccess()) {
+            String error = response != null && response.message() != null && !response.message().isBlank()
+                    ? response.message()
+                    : "Không tìm được tin nhắn.";
+            showMessageSearchStatus(error, true);
+            return;
+        }
+
+        try {
+            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+            JsonArray messages = json.getAsJsonArray("messages");
+            messageSearchResults.getChildren().clear();
+
+            if (messages == null || messages.isEmpty()) {
+                showMessageSearchStatus("Không có tin nhắn phù hợp.", false);
+                return;
+            }
+
+            showMessageSearchStatus("Tìm thấy " + messages.size() + " kết quả cho: " + keyword, false);
+            for (JsonElement element : messages) {
+                messageSearchResults.getChildren().add(createMessageSearchResultItem(element.getAsJsonObject()));
+            }
+        } catch (Exception e) {
+            showMessageSearchStatus("Không đọc được kết quả tìm kiếm.", true);
+        }
+    }
+
+    private VBox createMessageSearchResultItem(JsonObject message) {
+        long senderId = message.has("senderId") ? message.get("senderId").getAsLong() : -1;
+        String sender = senderId == currentUserId ? "Bạn" : "User #" + senderId;
+        String content = message.has("content") && !message.get("content").isJsonNull()
+                ? message.get("content").getAsString()
+                : "";
+        String createdAt = message.has("createdAt") && !message.get("createdAt").isJsonNull()
+                ? message.get("createdAt").getAsString()
+                : "";
+
+        Label meta = new Label(sender + (createdAt.isBlank() ? "" : " • " + createdAt));
+        meta.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 11px;
+                """.formatted(TEXT_DIM));
+
+        Label contentLabel = new Label(content);
+        contentLabel.setWrapText(true);
+        contentLabel.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 13px;
+                """.formatted(TEXT_WHITE));
+
+        VBox item = new VBox(3, meta, contentLabel);
+        item.setPadding(new Insets(8, 10, 8, 10));
+        item.setStyle("""
+                -fx-background-color: #181818;
+                -fx-border-color: %s;
+                -fx-border-width: 1px;
+                -fx-border-radius: 8px;
+                -fx-background-radius: 8px;
+                """.formatted(BORDER_COLOR));
+        return item;
+    }
+
+    private void showMessageSearchStatus(String text, boolean error) {
+        if (messageSearchPanel == null || messageSearchStatus == null || messageSearchResults == null) return;
+        messageSearchPanel.setVisible(true);
+        messageSearchPanel.setManaged(true);
+        messageSearchStatus.setText(text);
+        messageSearchStatus.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                """.formatted(error ? "#ff7777" : TEXT_MUTED));
+        if (error) {
+            messageSearchResults.getChildren().clear();
+        }
+    }
+
+    private void clearMessageSearchResults() {
+        if (messageSearchField != null) {
+            messageSearchField.clear();
+        }
+        if (messageSearchResults != null) {
+            messageSearchResults.getChildren().clear();
+        }
+        if (messageSearchStatus != null) {
+            messageSearchStatus.setText("");
+        }
+        if (messageSearchPanel != null) {
+            messageSearchPanel.setVisible(false);
+            messageSearchPanel.setManaged(false);
+        }
     }
 
     private void addReceivedMessage(String text) {
@@ -941,19 +1131,19 @@ public class ChatView {
     }
 
     /**
-     * Gửi tin nhắn qua TCP.
-     * Server lưu vào DB rồi broadcast lại cho tất cả thành viên (gồm cả sender).
-     * UI được cập nhật khi nhận được broadcast NEW_MESSAGE từ server.
+     * Gui tin nhan qua TCP.
+     * Server luu vao DB roi broadcast lai cho cac thanh vien, gom ca sender.
+     * UI cap nhat khi nhan broadcast NEW_MESSAGE tu server.
      */
     private void sendMessage() {
         String text = messageInput.getText().trim();
 
         if (!text.isEmpty()) {
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
-                // Gửi qua TCP → server lưu DB → broadcast về cho mọi người
+                // Gui qua TCP, server luu DB roi broadcast ve cho moi nguoi.
                 tcpClient.sendMessage(currentConversationId, currentUserId, text);
                 
-                // Ngay lập tức gửi trạng thái ngừng gõ (isTyping = false) cho người kia
+                // Bao ngay la minh da dung go sau khi gui tin.
                 tcpClient.sendTyping(currentConversationId, -1, false);
             }
         messageInput.clear();
@@ -974,7 +1164,7 @@ public class ChatView {
         currentAvatarImage = createDefaultAvatarImage();
         initialAvatarImage = currentAvatarImage;
         profileAvatarCircle = new Circle(55);
-        // Chỉ dùng ImagePattern khi ảnh load xong và không bị lỗi
+        // Chi dung ImagePattern khi anh load xong va khong loi.
         if (!currentAvatarImage.isError() && currentAvatarImage.getProgress() >= 1.0) {
             profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
         } else {
@@ -1009,6 +1199,7 @@ public class ChatView {
 
         Button nameBtn = createProfileButton("\u0110\u1ed5i t\u00ean ng\u01b0\u1eddi d\u00f9ng", false);
         Button passBtn = createProfileButton("\u0110\u1ed5i m\u1eadt kh\u1ea9u", false);
+        passBtn.setOnAction(e -> showChangePasswordDialog());
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
@@ -1019,8 +1210,7 @@ public class ChatView {
                 -fx-text-fill: #cc3333;
                 """);
         logoutBtn.setOnAction(e -> {
-            // Dùng resetInstance() để dừng hẳn connectLoop và
-            // tạo instance mới khi login lại
+            // Dung resetInstance de dung connectLoop cu va tao instance moi khi login lai.
             ChatTcpClient.resetInstance();
             LoginView loginView = new LoginView(stage);
             stage.setScene(loginView.createScene());
@@ -1037,6 +1227,187 @@ public class ChatView {
         );
 
         return panel;
+    }
+
+    private void showChangePasswordDialog() {
+        Stage dialog = new Stage();
+        dialog.initOwner(stage);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        dialog.setTitle("Đổi mật khẩu");
+
+        VBox content = new VBox(16);
+        content.setPadding(new Insets(26));
+        content.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1px;
+                """.formatted(PANEL_DARK, BORDER_COLOR));
+
+        Label title = new Label("Đổi mật khẩu");
+        title.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 24px;
+                -fx-font-weight: bold;
+                """.formatted(TEXT_WHITE));
+
+        Label subtitle = new Label("Nhập mật khẩu hiện tại trước khi đặt mật khẩu mới.");
+        subtitle.setWrapText(true);
+        subtitle.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 14px;
+                """.formatted(TEXT_MUTED));
+
+        PasswordField oldPasswordField = createPasswordDialogField("Mật khẩu hiện tại");
+        PasswordField newPasswordField = createPasswordDialogField("Mật khẩu mới");
+        PasswordField confirmPasswordField = createPasswordDialogField("Nhập lại mật khẩu mới");
+
+        Label message = new Label("");
+        message.setWrapText(true);
+        message.setMinHeight(24);
+        message.setStyle("""
+                -fx-text-fill: transparent;
+                -fx-font-size: 13px;
+                """);
+
+        Button cancelButton = createPasswordDialogButton("Hủy", false);
+        cancelButton.setOnAction(e -> dialog.close());
+
+        Button saveButton = createPasswordDialogButton("Lưu mật khẩu", true);
+        saveButton.setOnAction(e -> {
+            String oldPassword = oldPasswordField.getText();
+            String newPassword = newPasswordField.getText();
+            String confirmPassword = confirmPasswordField.getText();
+
+            if (oldPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
+                setPasswordDialogMessage(message, "Vui lòng nhập đầy đủ thông tin.", "#ff7777");
+                return;
+            }
+
+            if (newPassword.length() < 6) {
+                setPasswordDialogMessage(message, "Mật khẩu mới phải có ít nhất 6 ký tự.", "#ff7777");
+                return;
+            }
+
+            if (oldPassword.equals(newPassword)) {
+                setPasswordDialogMessage(message, "Mật khẩu mới không được trùng mật khẩu hiện tại.", "#ff7777");
+                return;
+            }
+
+            if (!newPassword.equals(confirmPassword)) {
+                setPasswordDialogMessage(message, "Mật khẩu nhập lại không khớp.", "#ff7777");
+                return;
+            }
+
+            if (tcpClient == null || !tcpClient.isConnected()) {
+                setPasswordDialogMessage(message, "Chưa kết nối được server TCP.", "#ff7777");
+                return;
+            }
+
+            saveButton.setDisable(true);
+            cancelButton.setDisable(true);
+            setPasswordDialogMessage(message, "Đang đổi mật khẩu...", TEXT_MUTED);
+
+            CompletableFuture
+                    .supplyAsync(() -> tcpClient.changePassword(currentUserId, oldPassword, newPassword))
+                    .thenAccept(response -> Platform.runLater(() -> {
+                        saveButton.setDisable(false);
+                        cancelButton.setDisable(false);
+
+                        if (response != null && response.isSuccess()) {
+                            oldPasswordField.clear();
+                            newPasswordField.clear();
+                            confirmPasswordField.clear();
+                            setPasswordDialogMessage(message, "Đổi mật khẩu thành công.", "#4ade80");
+                            return;
+                        }
+
+                        setPasswordDialogMessage(message, mapChangePasswordError(response), "#ff7777");
+                    }));
+        });
+
+        HBox actions = new HBox(10, cancelButton, saveButton);
+        actions.setAlignment(Pos.CENTER_RIGHT);
+
+        content.getChildren().addAll(
+                title,
+                subtitle,
+                oldPasswordField,
+                newPasswordField,
+                confirmPasswordField,
+                message,
+                actions
+        );
+
+        Scene scene = new Scene(content, 460, 390);
+        dialog.setScene(scene);
+        dialog.setResizable(false);
+        dialog.showAndWait();
+    }
+
+    private PasswordField createPasswordDialogField(String prompt) {
+        PasswordField field = new PasswordField();
+        field.setPromptText(prompt);
+        field.setPrefHeight(46);
+        field.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 12px;
+                -fx-background-radius: 12px;
+                -fx-text-fill: %s;
+                -fx-prompt-text-fill: %s;
+                -fx-font-size: 14px;
+                -fx-padding: 12px 14px;
+                """.formatted(BG_BLACK, INPUT_BORDER, TEXT_WHITE, TEXT_DIM));
+        return field;
+    }
+
+    private Button createPasswordDialogButton(String text, boolean accent) {
+        Button button = new Button(text);
+        button.setMinWidth(120);
+        button.setPrefHeight(42);
+        button.setStyle(accent
+                ? """
+                -fx-background-color: %s;
+                -fx-text-fill: %s;
+                -fx-font-size: 14px;
+                -fx-font-weight: bold;
+                -fx-background-radius: 12px;
+                -fx-cursor: hand;
+                """.formatted(ACCENT, TEXT_WHITE)
+                : """
+                -fx-background-color: transparent;
+                -fx-text-fill: %s;
+                -fx-font-size: 14px;
+                -fx-border-color: %s;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 12px;
+                -fx-background-radius: 12px;
+                -fx-cursor: hand;
+                """.formatted(TEXT_MUTED, INPUT_BORDER));
+        return button;
+    }
+
+    private void setPasswordDialogMessage(Label label, String text, String color) {
+        label.setText(text);
+        label.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 13px;
+                """.formatted(color));
+    }
+
+    private String mapChangePasswordError(ChatTcpClient.ApiResponse response) {
+        if (response == null || response.message() == null || response.message().isBlank()) {
+            return "Không nhận được phản hồi từ server.";
+        }
+
+        return switch (response.message()) {
+            case "Current password is incorrect" -> "Mật khẩu hiện tại không đúng.";
+            case "New password must be at least 6 characters" -> "Mật khẩu mới phải có ít nhất 6 ký tự.";
+            case "User not found" -> "Không tìm thấy tài khoản.";
+            case "Unauthorized password change request" -> "Phiên đăng nhập không hợp lệ.";
+            default -> response.message();
+        };
     }
 
     private Button createProfileButton(String text, boolean accent) {
@@ -1073,9 +1444,7 @@ public class ChatView {
         return new Scene(root, 1400, 800);
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  AVATAR MODAL — tích hợp từ changeAvatarTest
-    // ═══════════════════════════════════════════════════════════
+    // Modal doi avatar, lay tu man test doi avatar roi ghep vao UI chinh.
     private ContextMenu createAvatarContextMenu() {
         ContextMenu contextMenu = new ContextMenu();
         
@@ -1113,7 +1482,7 @@ public class ChatView {
                 currentAvatarImage = initialAvatarImage;
                 profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
                 
-                // Đồng bộ avatar qua TCP (server hiện tại không chạy HTTP REST)
+                // Dong bo avatar qua luong TCP hien tai.
                 CompletableFuture.supplyAsync(() -> uploadAvatarViaTcp(initialAvatarImage))
                         .thenAccept(response -> Platform.runLater(() -> {
                             if (response != null && response.isSuccess()) {
@@ -1139,7 +1508,7 @@ public class ChatView {
         BorderPane modalRoot = new BorderPane();
         modalRoot.setStyle("-fx-background-color: #1c1c1c;");
 
-        // ── HEADER ──
+        // Header cua modal.
         StackPane header = new StackPane();
         header.setPrefHeight(80);
         header.setMinHeight(80);
@@ -1180,12 +1549,12 @@ public class ChatView {
         header.getChildren().addAll(title, closeBtn);
         modalRoot.setTop(header);
 
-        // ── SCROLL CONTENT ──
+        // Noi dung cuon cua modal.
         VBox scrollContent = new VBox();
         scrollContent.setStyle("-fx-background-color: #1c1c1c;");
         scrollContent.setAlignment(Pos.TOP_CENTER);
 
-        // 1. PREVIEW SECTION
+        // Khu vuc xem truoc avatar.
         VBox previewSection = new VBox(20);
         previewSection.setAlignment(Pos.CENTER);
         previewSection.setPadding(new Insets(30));
@@ -1199,18 +1568,18 @@ public class ChatView {
                 -fx-background-radius: 16px;
                 """);
 
-        // Load current avatar or default
+        // Tai avatar hien tai, neu khong co thi dung avatar mac dinh.
         Image previewImg = currentAvatarImage != null ? currentAvatarImage : createDefaultAvatarImage();
         ImageView previewImage = new ImageView(previewImg);
         previewImage.setPreserveRatio(true);
         previewImage.setSmooth(true);
 
-        // Circular clip
+        // Cat anh theo khung tron.
         Circle containerClip = new Circle(250, 250, 250);
         previewContainer.setClip(containerClip);
         previewContainer.getChildren().add(previewImage);
 
-        // Zoom slider
+        // Thanh zoom anh.
         zoomSlider = new Slider(1.0, 3.0, 1.0);
         zoomSlider.setPrefWidth(300);
         zoomSlider.setBlockIncrement(0.05);
@@ -1232,7 +1601,7 @@ public class ChatView {
             clampImagePosition(previewImage);
         });
 
-        // Drag handlers
+        // Xu ly keo anh trong khung preview.
         previewContainer.setOnMousePressed(evt -> {
             mouseAnchorX = evt.getSceneX();
             mouseAnchorY = evt.getSceneY();
@@ -1251,7 +1620,7 @@ public class ChatView {
         previewSection.getChildren().addAll(previewContainer, zoomRow);
         scrollContent.getChildren().add(previewSection);
 
-        // 2. OLD AVATAR SECTION (placeholder URLs)
+        // Danh sach avatar da dung hoac avatar mau.
         VBox oldAvatarSection = new VBox(18);
         oldAvatarSection.setPadding(new Insets(0, 30, 30, 30));
 
@@ -1327,7 +1696,7 @@ public class ChatView {
         oldAvatarSection.getChildren().addAll(oldAvatarTitle, oldAvatarList);
         scrollContent.getChildren().add(oldAvatarSection);
 
-        // 3. ACTIONS (Upload / Delete)
+        // Cac nut thao tac upload va xoa.
         HBox actionsSection = new HBox(16);
         actionsSection.setPadding(new Insets(0, 30, 30, 30));
 
@@ -1398,7 +1767,7 @@ public class ChatView {
         actionsSection.getChildren().addAll(uploadBtn, deleteBtn);
         scrollContent.getChildren().add(actionsSection);
 
-        // SCROLLPANE
+        // Khung cuon.
         ScrollPane scrollPane = new ScrollPane(scrollContent);
         scrollPane.setFitToWidth(true);
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
@@ -1410,7 +1779,7 @@ public class ChatView {
                 """);
         modalRoot.setCenter(scrollPane);
 
-        // ── FOOTER ──
+        // Footer chua nut dong va luu.
         HBox footer = new HBox(14);
         footer.setPadding(new Insets(20));
         footer.setAlignment(Pos.CENTER_RIGHT);
@@ -1452,19 +1821,19 @@ public class ChatView {
         saveBtn.setOnMouseExited(ev -> saveBtn.setStyle(saveBtnStyle));
 
         saveBtn.setOnAction(evt -> {
-            // Snapshot the preview container (cropped circle)
+            // Chup phan preview avatar dang crop hinh tron.
             SnapshotParameters params = new SnapshotParameters();
             params.setFill(Color.TRANSPARENT);
             WritableImage croppedImage = previewContainer.snapshot(params, null);
 
-            // Update local avatar
+            // Cap nhat avatar tren UI truoc.
             currentAvatarImage = croppedImage;
             profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
 
-            // Thêm ảnh vừa đổi vào danh sách ảnh đại diện đã từng sử dụng
+            // Them anh vua doi vao danh sach avatar da tung dung.
             previouslyUsedAvatars.add(0, croppedImage);
 
-            // Upload to server in background
+            // Gui avatar len server qua TCP o background.
             saveBtn.setDisable(true);
             saveBtn.setText("Đang lưu...");
 
@@ -1489,7 +1858,7 @@ public class ChatView {
         modal.showAndWait();
     }
 
-    // ── Avatar helper methods ──────────────────────────────────
+    // Cac ham ho tro avatar.
 
     private void updatePreviewFit(ImageView previewImage, Image image) {
         if (image == null) return;
@@ -1540,7 +1909,7 @@ public class ChatView {
         File file = new File("avatarMacDinh.jpg");
 
         if (file.exists()) {
-            // Load file local
+            // Tai anh tu file local.
             Image img = new Image(file.toURI().toString(), false);
             if (!img.isError()) {
                 return img;
@@ -1550,7 +1919,7 @@ public class ChatView {
         e.printStackTrace();
     }
 
-    // Fallback avatar online
+    // Avatar online dung khi chua co avatar rieng.
     try {
         Image img = new Image("https://i.pravatar.cc/300?img=0", false);
 
@@ -1560,7 +1929,7 @@ public class ChatView {
     } catch (Exception ignored) {
     }
 
-        // Fallback cuối cùng: avatar màu
+        // Fallback cuoi cung la avatar mau.
         javafx.scene.canvas.Canvas canvas =
                 new javafx.scene.canvas.Canvas(110, 110);
     
@@ -1604,7 +1973,7 @@ public class ChatView {
     }
 
     private void showAvatarToast(String text, String bgColor) {
-        // Create or reuse a toast on the root StackPane-like area
+        // Tao thong bao nho de bao ket qua thao tac avatar.
         Label toast = new Label(text);
         toast.setStyle("""
                 -fx-background-color: %s;
@@ -1615,7 +1984,7 @@ public class ChatView {
                 -fx-background-radius: 14px;
                 """.formatted(bgColor));
 
-        // Place toast in a temporary popup-like Stage
+        // Dat toast trong Stage tam de khong pha layout chinh.
         Stage toastStage = new Stage();
         toastStage.initOwner(stage);
         toastStage.setAlwaysOnTop(true);
@@ -1628,7 +1997,7 @@ public class ChatView {
         toastStage.setScene(toastScene);
         toastStage.show();
 
-        // Auto-close after 2.5 seconds
+        // Tu dong sau 2.5 giay.
         scheduler.schedule(
             () -> Platform.runLater(toastStage::close),
             2500,

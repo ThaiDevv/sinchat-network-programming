@@ -5,9 +5,9 @@ public class Friendship {
     // Enum  `status` ENUM('PENDING','ACCEPTED','BLOCKED')
     public enum FriendshipStatus { PENDING, ACCEPTED, BLOCKED }
 
-    private long user1Id;               // bigint NOT NULL — FK → users.id
-    private long user2Id;               // bigint NOT NULL — FK → users.id
-    private FriendshipStatus status;    // trạng thái kết bạn
+    private long user1Id;               // bigint NOT NULL - FK den users.id
+    private long user2Id;               // bigint NOT NULL - FK den users.id
+    private FriendshipStatus status;    // trang thai ket ban
 
     public Friendship() {}
 

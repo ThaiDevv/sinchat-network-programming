@@ -15,12 +15,14 @@ import org.slf4j.LoggerFactory;
 public class Router {
     private static final Logger logger = LoggerFactory.getLogger(Router.class);
 
-    // Reuse handler instances to optimize GC overhead and facilitate injection in testing
+    // Dung chung handler de giam tao object va de thay mock khi test.
     private static LoginHandler loginHandler = new LoginHandler();
     private static RegisterHandler registerHandler = new RegisterHandler();
     private static ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
+    private static ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
     private static ProfileHandler profileHandler = new ProfileHandler();
     private static GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
+    private static SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
     private static SendMessageHandler sendMessageHandler = new SendMessageHandler();
     private static ConversationHandle conversationHandle = new ConversationHandle();
     private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
@@ -57,11 +59,17 @@ public class Router {
                 case "FORGOT_PASSWORD":
                     response = forgotPasswordHandler.handleTcp(request, conn);
                     break;
+                case "CHANGE_PASSWORD":
+                    response = changePasswordHandler.handleTcp(request, conn);
+                    break;
                 case "PROFILE":
                     response = profileHandler.handleTcp(request, conn);
                     break;
                 case "GET_MESSAGES":
                     response = getMessagesHandler.handleTcp(request, conn);
+                    break;
+                case "SEARCH_MESSAGES":
+                    response = searchMessagesHandler.handleTcp(request, conn);
                     break;
                 case "SEND_MESSAGE":
                     response = sendMessageHandler.handleTcp(request, conn);
@@ -103,7 +111,7 @@ public class Router {
                     break;
                 case "PING":
                     pingHandler.handle(request, conn, requestId);
-                    return; // PING already sent response
+                    return; // PING tu gui response nen khong di qua phan gui chung ben duoi.
                 case "TYPING":
                     response = typingHandler.handleTcp(request, conn);
                     break;

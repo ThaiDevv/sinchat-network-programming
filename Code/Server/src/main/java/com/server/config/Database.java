@@ -31,7 +31,7 @@ public class Database {
                 if (dotenv.get("DB_USER") == null || dotenv.get("DB_USER").trim().isEmpty()) {
                     throw new RuntimeException("DB_USER is not configured in .env file");
                 }
-                if (dotenv.get("DB_PASSWORD") == null || dotenv.get("DB_PASSWORD").trim().isEmpty()) {
+                if (dotenv.get("DB_PASSWORD") == null) {
                     throw new RuntimeException("DB_PASSWORD is not configured in .env file");
                 }
             // Add SSL disable parameters to avoid timeout issues
@@ -44,7 +44,7 @@ public class Database {
         config.setUsername(dotenv.get("DB_USER"));
         config.setPassword(dotenv.get("DB_PASSWORD"));
 
-        // Pool sizing — tuned for Render Free (0.1 CPU, 512MB RAM)
+        // Pool size nay vua du cho Render Free (0.1 CPU, 512MB RAM).
         config.setMaximumPoolSize(5);
         config.setMinimumIdle(1);
 

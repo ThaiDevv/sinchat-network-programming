@@ -16,12 +16,12 @@ public class ChatTcpClient {
     private static final String HOST = System.getProperty("tcp.host", System.getenv("TCP_HOST") != null ? System.getenv("TCP_HOST") : "localhost");
     private static final int PORT = Integer.parseInt(System.getProperty("tcp.port", System.getenv("TCP_PORT") != null ? System.getenv("TCP_PORT") : "3000"));
 
-    // TLS: set tls.enabled=true or env TLS_ENABLED=true to use SSLSocket.
-    // Set javax.net.ssl.trustStore / javax.net.ssl.trustStorePassword for custom CA.
+    // Bat TLS neu can chay socket ma hoa thay vi socket thuong.
+    // Neu server dung chung chi rieng thi cau hinh them trustStore.
     private static final boolean TLS_ENABLED = "true".equalsIgnoreCase(
             System.getProperty("tls.enabled", System.getenv("TLS_ENABLED") != null ? System.getenv("TLS_ENABLED") : "false"));
 
-    // Heartbeat: send PING every HEARTBEAT_INTERVAL_MS, timeout after 3 missed pongs.
+    // Heartbeat giup phat hien ket noi TCP bi dut ngam.
     private static final long HEARTBEAT_INTERVAL_MS = Long.parseLong(
             System.getProperty("tcp.heartbeat.interval", "15000"));
 
@@ -41,7 +41,7 @@ public class ChatTcpClient {
     private Consumer<String> onDisconnected;
 
     private final AtomicBoolean reconnecting = new AtomicBoolean(false);
-    private volatile long userId = -1; // last joined userId for re-join after reconnect
+    private volatile long userId = -1; // Luu userId de JOIN lai sau khi reconnect.
 
     private ScheduledExecutorService heartbeatScheduler;
     private volatile boolean pongReceived = true;
@@ -56,11 +56,11 @@ public class ChatTcpClient {
         return instance;
     }
 
-    // ── Connection ────────────────────────────────────────────────────────────
+    // Ket noi TCP
 
     private SocketFactory createSocketFactory() {
         if (TLS_ENABLED) {
-            // Configure trust store via system properties if needed:
+            // Cau hinh trustStore qua JVM args neu can:
             // -Djavax.net.ssl.trustStore=path -Djavax.net.ssl.trustStorePassword=pass
             return SSLSocketFactory.getDefault();
         }
@@ -86,32 +86,32 @@ public class ChatTcpClient {
                 startHeartbeat();
 
                 if (onConnected != null) Platform.runLater(onConnected);
-                if (userId > 0) join(userId); // re-join after reconnect
+                if (userId > 0) join(userId); // JOIN lai sau khi reconnect.
 
-                // ── Read loop ────────────────────────────────────
+                // Doc lien tuc tung dong JSON server gui ve qua socket.
                 String line;
                 while ((line = reader.readLine()) != null) {
                     handleServerMessage(line);
                 }
             } catch (IOException e) {
-                // connection lost or failed
+                // Mat ket noi hoac chua ket noi duoc thi vong lap se thu lai.
             }
 
-            // cleanup
+            // Don trang thai cu truoc khi reconnect.
             stopHeartbeat();
             try { if (tempSocket != null && !tempSocket.isClosed()) tempSocket.close(); } catch (IOException ignored) {}
             failPendingRequests();
 
             if (onDisconnected != null) Platform.runLater(() -> onDisconnected.accept("Connection closed – reconnecting…"));
 
-            // Wait 2 seconds before retry, but bail if shutdown requested
+            // Cho ngan mot chut truoc khi thu ket noi lai.
             if (!shutdownRequested.get()) {
                 try { Thread.sleep(2000); } catch (InterruptedException ex) { Thread.currentThread().interrupt(); break; }
             }
         }
     }
 
-    // ── Heartbeat ─────────────────────────────────────────────────────────────
+    // Heartbeat
 
     private void startHeartbeat() {
         stopHeartbeat();
@@ -133,7 +133,7 @@ public class ChatTcpClient {
     private void sendPing() {
         if (!isConnected()) return;
         if (!pongReceived) {
-            // server missed previous pong → close socket to trigger reconnect
+            // Server khong tra PONG thi dong socket de reconnect.
             disconnect();
             return;
         }
@@ -144,16 +144,16 @@ public class ChatTcpClient {
         writeLine(gson.toJson(ping));
     }
 
-    // ── Message handling ──────────────────────────────────────────────────────
+    // Xu ly du lieu server gui ve
 
     private void handleServerMessage(String line) {
         try {
             JsonObject json = JsonParser.parseString(line).getAsJsonObject();
 
-            // request/response correlation
+            // Ghep response voi request ban dau bang requestId.
             if (json.has("requestId")) {
                 String requestId = json.get("requestId").getAsString();
-                // ignore internal ping IDs without a registered future
+                // Bo qua PING noi bo neu khong co request dang cho.
                 CompletableFuture<ApiResponse> future = pendingRequests.remove(requestId);
                 if (future != null) {
                     String status = json.has("status") ? json.get("status").getAsString() : "";
@@ -188,7 +188,7 @@ public class ChatTcpClient {
         }
     }
 
-    // ── I/O helpers ───────────────────────────────────────────────────────────
+    // Ho tro doc ghi socket
 
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
@@ -198,8 +198,8 @@ public class ChatTcpClient {
     }
 
     /**
-     * Shutdown the current instance and reset singleton so that next
-     * {@link #getInstance()} call creates a fresh client.
+     * Dung client hien tai va reset singleton de lan dang nhap sau
+     * tao mot ket noi TCP moi.
      */
     public static synchronized void resetInstance() {
         if (instance != null) {
@@ -233,7 +233,7 @@ public class ChatTcpClient {
         return socket != null && socket.isConnected() && !socket.isClosed();
     }
 
-    // ── Callbacks ─────────────────────────────────────────────────────────────
+    // Callback cho UI
 
     public void setOnNewMessage(Consumer<JsonObject> callback) { this.onNewMessage = callback; }
     public void setOnUserTyping(Consumer<JsonObject> callback) { this.onUserTyping = callback; }
@@ -241,7 +241,7 @@ public class ChatTcpClient {
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 
-    // ── Request/response ──────────────────────────────────────────────────────
+    // Gui request TCP va cho response
 
     private ApiResponse sendRequestSync(JsonObject request) {
         int retries = 0;
@@ -250,7 +250,7 @@ public class ChatTcpClient {
         }
 
         if (!isConnected()) {
-            return new ApiResponse(500, "error", "Not connected to server", null, null, "");
+            return new ApiResponse(500, "error", "Chưa kết nối được server TCP", null, null, "");
         }
 
         String requestId = UUID.randomUUID().toString();
@@ -265,11 +265,11 @@ public class ChatTcpClient {
             return future.get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             pendingRequests.remove(requestId);
-            return new ApiResponse(500, "error", "Request timeout or interrupted", null, null, "");
+            return new ApiResponse(500, "error", "Server TCP phản hồi quá lâu hoặc request bị ngắt", null, null, "");
         }
     }
 
-    // ── API methods ───────────────────────────────────────────────────────────
+    // Cac action gui qua TCP
 
     public ApiResponse register(String username, String password, String email) {
         JsonObject req = new JsonObject();
@@ -300,6 +300,15 @@ public class ChatTcpClient {
         req.addProperty("action", "FORGOT_PASSWORD");
         req.addProperty("code", code);
         req.addProperty("password", password);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse changePassword(long userId, String oldPassword, String newPassword) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "CHANGE_PASSWORD");
+        req.addProperty("userId", userId);
+        req.addProperty("oldPassword", oldPassword);
+        req.addProperty("newPassword", newPassword);
         return sendRequestSync(req);
     }
 
@@ -336,6 +345,16 @@ public class ChatTcpClient {
         JsonObject req = new JsonObject();
         req.addProperty("action", "GET_MESSAGES");
         req.addProperty("conversationId", conversationId);
+        req.addProperty("limit", limit);
+        req.addProperty("offset", offset);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse searchMessages(long conversationId, String keyword, int limit, int offset) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SEARCH_MESSAGES");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("keyword", keyword);
         req.addProperty("limit", limit);
         req.addProperty("offset", offset);
         return sendRequestSync(req);
@@ -380,7 +399,7 @@ public class ChatTcpClient {
     public ApiResponse getUserProfile(long userId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "GET_USER_PROFILE");
-            req.addProperty("userId", userId);
+        req.addProperty("userId", userId);
         return sendRequestSync(req);
     }
 
@@ -391,7 +410,7 @@ public class ChatTcpClient {
         return sendRequestSync(req);
     }
 
-    // ── ApiResponse ───────────────────────────────────────────────────────────
+    // Ket qua tra ve cho UI
 
     public record ApiResponse(
             int statusCode,
