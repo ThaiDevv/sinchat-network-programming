@@ -76,6 +76,7 @@
 ---
 
 ## 🏗️ Architecture
+
 ```mermaid
 graph TD
     %% Client Layer
@@ -123,6 +124,7 @@ graph TD
     style Client fill:#f9f9f9,stroke:#333
     style Server fill:#e1f5fe,stroke:#01579b
     style DB fill:#fff3e0,stroke:#e65100
+```
 
 ### Design Patterns Used
 - **Singleton** — `ChatTcpClient`, `Database`, Router handlers
@@ -131,7 +133,7 @@ graph TD
 - **Thread Pool** — 100 concurrent connections via `ExecutorService`
 - **Observer (Callbacks)** — `onNewMessage`, `onConnected`, `onDisconnected` event listeners
 - **Model/Entity** — Plain Java objects with enums for type safety
-```
+
 ---
 
 ## ⚙️ Running the Application
