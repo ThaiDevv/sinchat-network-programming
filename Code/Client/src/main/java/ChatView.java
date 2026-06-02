@@ -5,6 +5,9 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 
@@ -65,6 +68,11 @@ public class ChatView {
         return t;
     });
     private ScheduledFuture<?> typingHideTask;
+
+    // Theo doi trang thai hien tai cua header presence de cap nhat moi phut.
+    private volatile boolean currentHeaderIsOnline = false;
+    private volatile String currentHeaderLastSeen = null;
+    private ScheduledFuture<?> presenceRefreshTask;
     private long lastTypingSentTime = 0;
     private static final long TYPING_THROTTLE_MS = 1000; // Chi gui typing toi da 1 lan/giay.
 
@@ -588,18 +596,80 @@ public class ChatView {
     }
 
     private void updateHeaderPresence(boolean isOnline, String lastSeen) {
-        if (chatStatus != null) {
-            if (isOnline) {
-                chatStatus.setText("Online");
-                chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #4ade80;");
+        // Luu trang thai moi nhat de bo dem 1 phut co the lam moi lai.
+        currentHeaderIsOnline = isOnline;
+        currentHeaderLastSeen = lastSeen;
+
+        // Huy bo dem cu va bat bo dem moi chi khi offline co lastSeen.
+        if (presenceRefreshTask != null && !presenceRefreshTask.isDone()) {
+            presenceRefreshTask.cancel(false);
+            presenceRefreshTask = null;
+        }
+        if (!isOnline && lastSeen != null && !lastSeen.isEmpty()) {
+            // Cap nhat lai moi 60 giay.
+            presenceRefreshTask = scheduler.scheduleAtFixedRate(() ->
+                Platform.runLater(() -> renderHeaderPresence(false, currentHeaderLastSeen)),
+                60, 60, TimeUnit.SECONDS
+            );
+        }
+
+        renderHeaderPresence(isOnline, lastSeen);
+    }
+
+    /**
+     * Render trang thai len chatStatus label.
+     * - Online              → "Online" (xanh la)
+     * - Offline, < 1 phut  → "Vừa mới hoạt động" (xam)
+     * - Offline, X phut    → "Hoạt động X phút trước" (xam)
+     * - Offline, X gio     → "Hoạt động X giờ trước" (xam)
+     * - Offline, > 24 gio  → "Offline" (xam)
+     * - Offline, khong co lastSeen → "Offline" (xam)
+     */
+    private void renderHeaderPresence(boolean isOnline, String lastSeen) {
+        if (chatStatus == null) return;
+        if (isOnline) {
+            chatStatus.setText("Online");
+            chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #4ade80;");
+            return;
+        }
+
+        String statusText = "Offline";
+        if (lastSeen != null && !lastSeen.isEmpty()) {
+            statusText = formatRelativePresence(lastSeen);
+        }
+        chatStatus.setText(statusText);
+        chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #888888;");
+    }
+
+    private static final DateTimeFormatter LAST_SEEN_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /**
+     * Chuyen chuoi lastSeen "yyyy-MM-dd HH:mm:ss" thanh dang tuong doi tieng Viet.
+     */
+    private String formatRelativePresence(String lastSeenStr) {
+        try {
+            LocalDateTime lastSeenTime = LocalDateTime.parse(lastSeenStr, LAST_SEEN_FMT);
+            LocalDateTime now = LocalDateTime.now();
+            long minutes = ChronoUnit.MINUTES.between(lastSeenTime, now);
+
+            if (minutes < 0) minutes = 0;
+
+            if (minutes < 1) {
+                return "Vừa mới hoạt động";
+            } else if (minutes < 60) {
+                return "Hoạt động " + minutes + " phút trước";
             } else {
-                String statusText = "Offline";
-                if (lastSeen != null && !lastSeen.isEmpty()) {
-                    statusText = "Offline • seen " + lastSeen;
+                long hours = minutes / 60;
+                if (hours >= 24) {
+                    // Qua 24 gio thi chi hien Offline.
+                    return "Offline";
                 }
-                chatStatus.setText(statusText);
-                chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #888888;");
+                return "Hoạt động " + hours + " giờ trước";
             }
+        } catch (Exception e) {
+            // Neu parse that bai thi hien Offline.
+            return "Offline";
         }
     }
 
