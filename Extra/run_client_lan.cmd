@@ -5,8 +5,8 @@ echo ===================================================
 echo     STARTING SINCHAT TCP CLIENT (LAN DISCOVERY)     
 echo ===================================================
 echo.
-echo [Mode] UDP LAN auto-discovery ENABLED (port 9999)
-echo        Client will wait for a SinChat server beacon on the LAN.
+echo [Mode] TCP LAN auto-discovery ENABLED (port 9999)
+echo        Client will probe the local subnet for a SinChat server.
 echo        Set TCP_HOST env var to override with a fixed IP.
 echo.
 

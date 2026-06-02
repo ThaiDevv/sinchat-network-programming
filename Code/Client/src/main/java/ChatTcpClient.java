@@ -189,7 +189,7 @@ public class ChatTcpClient {
 
     /** Priority order: gateway (.1), then .254, then sweep 2..253 skipping own IP. */
     private static int[] buildPriorityOrder() {
-        int[] result = new int[253];
+        int[] result = new int[254];
         result[0] = 1;    // gateway
         result[1] = 254;  // common server
         int idx = 2;
