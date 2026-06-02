@@ -1,4 +1,4 @@
-import com.google.gson.Gson;
+﻿import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -60,6 +60,7 @@ public class ChatView {
     private final java.util.Map<Long, Long> conversationIdByPeerId = new java.util.HashMap<>();
     private final java.util.Map<Long, Long> peerIdByConversationId = new java.util.HashMap<>();
     private final java.util.Map<Long, String> peerLastSeenByPeerId = new java.util.HashMap<>();
+    private final java.util.Map<Long, Boolean> peerOnlineByPeerId = new java.util.HashMap<>();
 
     private Label typingLabel;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -313,6 +314,7 @@ public class ChatView {
         String status = json.get("status").getAsString();
         boolean isOnline = "online".equals(status);
         String lastSeenStr = json.has("lastSeen") ? json.get("lastSeen").getAsString() : null;
+        peerOnlineByPeerId.put(peerId, isOnline);
         if (lastSeenStr != null) {
             peerLastSeenByPeerId.put(peerId, lastSeenStr);
         }
@@ -399,8 +401,20 @@ public class ChatView {
         }
 
 
-        // Tải lại avatar cho header
+        // Cap nhat trang thai online/offline header tu cache ngay lap tuc.
         Long peerId = peerIdByConversationId.get(conversationId);
+        if (peerId != null) {
+            Boolean cachedOnline = peerOnlineByPeerId.get(peerId);
+            String cachedLastSeen = peerLastSeenByPeerId.get(peerId);
+            if (cachedOnline != null) {
+                updateHeaderPresence(cachedOnline, cachedOnline ? null : cachedLastSeen);
+            } else {
+                // Chua co cache, hien Offline tam, loadConversations se cap nhat sau.
+                updateHeaderPresence(false, cachedLastSeen);
+            }
+        }
+
+        // Tải lại avatar cho header
         if (peerId != null) {
             if (headerChatName != null && headerChatName.getParent() != null && headerChatName.getParent().getParent() instanceof HBox) {
                 HBox header = (HBox) headerChatName.getParent().getParent();
@@ -643,13 +657,21 @@ public class ChatView {
 
     private static final DateTimeFormatter LAST_SEEN_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter LAST_SEEN_FMT_NANOS =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S");
 
     /**
      * Chuyen chuoi lastSeen "yyyy-MM-dd HH:mm:ss" thanh dang tuong doi tieng Viet.
      */
     private String formatRelativePresence(String lastSeenStr) {
         try {
-            LocalDateTime lastSeenTime = LocalDateTime.parse(lastSeenStr, LAST_SEEN_FMT);
+            LocalDateTime lastSeenTime;
+            try {
+                lastSeenTime = LocalDateTime.parse(lastSeenStr, LAST_SEEN_FMT);
+            } catch (Exception e1) {
+                // Fallback: Timestamp.toString() co the tra ve "yyyy-MM-dd HH:mm:ss.S"
+                lastSeenTime = LocalDateTime.parse(lastSeenStr.trim(), LAST_SEEN_FMT_NANOS);
+            }
             LocalDateTime now = LocalDateTime.now();
             long minutes = ChronoUnit.MINUTES.between(lastSeenTime, now);
 
@@ -695,6 +717,14 @@ public class ChatView {
             long peerId = conv.get("peerId").getAsLong();
             conversationIdByPeerId.put(peerId, conversationId);
             peerIdByConversationId.put(conversationId, peerId);
+            
+            // Cache trang thai online va lastSeen de su dung khi chuyen conversation.
+            if (conv.has("isOnline")) {
+                peerOnlineByPeerId.put(peerId, conv.get("isOnline").getAsBoolean());
+            }
+            if (conv.has("lastSeen")) {
+                peerLastSeenByPeerId.put(peerId, conv.get("lastSeen").getAsString());
+            }
             
             peerAvatarCircles.computeIfAbsent(peerId, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(avatar);
             loadPeerAvatar(peerId, avatar);
