@@ -21,6 +21,13 @@ public class GetMessagesHandler {
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
         try {
+            Long userId = conn.getUserId();
+            if (userId == null) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized");
+                return response;
+            }
+
             if (!request.has("conversationId")) {
                 logger.warn("[GET_MESSAGES] Remote={} | Missing conversationId",
                         conn.getRemoteAddress());
@@ -33,7 +40,24 @@ public class GetMessagesHandler {
             int offset = request.has("offset") ? request.get("offset").getAsInt() : 0;
 
             logger.info("[GET_MESSAGES] Remote={} | UserId={} | ConversationId={} | limit={} | offset={} | Fetching messages",
-                    conn.getRemoteAddress(), conn.getUserId(), conversationId, limit, offset);
+                    conn.getRemoteAddress(), userId, conversationId, limit, offset);
+
+            // Update statuses to SEEN for the recipient fetching them
+            com.server.repository.MessageStatusRepository msRepo = new com.server.repository.MessageStatusRepository();
+            msRepo.markAllAsSeen(conversationId, userId);
+
+            // Notify other members that this user has SEEN the messages in the conversation
+            java.util.List<Long> memberIds = new com.server.repository.ConversationRepository().getMemberIds(conversationId);
+            JsonObject statusEvent = new JsonObject();
+            statusEvent.addProperty("action", "MESSAGE_STATUS_EVENT");
+            statusEvent.addProperty("conversationId", conversationId);
+            statusEvent.addProperty("status", "SEEN");
+            statusEvent.addProperty("userId", userId);
+            for (Long memberId : memberIds) {
+                if (!memberId.equals(userId)) {
+                    com.server.tcp.TcpConnectionManager.getInstance().broadcastToUser(memberId, statusEvent);
+                }
+            }
 
             List<Message> messages;
             if (limit > 0) {
@@ -54,6 +78,17 @@ public class GetMessagesHandler {
                         conn.getRemoteAddress(), conversationId, messages.size());
             }
 
+            // Populate status in messages
+            java.util.Map<Long, com.server.model.MessageStatus.Status> statuses = msRepo.getStatusesForConversation(conversationId);
+            for (Message msg : messages) {
+                com.server.model.MessageStatus.Status status = statuses.get(msg.getId());
+                if (status != null) {
+                    msg.setStatus(status.name());
+                } else {
+                    msg.setStatus("SENT");
+                }
+            }
+
             response.addProperty("status", "success");
             response.addProperty("conversationId", conversationId);
             response.addProperty("count", messages.size());
@@ -69,3 +104,4 @@ public class GetMessagesHandler {
         return response;
     }
 }
+

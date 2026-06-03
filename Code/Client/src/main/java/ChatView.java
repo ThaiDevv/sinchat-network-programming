@@ -60,6 +60,8 @@ public class ChatView {
     private final java.util.Map<Long, Long> conversationIdByPeerId = new java.util.HashMap<>();
     private final java.util.Map<Long, Long> peerIdByConversationId = new java.util.HashMap<>();
     private final java.util.Map<Long, String> peerLastSeenByPeerId = new java.util.HashMap<>();
+    private final java.util.Map<Long, Label> messageStatusLabels = new java.util.HashMap<>();
+
 
     private Label typingLabel;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -161,6 +163,7 @@ public class ChatView {
 
         tcpClient.setOnUserStatusChange(this::onUserStatusChange);
         tcpClient.setOnUserAvatarChanged(this::onUserAvatarChanged);
+        tcpClient.setOnMessageStatusChanged(this::onMessageStatusChanged);
 
 
         tcpClient.setOnConnected(() -> {
@@ -175,6 +178,7 @@ public class ChatView {
         tcpClient.join(currentUserId);
         loadUserAvatar();
     }
+
 
     /**
      * Tai avatar nguoi dung sau khi client ket noi server.
@@ -252,6 +256,7 @@ public class ChatView {
         long conversationId = json.get("conversationId").getAsLong();
         long senderId = json.get("senderId").getAsLong();
         String content = json.get("content").getAsString();
+        long msgId = json.has("messageId") ? json.get("messageId").getAsLong() : -1;
 
         // Chi hien thi neu user dang mo dung conversation.
         if (conversationId == currentConversationId) {
@@ -261,9 +266,14 @@ public class ChatView {
             }
 
             if (senderId == currentUserId) {
-                addSentMessage(content);
+                String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
+                addSentMessage(content, msgId, status);
             } else {
                 addReceivedMessage(content);
+                // Mark as SEEN
+                if (msgId > 0 && tcpClient != null) {
+                    tcpClient.updateMessageStatus(currentConversationId, msgId, "SEEN");
+                }
             }
             scrollToBottom();
         }
@@ -271,6 +281,35 @@ public class ChatView {
         // Load lai danh sach conversation de item moi nhat duoc day len tren.
         Platform.runLater(this::loadConversations);
     }
+
+    private void onMessageStatusChanged(JsonObject json) {
+        long conversationId = json.has("conversationId") ? json.get("conversationId").getAsLong() : -1;
+        if (conversationId == currentConversationId) {
+            if (json.has("messageId")) {
+                long messageId = json.get("messageId").getAsLong();
+                String status = json.get("status").getAsString();
+                Platform.runLater(() -> {
+                    Label label = messageStatusLabels.get(messageId);
+                    if (label != null) {
+                        label.setText(getStatusLabelText(status));
+                    }
+                });
+            } else if (json.has("status") && "SEEN".equals(json.get("status").getAsString())) {
+                Platform.runLater(() -> {
+                    for (Label label : messageStatusLabels.values()) {
+                        label.setText("Read");
+                    }
+                });
+            }
+        }
+    }
+
+    private String getStatusLabelText(String status) {
+        if ("SEEN".equalsIgnoreCase(status)) return "Read";
+        if ("DELIVERED".equalsIgnoreCase(status)) return "Delivered";
+        return "Sent";
+    }
+
 
     /**
      * Xu ly khi nguoi ben kia dang go trong conversation hien tai.
@@ -460,6 +499,7 @@ public class ChatView {
 
                         if (reset) {
                             messagesBox.getChildren().clear();
+                            messageStatusLabels.clear();
                         }
 
                         // Chen tin nhan cu len dau danh sach.
@@ -468,17 +508,26 @@ public class ChatView {
                             JsonObject msg = element.getAsJsonObject();
                             long senderId = msg.get("senderId").getAsLong();
                             String content = msg.get("content").getAsString();
+                            long msgId = msg.get("id").getAsLong();
+                            String status = msg.has("status") ? msg.get("status").getAsString() : "SENT";
 
                             HBox wrapper = new HBox();
                             if (senderId == currentUserId) {
                                 wrapper.setAlignment(Pos.CENTER_RIGHT);
+                                VBox container = new VBox(2);
+                                container.setAlignment(Pos.BOTTOM_RIGHT);
                                 Label bubble = createMessageBubble(content, ACCENT, "18px 18px 4px 18px");
-                                wrapper.getChildren().add(bubble);
+                                Label statusLabel = new Label(getStatusLabelText(status));
+                                statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
+                                messageStatusLabels.put(msgId, statusLabel);
+                                container.getChildren().addAll(bubble, statusLabel);
+                                wrapper.getChildren().add(container);
                             } else {
                                 wrapper.setAlignment(Pos.CENTER_LEFT);
                                 Label bubble = createMessageBubble(content, "#1e1e1e", "18px 18px 18px 4px");
                                 wrapper.getChildren().add(bubble);
                             }
+
                             messagesBox.getChildren().add(insertIndex++, wrapper);
                         }
 
@@ -1280,14 +1329,25 @@ public class ChatView {
         messagesBox.getChildren().add(wrapper);
     }
 
-    private void addSentMessage(String text) {
+    private void addSentMessage(String text, long msgId, String status) {
         HBox wrapper = new HBox();
         wrapper.setAlignment(Pos.CENTER_RIGHT);
 
+        VBox container = new VBox(2);
+        container.setAlignment(Pos.BOTTOM_RIGHT);
+
         Label bubble = createMessageBubble(text, ACCENT, "18px 18px 4px 18px");
-        wrapper.getChildren().add(bubble);
+        Label statusLabel = new Label(getStatusLabelText(status));
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
+        if (msgId > 0) {
+            messageStatusLabels.put(msgId, statusLabel);
+        }
+
+        container.getChildren().addAll(bubble, statusLabel);
+        wrapper.getChildren().add(container);
         messagesBox.getChildren().add(wrapper);
     }
+
 
     private Label createMessageBubble(String text, String backgroundColor, String radius) {
         Label bubble = new Label(text);
