@@ -96,7 +96,14 @@ public class ChatView {
     private boolean isLoadingMore = false;
     private static final int PAGE_SIZE = 50;
 
+    // Co nay ngan scroll listener khi dang load tin nhan lan dau (reset).
+    // Khi reset, VBox bi xoa trang -> vvalue giam ve 0 -> scroll listener se hieu nham
+    // la user keo len va load them tin nhan cu. Co nay chan hanh vi do.
+    private boolean pendingScrollToBottom = false;
+
     private final javafx.beans.value.ChangeListener<Number> scrollListener = (obs, oldVal, newVal) -> {
+        // Khi dang cho scroll xuong cuoi (reset) thi khong load them tin nhan cu.
+        if (pendingScrollToBottom) return;
         // Khi scroll len dau thi load them tin nhan cu.
         if (newVal.doubleValue() < 0.05 && hasMoreMessages && !isLoadingMore && currentConversationId > 0) {
             loadMessagesForCurrentConversation(false);
@@ -388,10 +395,25 @@ public class ChatView {
 
     /**
      * Cuon xuong cuoi danh sach tin nhan.
+     * Dung applyCss() + layout() de dam bao JavaFX da tinh xong kich thuoc noi dung
+     * truoc khi dat vvalue = 1.0, tranh loi cuon khong den cuoi.
      */
     private void scrollToBottom() {
+        pendingScrollToBottom = true;
         javafx.application.Platform.runLater(() -> {
+            // Buoc JavaFX tinh lai layout truoc khi cuon.
+            messagesBox.applyCss();
+            messagesBox.layout();
+            scrollMessages.applyCss();
+            scrollMessages.layout();
             scrollMessages.setVvalue(1.0);
+
+            // Lan runLater thu hai: dam bao du cho truong hop layout chua xong hoan toan
+            // (vi du khi co nhieu tin nhan hoac hinh anh thay doi kich thuoc).
+            javafx.application.Platform.runLater(() -> {
+                scrollMessages.setVvalue(1.0);
+                pendingScrollToBottom = false;
+            });
         });
     }
 
