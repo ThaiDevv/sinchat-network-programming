@@ -22,6 +22,7 @@ public class TcpServer {
     private ServerSocket serverSocket;
     private volatile boolean running = false;
     private IdleConnectionSweeper idleConnectionSweeper;
+    private LanDiscoveryBroadcaster lanDiscoveryBroadcaster;
     private final UserRepository userRepository;
 
     public TcpServer(int port, boolean tlsEnabled, long idleTimeoutMillis) {
@@ -46,6 +47,10 @@ public class TcpServer {
                 idleTimeoutMillis
         );
         idleConnectionSweeper.start();
+
+        // Start LAN auto-discovery so clients can find this server
+        lanDiscoveryBroadcaster = new LanDiscoveryBroadcaster(port);
+        lanDiscoveryBroadcaster.start();
 
         new Thread(() -> {
             try {
@@ -88,6 +93,9 @@ public class TcpServer {
     public void stop() {
         logger.info("[TcpServer] Stopping server...");
         running = false;
+        if (lanDiscoveryBroadcaster != null) {
+            lanDiscoveryBroadcaster.stop();
+        }
         if (idleConnectionSweeper != null) {
             idleConnectionSweeper.stop();
         }
