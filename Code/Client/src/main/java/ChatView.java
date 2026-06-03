@@ -1317,30 +1317,6 @@ public class ChatView {
             sender = "Nguoi dung";
         }
 
-        Label meta = new Label(sender + (createdAt.isBlank() ? "" : " • " + createdAt));
-        meta.setStyle("""
-                -fx-text-fill: %s;
-                -fx-font-size: 11px;
-                """.formatted(TEXT_DIM));
-
-        Label contentLabel = new Label(content);
-        contentLabel.setWrapText(true);
-        contentLabel.setStyle("""
-                -fx-text-fill: %s;
-                -fx-font-size: 13px;
-                """.formatted(TEXT_WHITE));
-
-        Label avatarText = new Label(sender.isBlank() ? "?" : sender.substring(0, 1).toUpperCase());
-        avatarText.setStyle("""
-                -fx-text-fill: %s;
-                -fx-font-size: 14px;
-                -fx-font-weight: bold;
-                """.formatted(TEXT_WHITE));
-        Circle avatar = new Circle(20);
-        avatar.setFill(Color.web(senderId == currentUserId ? ACCENT : "#444444"));
-        StackPane avatarNode = new StackPane(avatar, avatarText);
-        avatarNode.setMinSize(44, 44);
-
         Label senderLabel = new Label(sender);
         senderLabel.setStyle("""
                 -fx-text-fill: %s;
@@ -1357,17 +1333,9 @@ public class ChatView {
                 -fx-font-size: 12px;
                 """.formatted(TEXT_MUTED));
 
-        VBox textBox = new VBox(3, senderLabel, previewLabel);
-        textBox.setAlignment(Pos.CENTER_LEFT);
-        textBox.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(textBox, Priority.ALWAYS);
-        HBox row = new HBox(10, avatarNode, textBox);
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.setMaxWidth(Double.MAX_VALUE);
-
-        VBox item = new VBox(row);
+        VBox item = new VBox(3, senderLabel, previewLabel);
         item.setMaxWidth(Double.MAX_VALUE);
-        item.setPadding(new Insets(10, 14, 10, 14));
+        item.setPadding(new Insets(12, 14, 12, 14));
         item.setCursor(javafx.scene.Cursor.HAND);
         styleMessageSearchItem(item, false, false);
         item.setOnMouseEntered(e -> styleMessageSearchItem(item, resultIndex == activeMessageSearchIndex, true));
