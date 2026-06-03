@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Client",
+			"type": "shell",
+			"command": "cd C:\\Users\\ngnsusinn\\Documents\\GitHub\\Network-Programming-project\\Code\\Client && mvn clean compile -q",
+			"group": "build"
+		},
+		{
+			"label": "Build Server",
+			"type": "shell",
+			"command": "cd C:\\Users\\ngnsusinn\\Documents\\GitHub\\Network-Programming-project\\Code\\Server && mvn clean compile -q -DskipTests",
+			"group": "build"
+		}
+	]
+}

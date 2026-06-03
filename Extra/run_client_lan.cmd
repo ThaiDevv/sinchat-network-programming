@@ -1,9 +1,13 @@
 @echo off
-title SinChat Client Launcher
-color 0A
+title SinChat Client - LAN Auto-Discovery
+color 0E
 echo ===================================================
-echo             STARTING SINCHAT TCP CLIENT            
+echo     STARTING SINCHAT TCP CLIENT (LAN DISCOVERY)     
 echo ===================================================
+echo.
+echo [Mode] TCP LAN auto-discovery ENABLED (port 9999)
+echo        Client will probe the local subnet for a SinChat server.
+echo        Set TCP_HOST env var to override with a fixed IP.
 echo.
 
 :: Navigate to Client directory
@@ -22,7 +26,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo [2/2] Launching JavaFX Client...
+echo [2/2] Launching JavaFX Client (LAN auto-discovery)...
 echo ===================================================
 call mvn javafx:run
 if %ERRORLEVEL% NEQ 0 (

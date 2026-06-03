@@ -7,10 +7,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import java.sql.*;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ConversationRepository {
+    private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     public Long findPrivateConversation(long user1Id, long user2Id) {
         String query = "SELECT c.id FROM conversations c " +
                 "JOIN conversation_members cm1 ON c.id = cm1.conversation_id " +
@@ -152,7 +155,7 @@ public class ConversationRepository {
 
                     Timestamp lastSeen = rs.getTimestamp("last_seen");
                     if (lastSeen != null) {
-                        obj.addProperty("lastSeen", lastSeen.toString());
+                        obj.addProperty("lastSeen", TS_FMT.format(lastSeen.toLocalDateTime()));
                     }
 
                     String lastMessage = rs.getString("last_message");
