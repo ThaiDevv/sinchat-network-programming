@@ -9,8 +9,8 @@ echo.
 :: Navigate to Client directory
 cd /d "%~dp0..\Code\Client"
 
-echo [1/2] Compiling Client code...
-call mvn compile
+echo [1/2] Cleaning and Compiling Client code...
+call mvn clean compile
 if %ERRORLEVEL% NEQ 0 (
     color 0C
     echo.

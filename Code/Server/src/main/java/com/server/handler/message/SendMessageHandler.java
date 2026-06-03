@@ -52,11 +52,14 @@ public class SendMessageHandler {
             long msgId = messageService.sendMessage(conversationId, senderId, content);
             logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored",
                     conn.getRemoteAddress(), senderId, conversationId, msgId);
+            com.server.model.MessageStatus.Status collectiveStatus = new com.server.repository.MessageStatusRepository().getCollectiveStatus(msgId);
+
             response.addProperty("status", "success");
             response.addProperty("messageId", msgId);
             response.addProperty("conversationId", conversationId);
             response.addProperty("senderId", senderId);
             response.addProperty("content", content);
+            response.addProperty("messageStatus", collectiveStatus.name());
 
             // Broadcast new message to all members in the conversation
             java.util.List<Long> memberIds = getMemberIds(conversationId);
@@ -70,6 +73,8 @@ public class SendMessageHandler {
             broadcastMsg.addProperty("senderId", senderId);
             broadcastMsg.addProperty("content", content);
             broadcastMsg.addProperty("messageId", msgId);
+            broadcastMsg.addProperty("messageStatus", collectiveStatus.name());
+
 
             for (Long memberId : memberIds) {
                 logger.info("[SEND_MESSAGE BROADCAST] MessageId={} | Broadcasting to memberId={}",

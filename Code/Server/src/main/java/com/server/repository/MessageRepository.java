@@ -2,6 +2,7 @@ package com.server.repository;
 
 import com.server.config.Database;
 import com.server.model.Message;
+import com.server.model.MessageSearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,12 +77,14 @@ public class MessageRepository {
         return messages;
     }
 
-    public List<Message> searchByConversation(long conversationId, String keyword, int limit, int offset) {
-        List<Message> messages = new ArrayList<>();
-        String query = "SELECT id, conversation_id, sender_id, type, content, created_at " +
-                "FROM messages " +
-                "WHERE conversation_id = ? AND LOWER(content) LIKE LOWER(?) " +
-                "ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    public List<MessageSearchResult> searchByConversation(long conversationId, String keyword, int limit, int offset) {
+        List<MessageSearchResult> messages = new ArrayList<>();
+        String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, " +
+                "m.type, m.content, m.created_at " +
+                "FROM messages m " +
+                "JOIN users u ON u.id = m.sender_id " +
+                "WHERE m.conversation_id = ? AND LOWER(m.content) LIKE LOWER(?) " +
+                "ORDER BY m.created_at DESC LIMIT ? OFFSET ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, conversationId);
@@ -89,7 +92,7 @@ public class MessageRepository {
             pstmt.setInt(3, limit);
             pstmt.setInt(4, offset);
             try (ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) messages.add(mapRow(rs));
+                while (rs.next()) messages.add(mapSearchRow(rs));
             }
         } catch (SQLException e) {
             logger.error("Error searching messages for conversation: {}", conversationId, e);
@@ -102,6 +105,18 @@ public class MessageRepository {
                 rs.getLong("id"),
                 rs.getLong("conversation_id"),
                 rs.getLong("sender_id"),
+                Message.MessageType.valueOf(rs.getString("type")),
+                rs.getString("content"),
+                rs.getTimestamp("created_at")
+        );
+    }
+
+    private MessageSearchResult mapSearchRow(ResultSet rs) throws SQLException {
+        return new MessageSearchResult(
+                rs.getLong("id"),
+                rs.getLong("conversation_id"),
+                rs.getLong("sender_id"),
+                rs.getString("sender_username"),
                 Message.MessageType.valueOf(rs.getString("type")),
                 rs.getString("content"),
                 rs.getTimestamp("created_at")

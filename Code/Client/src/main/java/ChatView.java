@@ -47,7 +47,12 @@ public class ChatView {
     private TextField messageSearchField;
     private VBox messageSearchPanel;
     private VBox messageSearchResults;
+    private ScrollPane messageSearchResultsScroll;
     private Label messageSearchStatus;
+    private HBox messageSearchNavigator;
+    private Label messageSearchCounter;
+    private Button messageSearchPrevBtn;
+    private Button messageSearchNextBtn;
     private Label headerChatName;
     private Label chatStatus;
 
@@ -60,6 +65,15 @@ public class ChatView {
     private final java.util.Map<Long, Long> conversationIdByPeerId = new java.util.HashMap<>();
     private final java.util.Map<Long, Long> peerIdByConversationId = new java.util.HashMap<>();
     private final java.util.Map<Long, String> peerLastSeenByPeerId = new java.util.HashMap<>();
+    private final java.util.Map<Long, Label> messageStatusLabels = new java.util.HashMap<>();
+    private final java.util.Map<Long, Boolean> peerOnlineByPeerId = new java.util.HashMap<>();
+    private final java.util.Map<Long, Label> messageBubbleById = new java.util.HashMap<>();
+    private final java.util.List<JsonObject> messageSearchMatches = new java.util.ArrayList<>();
+    private final java.util.List<VBox> messageSearchItems = new java.util.ArrayList<>();
+    private Label highlightedMessageBubble;
+    private String highlightedMessageStyle;
+    private int activeMessageSearchIndex = -1;
+    private String activeMessageSearchKeyword = "";
 
     private Label typingLabel;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -161,6 +175,7 @@ public class ChatView {
 
         tcpClient.setOnUserStatusChange(this::onUserStatusChange);
         tcpClient.setOnUserAvatarChanged(this::onUserAvatarChanged);
+        tcpClient.setOnMessageStatusChanged(this::onMessageStatusChanged);
 
 
         tcpClient.setOnConnected(() -> {
@@ -175,6 +190,7 @@ public class ChatView {
         tcpClient.join(currentUserId);
         loadUserAvatar();
     }
+
 
     /**
      * Tai avatar nguoi dung sau khi client ket noi server.
@@ -252,6 +268,8 @@ public class ChatView {
         long conversationId = json.get("conversationId").getAsLong();
         long senderId = json.get("senderId").getAsLong();
         String content = json.get("content").getAsString();
+        long messageId = json.has("messageId") ? json.get("messageId").getAsLong() : -1;
+
 
         // Chi hien thi neu user dang mo dung conversation.
         if (conversationId == currentConversationId) {
@@ -261,16 +279,51 @@ public class ChatView {
             }
 
             if (senderId == currentUserId) {
-                addSentMessage(content);
+                String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
+                addSentMessage(content, messageId, status);
             } else {
-                addReceivedMessage(content);
+                addReceivedMessage(content, messageId);
+                // Mark as SEEN
+                if (messageId > 0 && tcpClient != null) {
+                    tcpClient.updateMessageStatus(currentConversationId, messageId, "SEEN");
+                }
             }
             scrollToBottom();
         }
 
+
         // Load lai danh sach conversation de item moi nhat duoc day len tren.
         Platform.runLater(this::loadConversations);
     }
+
+    private void onMessageStatusChanged(JsonObject json) {
+        long conversationId = json.has("conversationId") ? json.get("conversationId").getAsLong() : -1;
+        if (conversationId == currentConversationId) {
+            if (json.has("messageId")) {
+                long messageId = json.get("messageId").getAsLong();
+                String status = json.get("status").getAsString();
+                Platform.runLater(() -> {
+                    Label label = messageStatusLabels.get(messageId);
+                    if (label != null) {
+                        label.setText(getStatusLabelText(status));
+                    }
+                });
+            } else if (json.has("status") && "SEEN".equals(json.get("status").getAsString())) {
+                Platform.runLater(() -> {
+                    for (Label label : messageStatusLabels.values()) {
+                        label.setText("Read");
+                    }
+                });
+            }
+        }
+    }
+
+    private String getStatusLabelText(String status) {
+        if ("SEEN".equalsIgnoreCase(status)) return "Read";
+        if ("DELIVERED".equalsIgnoreCase(status)) return "Delivered";
+        return "Sent";
+    }
+
 
     /**
      * Xu ly khi nguoi ben kia dang go trong conversation hien tai.
@@ -313,6 +366,7 @@ public class ChatView {
         String status = json.get("status").getAsString();
         boolean isOnline = "online".equals(status);
         String lastSeenStr = json.has("lastSeen") ? json.get("lastSeen").getAsString() : null;
+        peerOnlineByPeerId.put(peerId, isOnline);
         if (lastSeenStr != null) {
             peerLastSeenByPeerId.put(peerId, lastSeenStr);
         }
@@ -387,6 +441,9 @@ public class ChatView {
         this.currentConversationId = conversationId;
         // Xoa tin nhan cu tren UI.
         messagesBox.getChildren().clear();
+        messageBubbleById.clear();
+        highlightedMessageBubble = null;
+        highlightedMessageStyle = null;
         clearMessageSearchResults();
         // Reset phan trang cho conversation moi.
         currentMessageOffset = 0;
@@ -399,8 +456,20 @@ public class ChatView {
         }
 
 
-        // Tải lại avatar cho header
+        // Cap nhat trang thai online/offline header tu cache ngay lap tuc.
         Long peerId = peerIdByConversationId.get(conversationId);
+        if (peerId != null) {
+            Boolean cachedOnline = peerOnlineByPeerId.get(peerId);
+            String cachedLastSeen = peerLastSeenByPeerId.get(peerId);
+            if (cachedOnline != null) {
+                updateHeaderPresence(cachedOnline, cachedOnline ? null : cachedLastSeen);
+            } else {
+                // Chua co cache, hien Offline tam, loadConversations se cap nhat sau.
+                updateHeaderPresence(false, cachedLastSeen);
+            }
+        }
+
+        // Tải lại avatar cho header
         if (peerId != null) {
             if (headerChatName != null && headerChatName.getParent() != null && headerChatName.getParent().getParent() instanceof HBox) {
                 HBox header = (HBox) headerChatName.getParent().getParent();
@@ -455,41 +524,11 @@ public class ChatView {
                             return;
                         }
 
-                        JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
-                        JsonArray messages = json.getAsJsonArray("messages");
-
                         if (reset) {
-                            messagesBox.getChildren().clear();
+                            messageStatusLabels.clear();
                         }
+                        renderMessagesPage(response.rawBody(), reset, capturedConversationId, offset);
 
-                        // Chen tin nhan cu len dau danh sach.
-                        int insertIndex = 0;
-                        for (JsonElement element : messages) {
-                            JsonObject msg = element.getAsJsonObject();
-                            long senderId = msg.get("senderId").getAsLong();
-                            String content = msg.get("content").getAsString();
-
-                            HBox wrapper = new HBox();
-                            if (senderId == currentUserId) {
-                                wrapper.setAlignment(Pos.CENTER_RIGHT);
-                                Label bubble = createMessageBubble(content, ACCENT, "18px 18px 4px 18px");
-                                wrapper.getChildren().add(bubble);
-                            } else {
-                                wrapper.setAlignment(Pos.CENTER_LEFT);
-                                Label bubble = createMessageBubble(content, "#1e1e1e", "18px 18px 18px 4px");
-                                wrapper.getChildren().add(bubble);
-                            }
-                            messagesBox.getChildren().add(insertIndex++, wrapper);
-                        }
-
-                        // Cap nhat phan trang theo hasMore server tra ve.
-                        int msgCount = messages.size();
-                        currentMessageOffset = offset + msgCount;
-                        if (json.has("hasMore")) {
-                            hasMoreMessages = json.get("hasMore").getAsBoolean();
-                        } else {
-                            hasMoreMessages = msgCount >= PAGE_SIZE;
-                        }
 
                         // Load moi thi cuon xuong cuoi, load them thi giu vi tri.
                         if (reset) {
@@ -549,6 +588,66 @@ public class ChatView {
             }
         });
     }
+
+    private void renderMessagesPage(String rawBody, boolean reset, long capturedConversationId, int offset) {
+        if (this.currentConversationId != capturedConversationId) return;
+
+        JsonObject json = gson.fromJson(rawBody, JsonObject.class);
+        JsonArray messages = json.getAsJsonArray("messages");
+
+        if (reset) {
+            messagesBox.getChildren().clear();
+            messageBubbleById.clear();
+            messageStatusLabels.clear();
+            highlightedMessageBubble = null;
+            highlightedMessageStyle = null;
+        }
+
+        // Gan messageId vao bubble de ket qua search co the cuon toi dung tin.
+        int insertIndex = 0;
+        for (JsonElement element : messages) {
+            JsonObject msg = element.getAsJsonObject();
+            long messageId = msg.has("id") ? msg.get("id").getAsLong() : -1;
+            long senderId = msg.get("senderId").getAsLong();
+            String content = msg.get("content").getAsString();
+            String status = msg.has("status") ? msg.get("status").getAsString() : "SENT";
+
+            HBox wrapper;
+            if (senderId == currentUserId) {
+                wrapper = new HBox();
+                wrapper.setAlignment(Pos.CENTER_RIGHT);
+
+                VBox container = new VBox(2);
+                container.setAlignment(Pos.BOTTOM_RIGHT);
+
+                Label bubble = createMessageBubble(content, ACCENT, "18px 18px 4px 18px");
+                if (messageId > 0) {
+                    messageBubbleById.put(messageId, bubble);
+                }
+
+                Label statusLabel = new Label(getStatusLabelText(status));
+                statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
+                if (messageId > 0) {
+                    messageStatusLabels.put(messageId, statusLabel);
+                }
+
+                container.getChildren().addAll(bubble, statusLabel);
+                wrapper.getChildren().add(container);
+            } else {
+                wrapper = createMessageWrapper(senderId, content, messageId);
+            }
+            messagesBox.getChildren().add(insertIndex++, wrapper);
+        }
+
+        int msgCount = messages.size();
+        currentMessageOffset = offset + msgCount;
+        if (json.has("hasMore")) {
+            hasMoreMessages = json.get("hasMore").getAsBoolean();
+        } else {
+            hasMoreMessages = msgCount >= PAGE_SIZE;
+        }
+    }
+
 
     private void loadConversations() {
         statusDotsByPeerId.clear();
@@ -643,13 +742,21 @@ public class ChatView {
 
     private static final DateTimeFormatter LAST_SEEN_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter LAST_SEEN_FMT_NANOS =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S");
 
     /**
      * Chuyen chuoi lastSeen "yyyy-MM-dd HH:mm:ss" thanh dang tuong doi tieng Viet.
      */
     private String formatRelativePresence(String lastSeenStr) {
         try {
-            LocalDateTime lastSeenTime = LocalDateTime.parse(lastSeenStr, LAST_SEEN_FMT);
+            LocalDateTime lastSeenTime;
+            try {
+                lastSeenTime = LocalDateTime.parse(lastSeenStr, LAST_SEEN_FMT);
+            } catch (Exception e1) {
+                // Fallback: Timestamp.toString() co the tra ve "yyyy-MM-dd HH:mm:ss.S"
+                lastSeenTime = LocalDateTime.parse(lastSeenStr.trim(), LAST_SEEN_FMT_NANOS);
+            }
             LocalDateTime now = LocalDateTime.now();
             long minutes = ChronoUnit.MINUTES.between(lastSeenTime, now);
 
@@ -695,6 +802,14 @@ public class ChatView {
             long peerId = conv.get("peerId").getAsLong();
             conversationIdByPeerId.put(peerId, conversationId);
             peerIdByConversationId.put(conversationId, peerId);
+            
+            // Cache trang thai online va lastSeen de su dung khi chuyen conversation.
+            if (conv.has("isOnline")) {
+                peerOnlineByPeerId.put(peerId, conv.get("isOnline").getAsBoolean());
+            }
+            if (conv.has("lastSeen")) {
+                peerLastSeenByPeerId.put(peerId, conv.get("lastSeen").getAsString());
+            }
             
             peerAvatarCircles.computeIfAbsent(peerId, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(avatar);
             loadPeerAvatar(peerId, avatar);
@@ -995,16 +1110,55 @@ public class ChatView {
                 -fx-font-size: 12px;
                 """.formatted(TEXT_MUTED));
 
+        messageSearchCounter = new Label("");
+        messageSearchCounter.setMinWidth(48);
+        messageSearchCounter.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                -fx-font-weight: bold;
+                """.formatted(TEXT_WHITE));
+
+        messageSearchPrevBtn = createSearchNavButton("^");
+        messageSearchNextBtn = createSearchNavButton("v");
+        Button messageSearchCloseBtn = createSearchNavButton("x");
+        messageSearchPrevBtn.setOnAction(e -> openRelativeMessageSearchResult(-1));
+        messageSearchNextBtn.setOnAction(e -> openRelativeMessageSearchResult(1));
+        messageSearchCloseBtn.setOnAction(e -> clearMessageSearchResults());
+
+        messageSearchNavigator = new HBox(8, messageSearchCounter, messageSearchPrevBtn, messageSearchNextBtn, messageSearchCloseBtn);
+        messageSearchNavigator.setAlignment(Pos.CENTER_LEFT);
+        messageSearchNavigator.setVisible(false);
+        messageSearchNavigator.setManaged(false);
+
         messageSearchResults = new VBox(6);
-        messageSearchPanel = new VBox(8, messageSearchStatus, messageSearchResults);
-        messageSearchPanel.setPadding(new Insets(10, 24, 10, 24));
+        messageSearchResults.setMaxWidth(Double.MAX_VALUE);
+        messageSearchResultsScroll = new ScrollPane(messageSearchResults);
+        messageSearchResultsScroll.setFitToWidth(true);
+        messageSearchResultsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        messageSearchResultsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        messageSearchResultsScroll.setMaxWidth(Double.MAX_VALUE);
+        messageSearchResultsScroll.setMaxHeight(Double.MAX_VALUE);
+        messageSearchResultsScroll.setVisible(false);
+        messageSearchResultsScroll.setManaged(false);
+        messageSearchResultsScroll.setStyle("""
+                -fx-background: transparent;
+                -fx-background-color: transparent;
+                -fx-viewport-background-color: transparent;
+                -fx-border-color: transparent;
+                """);
+        VBox.setVgrow(messageSearchResultsScroll, Priority.ALWAYS);
+
+        messageSearchPanel = new VBox(8, messageSearchStatus, messageSearchNavigator, messageSearchResultsScroll);
+        messageSearchPanel.setFillWidth(true);
+        messageSearchPanel.setPadding(new Insets(14, 24, 14, 24));
         messageSearchPanel.setVisible(false);
         messageSearchPanel.setManaged(false);
         messageSearchPanel.setStyle("""
-                -fx-background-color: #0f0f0f;
+                -fx-background-color: #101010;
                 -fx-border-color: %s;
                 -fx-border-width: 0 0 1 0;
                 """.formatted(BORDER_COLOR));
+        VBox.setVgrow(messageSearchPanel, Priority.ALWAYS);
 
         // Vung hien thi tin nhan.
         messagesBox = new VBox(12);
@@ -1139,6 +1293,24 @@ public class ChatView {
         return btn;
     }
 
+    private Button createSearchNavButton(String text) {
+        Button btn = new Button(text);
+        btn.setMinSize(28, 26);
+        btn.setPrefSize(28, 26);
+        btn.setStyle("""
+                -fx-background-color: #202020;
+                -fx-border-color: %s;
+                -fx-border-width: 1px;
+                -fx-border-radius: 13px;
+                -fx-background-radius: 13px;
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                -fx-font-weight: bold;
+                -fx-cursor: hand;
+                """.formatted(BORDER_COLOR, TEXT_WHITE));
+        return btn;
+    }
+
     private void searchMessagesInCurrentConversation() {
         if (messageSearchField == null) return;
 
@@ -1148,7 +1320,8 @@ public class ChatView {
             return;
         }
 
-        if (keyword.length() < 2) {
+        // Cho phep tim ca 1 ky tu, giong Messenger.
+        if (keyword.length() < 1) {
             showMessageSearchStatus("Nhập ít nhất 2 ký tự để tìm.", true);
             return;
         }
@@ -1165,6 +1338,8 @@ public class ChatView {
 
         long capturedConversationId = currentConversationId;
         showMessageSearchStatus("Đang tìm tin nhắn...", false);
+
+        resetMessageSearchState(false);
 
         CompletableFuture
                 .supplyAsync(() -> tcpClient.searchMessages(capturedConversationId, keyword, 20, 0))
@@ -1191,24 +1366,40 @@ public class ChatView {
             JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
             JsonArray messages = json.getAsJsonArray("messages");
             messageSearchResults.getChildren().clear();
+            messageSearchMatches.clear();
+            messageSearchItems.clear();
+            activeMessageSearchIndex = -1;
+            activeMessageSearchKeyword = keyword;
 
             if (messages == null || messages.isEmpty()) {
                 showMessageSearchStatus("Không có tin nhắn phù hợp.", false);
+                updateMessageSearchNavigator();
+                showSearchResultsView(true);
                 return;
             }
 
             showMessageSearchStatus("Tìm thấy " + messages.size() + " kết quả cho: " + keyword, false);
+            int index = 0;
             for (JsonElement element : messages) {
-                messageSearchResults.getChildren().add(createMessageSearchResultItem(element.getAsJsonObject()));
+                JsonObject message = element.getAsJsonObject();
+                messageSearchMatches.add(message);
+                VBox item = createMessageSearchResultItem(message, index++);
+                messageSearchItems.add(item);
+                messageSearchResults.getChildren().add(item);
             }
+            activeMessageSearchIndex = 0;
+            updateMessageSearchNavigator();
+            showSearchResultsView(true);
         } catch (Exception e) {
             showMessageSearchStatus("Không đọc được kết quả tìm kiếm.", true);
         }
     }
 
-    private VBox createMessageSearchResultItem(JsonObject message) {
+    private VBox createMessageSearchResultItem(JsonObject message, int resultIndex) {
+        long messageId = message.has("id") ? message.get("id").getAsLong() : -1;
+        long conversationId = message.has("conversationId") ? message.get("conversationId").getAsLong() : currentConversationId;
         long senderId = message.has("senderId") ? message.get("senderId").getAsLong() : -1;
-        String sender = senderId == currentUserId ? "Bạn" : "User #" + senderId;
+        String sender = senderId == currentUserId ? "Bạn" : "";
         String content = message.has("content") && !message.get("content").isJsonNull()
                 ? message.get("content").getAsString()
                 : "";
@@ -1216,32 +1407,274 @@ public class ChatView {
                 ? message.get("createdAt").getAsString()
                 : "";
 
-        Label meta = new Label(sender + (createdAt.isBlank() ? "" : " • " + createdAt));
-        meta.setStyle("""
-                -fx-text-fill: %s;
-                -fx-font-size: 11px;
-                """.formatted(TEXT_DIM));
+        String senderUsername = message.has("senderUsername") && !message.get("senderUsername").isJsonNull()
+                ? message.get("senderUsername").getAsString()
+                : "";
+        if (senderId != currentUserId && !senderUsername.isBlank()) {
+            sender = senderUsername;
+        } else if (sender.isBlank()) {
+            sender = "Nguoi dung";
+        }
 
-        Label contentLabel = new Label(content);
-        contentLabel.setWrapText(true);
-        contentLabel.setStyle("""
+        Label senderLabel = new Label(sender);
+        senderLabel.setStyle("""
                 -fx-text-fill: %s;
-                -fx-font-size: 13px;
+                -fx-font-size: 14px;
+                -fx-font-weight: bold;
                 """.formatted(TEXT_WHITE));
 
-        VBox item = new VBox(3, meta, contentLabel);
-        item.setPadding(new Insets(8, 10, 8, 10));
-        item.setStyle("""
-                -fx-background-color: #181818;
-                -fx-border-color: %s;
-                -fx-border-width: 1px;
-                -fx-border-radius: 8px;
-                -fx-background-radius: 8px;
-                """.formatted(BORDER_COLOR));
+        Label previewLabel = new Label(buildSearchPreview(content, createdAt));
+        previewLabel.setMaxWidth(Double.MAX_VALUE);
+        previewLabel.setWrapText(false);
+        previewLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
+        previewLabel.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                """.formatted(TEXT_MUTED));
+
+        VBox item = new VBox(3, senderLabel, previewLabel);
+        item.setMaxWidth(Double.MAX_VALUE);
+        item.setPadding(new Insets(12, 14, 12, 14));
+        item.setCursor(javafx.scene.Cursor.HAND);
+        styleMessageSearchItem(item, false, false);
+        item.setOnMouseEntered(e -> styleMessageSearchItem(item, resultIndex == activeMessageSearchIndex, true));
+        item.setOnMouseExited(e -> styleMessageSearchItem(item, resultIndex == activeMessageSearchIndex, false));
+        item.setOnMouseClicked(e -> jumpToMessageSearchResultAt(resultIndex));
         return item;
     }
 
+    private String buildSearchPreview(String content, String createdAt) {
+        String safeContent = content == null || content.isBlank() ? "(khong co noi dung)" : content.trim();
+        if (createdAt == null || createdAt.isBlank()) {
+            return safeContent;
+        }
+        return safeContent + " - " + createdAt;
+    }
+
+    private void openRelativeMessageSearchResult(int direction) {
+        if (messageSearchMatches.isEmpty()) return;
+        int nextIndex = activeMessageSearchIndex + direction;
+        if (nextIndex < 0) {
+            nextIndex = messageSearchMatches.size() - 1;
+        } else if (nextIndex >= messageSearchMatches.size()) {
+            nextIndex = 0;
+        }
+        selectMessageSearchResultAt(nextIndex);
+    }
+
+    private void openMessageSearchResultAt(int index) {
+        jumpToMessageSearchResultAt(index);
+    }
+
+    private void selectMessageSearchResultAt(int index) {
+        if (index < 0 || index >= messageSearchMatches.size()) return;
+
+        activeMessageSearchIndex = index;
+        updateMessageSearchNavigator();
+    }
+
+    private void jumpToMessageSearchResultAt(int index) {
+        if (index < 0 || index >= messageSearchMatches.size()) return;
+
+        selectMessageSearchResultAt(index);
+
+        JsonObject message = messageSearchMatches.get(index);
+        long messageId = message.has("id") ? message.get("id").getAsLong() : -1;
+        long conversationId = message.has("conversationId") ? message.get("conversationId").getAsLong() : currentConversationId;
+        showSearchResultsView(false);
+        openMessageFromSearch(conversationId, messageId);
+    }
+
+    private void showSearchResultsView(boolean show) {
+        if (messageSearchPanel != null) {
+            messageSearchPanel.setVisible(show);
+            messageSearchPanel.setManaged(show);
+        }
+        if (!show) {
+            if (messageSearchNavigator != null) {
+                messageSearchNavigator.setVisible(false);
+                messageSearchNavigator.setManaged(false);
+            }
+            if (messageSearchResultsScroll != null) {
+                messageSearchResultsScroll.setVisible(false);
+                messageSearchResultsScroll.setManaged(false);
+            }
+        }
+        if (scrollMessages != null) {
+            scrollMessages.setVisible(!show);
+            scrollMessages.setManaged(!show);
+        }
+
+        // Khi dang xem ket qua tim kiem thi an dong typing de bo cuc khong bi chen.
+        if (typingLabel != null) {
+            typingLabel.setManaged(!show);
+            if (show) {
+                typingLabel.setVisible(false);
+            }
+        }
+    }
+
+    private void updateMessageSearchNavigator() {
+        boolean hasMatches = !messageSearchMatches.isEmpty();
+        if (messageSearchNavigator != null) {
+            messageSearchNavigator.setVisible(hasMatches);
+            messageSearchNavigator.setManaged(hasMatches);
+        }
+        if (messageSearchResultsScroll != null) {
+            messageSearchResultsScroll.setVisible(hasMatches);
+            messageSearchResultsScroll.setManaged(hasMatches);
+        }
+        if (messageSearchCounter != null) {
+            messageSearchCounter.setText(hasMatches ? (activeMessageSearchIndex + 1) + "/" + messageSearchMatches.size() : "");
+        }
+        if (messageSearchPrevBtn != null) {
+            messageSearchPrevBtn.setDisable(!hasMatches || messageSearchMatches.size() == 1);
+        }
+        if (messageSearchNextBtn != null) {
+            messageSearchNextBtn.setDisable(!hasMatches || messageSearchMatches.size() == 1);
+        }
+
+        for (int i = 0; i < messageSearchItems.size(); i++) {
+            styleMessageSearchItem(messageSearchItems.get(i), i == activeMessageSearchIndex, false);
+        }
+        scrollSearchResultsToActiveItem();
+    }
+
+    private void scrollSearchResultsToActiveItem() {
+        if (messageSearchResultsScroll == null || activeMessageSearchIndex < 0 || activeMessageSearchIndex >= messageSearchItems.size()) {
+            return;
+        }
+
+        Platform.runLater(() -> {
+            double itemCount = Math.max(1, messageSearchItems.size() - 1);
+            messageSearchResultsScroll.setVvalue(activeMessageSearchIndex / itemCount);
+        });
+    }
+
+    private void styleMessageSearchItem(VBox item, boolean active, boolean hover) {
+        String bg = active ? "#1f1835" : (hover ? "#181818" : "transparent");
+        String border = active ? ACCENT : BORDER_COLOR;
+        item.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 0 0 1px 0;
+                -fx-background-radius: 0px;
+                """.formatted(bg, border));
+    }
+
+    private void openMessageFromSearch(long conversationId, long messageId) {
+        if (conversationId != currentConversationId) {
+            showMessageSearchStatus("Ket qua nay khong thuoc cuoc tro chuyen dang mo.", true, false);
+            return;
+        }
+
+        if (messageId <= 0) {
+            showMessageSearchStatus("Ket qua nay thieu messageId nen chua mo duoc.", true, false);
+            return;
+        }
+
+        if (scrollToAndHighlightMessage(messageId)) {
+            showCurrentMessageSearchStatus("Da mo tin nhan");
+            return;
+        }
+
+        if (!hasMoreMessages) {
+            showMessageSearchStatus("Tin nhan chua co trong phan UI dang hien thi.", true, false);
+            return;
+        }
+
+        showMessageSearchStatus("Dang tai them lich su de mo tin nhan...", false);
+        loadOlderMessagesUntilVisible(conversationId, messageId, 0);
+    }
+
+    private void loadOlderMessagesUntilVisible(long conversationId, long messageId, int attempt) {
+        if (conversationId != currentConversationId) return;
+
+        if (attempt >= 8 || !hasMoreMessages) {
+            showMessageSearchStatus("Chua tim thay tin nhan trong phan lich su da tai.", true, false);
+            return;
+        }
+
+        if (isLoadingMore) {
+            showMessageSearchStatus("Dang tai tin nhan, thu lai sau mot chut.", false);
+            return;
+        }
+
+        isLoadingMore = true;
+        int offset = currentMessageOffset;
+        CompletableFuture
+                .supplyAsync(() -> tcpClient.getMessages(conversationId, PAGE_SIZE, offset))
+                .thenAccept(response -> Platform.runLater(() -> {
+                    try {
+                        if (currentConversationId != conversationId) return;
+                        if (response == null || !response.isSuccess()) {
+                            showMessageSearchStatus("Khong tai duoc lich su tin nhan.", true, false);
+                            return;
+                        }
+
+                        renderMessagesPage(response.rawBody(), false, conversationId, offset);
+                    } catch (Exception e) {
+                        showMessageSearchStatus("Khong doc duoc lich su tin nhan.", true, false);
+                        return;
+                    } finally {
+                        isLoadingMore = false;
+                    }
+
+                    if (scrollToAndHighlightMessage(messageId)) {
+                        showCurrentMessageSearchStatus("Da mo tin nhan");
+                    } else {
+                        loadOlderMessagesUntilVisible(conversationId, messageId, attempt + 1);
+                    }
+                }));
+    }
+
+    private boolean scrollToAndHighlightMessage(long messageId) {
+        Label bubble = messageBubbleById.get(messageId);
+        if (bubble == null || scrollMessages == null || messagesBox == null) return false;
+
+        Platform.runLater(() -> {
+            javafx.geometry.Bounds bubbleBounds = bubble.localToScene(bubble.getBoundsInLocal());
+            javafx.geometry.Bounds listBounds = messagesBox.localToScene(messagesBox.getBoundsInLocal());
+            double viewportHeight = scrollMessages.getViewportBounds().getHeight();
+            double contentHeight = Math.max(messagesBox.getBoundsInLocal().getHeight(), viewportHeight + 1);
+            double targetY = bubbleBounds.getMinY() - listBounds.getMinY() - viewportHeight / 2;
+            double v = targetY / Math.max(1, contentHeight - viewportHeight);
+            scrollMessages.setVvalue(Math.max(0, Math.min(1, v)));
+            highlightMessageBubble(bubble);
+        });
+        return true;
+    }
+
+    private void highlightMessageBubble(Label bubble) {
+        if (highlightedMessageBubble != null && highlightedMessageStyle != null) {
+            highlightedMessageBubble.setStyle(highlightedMessageStyle);
+        }
+
+        highlightedMessageBubble = bubble;
+        highlightedMessageStyle = bubble.getStyle();
+        bubble.setStyle(highlightedMessageStyle + """
+                -fx-border-color: #ffd166;
+                -fx-border-width: 2px;
+                -fx-border-radius: 18px;
+                """);
+
+        // Tu bo highlight de UI khong bi ket mau vang mai.
+        javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(2.5));
+        delay.setOnFinished(e -> {
+            if (highlightedMessageBubble == bubble && highlightedMessageStyle != null) {
+                bubble.setStyle(highlightedMessageStyle);
+                highlightedMessageBubble = null;
+                highlightedMessageStyle = null;
+            }
+        });
+        delay.play();
+    }
+
     private void showMessageSearchStatus(String text, boolean error) {
+        showMessageSearchStatus(text, error, true);
+    }
+
+    private void showMessageSearchStatus(String text, boolean error, boolean clearOnError) {
         if (messageSearchPanel == null || messageSearchStatus == null || messageSearchResults == null) return;
         messageSearchPanel.setVisible(true);
         messageSearchPanel.setManaged(true);
@@ -1250,14 +1683,30 @@ public class ChatView {
                 -fx-text-fill: %s;
                 -fx-font-size: 12px;
                 """.formatted(error ? "#ff7777" : TEXT_MUTED));
-        if (error) {
+        if (error && clearOnError) {
             messageSearchResults.getChildren().clear();
         }
     }
 
+    private void showCurrentMessageSearchStatus(String prefix) {
+        if (messageSearchMatches.isEmpty() || activeMessageSearchIndex < 0) {
+            showMessageSearchStatus(prefix, false);
+            return;
+        }
+
+        String keywordPart = activeMessageSearchKeyword.isBlank() ? "" : " cho: " + activeMessageSearchKeyword;
+        showMessageSearchStatus(prefix + keywordPart, false);
+    }
+
     private void clearMessageSearchResults() {
+        resetMessageSearchState(true);
+    }
+
+    private void resetMessageSearchState(boolean clearField) {
         if (messageSearchField != null) {
-            messageSearchField.clear();
+            if (clearField) {
+                messageSearchField.clear();
+            }
         }
         if (messageSearchResults != null) {
             messageSearchResults.getChildren().clear();
@@ -1269,25 +1718,57 @@ public class ChatView {
             messageSearchPanel.setVisible(false);
             messageSearchPanel.setManaged(false);
         }
+        showSearchResultsView(false);
+        messageSearchMatches.clear();
+        messageSearchItems.clear();
+        activeMessageSearchIndex = -1;
+        activeMessageSearchKeyword = "";
+        updateMessageSearchNavigator();
     }
 
-    private void addReceivedMessage(String text) {
+    private HBox createMessageWrapper(long senderId, String text, long messageId) {
         HBox wrapper = new HBox();
-        wrapper.setAlignment(Pos.CENTER_LEFT);
+        boolean isMine = senderId == currentUserId;
+        wrapper.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
-        Label bubble = createMessageBubble(text, "#1e1e1e", "18px 18px 18px 4px");
+        Label bubble = isMine
+                ? createMessageBubble(text, ACCENT, "18px 18px 4px 18px")
+                : createMessageBubble(text, "#1e1e1e", "18px 18px 18px 4px");
+        if (messageId > 0) {
+            // Luu bubble theo id de ket qua search co the nhay toi dung tin.
+            messageBubbleById.put(messageId, bubble);
+        }
         wrapper.getChildren().add(bubble);
-        messagesBox.getChildren().add(wrapper);
+        return wrapper;
     }
 
-    private void addSentMessage(String text) {
+    private void addReceivedMessage(String text, long messageId) {
+        messagesBox.getChildren().add(createMessageWrapper(-1, text, messageId));
+    }
+
+    private void addSentMessage(String text, long messageId, String status) {
         HBox wrapper = new HBox();
         wrapper.setAlignment(Pos.CENTER_RIGHT);
 
+        VBox container = new VBox(2);
+        container.setAlignment(Pos.BOTTOM_RIGHT);
+
         Label bubble = createMessageBubble(text, ACCENT, "18px 18px 4px 18px");
-        wrapper.getChildren().add(bubble);
+        if (messageId > 0) {
+            messageBubbleById.put(messageId, bubble);
+        }
+
+        Label statusLabel = new Label(getStatusLabelText(status));
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
+        if (messageId > 0) {
+            messageStatusLabels.put(messageId, statusLabel);
+        }
+
+        container.getChildren().addAll(bubble, statusLabel);
+        wrapper.getChildren().add(container);
         messagesBox.getChildren().add(wrapper);
     }
+
 
     private Label createMessageBubble(String text, String backgroundColor, String radius) {
         Label bubble = new Label(text);
