@@ -2,7 +2,7 @@ package com.server.handler.message;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.server.model.Message;
+import com.server.model.MessageSearchResult;
 import com.server.repository.ConversationRepository;
 import com.server.service.MessageService;
 import com.server.tcp.ClientConnection;
@@ -52,7 +52,8 @@ public class SearchMessagesHandler {
                 return response;
             }
 
-            List<Message> messages = messageService.searchMessages(conversationId, keyword, limit, offset);
+            // Tra kem username de UI khong phai doan ten user tu senderId.
+            List<MessageSearchResult> messages = messageService.searchMessages(conversationId, keyword, limit, offset);
             logger.info("[SEARCH_MESSAGES] Remote={} | UserId={} | ConversationId={} | KeywordLength={} | Count={}",
                     conn.getRemoteAddress(), userId, conversationId, keyword.length(), messages.size());
 
