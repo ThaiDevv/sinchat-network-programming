@@ -1,6 +1,7 @@
 package com.server.service;
 
 import com.server.model.Message;
+import com.server.model.MessageSearchResult;
 import com.server.repository.MessageRepository;
 import java.sql.SQLException;
 import java.util.List;
@@ -27,7 +28,7 @@ public class MessageService {
         return messageRepository.getByConversationId(conversationId, limit, offset);
     }
 
-    public List<Message> searchMessages(long conversationId, String keyword, int limit, int offset) {
+    public List<MessageSearchResult> searchMessages(long conversationId, String keyword, int limit, int offset) {
         return messageRepository.searchByConversation(conversationId, keyword, limit, offset);
     }
 }
