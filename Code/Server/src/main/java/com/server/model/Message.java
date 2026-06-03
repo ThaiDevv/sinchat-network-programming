@@ -12,6 +12,7 @@ public class Message {
     private MessageType type;           // enum DEFAULT 'TEXT'
     private String content;             // text - noi dung tin nhan
     private Timestamp createdAt;        // timestamp DEFAULT CURRENT_TIMESTAMP
+    private String status;              // Trạng thái tin nhắn (SENT, DELIVERED, SEEN) - join từ bảng message_status
 
     public Message() {}
 
@@ -42,4 +43,8 @@ public class Message {
 
     public Timestamp getCreatedAt() { return createdAt; }
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }
+

@@ -32,6 +32,8 @@ public class Router {
     private static final JoinHandler joinHandler = new JoinHandler();
     private static final PingHandler pingHandler = new PingHandler();
     private static final TypingHandler typingHandler = new TypingHandler();
+    private static final UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
+
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
             logger.warn("[ROUTER] Remote={} | Missing action field in request: {}",
@@ -115,6 +117,10 @@ public class Router {
                 case "TYPING":
                     response = typingHandler.handleTcp(request, conn);
                     break;
+                case "UPDATE_MESSAGE_STATUS":
+                    response = updateMessageStatusHandler.handleTcp(request, conn);
+                    break;
+
                 default:
                     logger.warn("[ROUTER] Unknown action='{}' from Remote={} | UserId={}",
                             action, conn.getRemoteAddress(), conn.getUserId());

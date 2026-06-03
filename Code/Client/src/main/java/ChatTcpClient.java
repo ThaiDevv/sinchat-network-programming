@@ -60,8 +60,10 @@ public class ChatTcpClient {
     private Consumer<JsonObject> onUserTyping;
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
+    private Consumer<JsonObject> onMessageStatusChanged;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
+
 
     private final AtomicBoolean reconnecting = new AtomicBoolean(false);
     private volatile long userId = -1; // Luu userId de JOIN lai sau khi reconnect.
@@ -357,6 +359,10 @@ public class ChatTcpClient {
                 case "NEW_MESSAGE":
                     if (onNewMessage != null) Platform.runLater(() -> onNewMessage.accept(json));
                     break;
+                case "MESSAGE_STATUS_EVENT":
+                    if (onMessageStatusChanged != null) Platform.runLater(() -> onMessageStatusChanged.accept(json));
+                    break;
+
                 case "TYPING_EVENT":
                     if (onUserTyping != null) Platform.runLater(() -> onUserTyping.accept(json));
                     break;
@@ -440,8 +446,27 @@ public class ChatTcpClient {
     public void setOnUserTyping(Consumer<JsonObject> callback) { this.onUserTyping = callback; }
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
+    public void setOnMessageStatusChanged(Consumer<JsonObject> callback) { this.onMessageStatusChanged = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
+
+    public void updateMessageStatus(long conversationId, String status) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "UPDATE_MESSAGE_STATUS");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("status", status);
+        if (isConnected()) writeLine(gson.toJson(req));
+    }
+
+    public void updateMessageStatus(long conversationId, long messageId, String status) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "UPDATE_MESSAGE_STATUS");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("messageId", messageId);
+        req.addProperty("status", status);
+        if (isConnected()) writeLine(gson.toJson(req));
+    }
+
 
     // Gui request TCP va cho response
 
