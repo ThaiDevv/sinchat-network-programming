@@ -14,8 +14,10 @@ public class UserRepository {
 
     /** Tim user theo username. */
     public User findByUsername(String username) {
-        String query = "SELECT id, username, password_hash, email, avatar_url, status_message, " +
-                       "is_online, last_seen, created_at FROM users WHERE username = ?";
+        String query = "SELECT u.id, u.username, u.password_hash, u.email, " +
+                       "(CASE WHEN ua.id IS NOT NULL THEN 'db' ELSE NULL END) AS avatar_url, " +
+                       "u.status_message, u.is_online, u.last_seen, u.created_at " +
+                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.username = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, username);
@@ -30,8 +32,10 @@ public class UserRepository {
 
     /** Tim user theo ID. */
     public User findById(long id) {
-        String query = "SELECT id, username, password_hash, email, avatar_url, status_message, " +
-                       "is_online, last_seen, created_at FROM users WHERE id = ?";
+        String query = "SELECT u.id, u.username, u.password_hash, u.email, " +
+                       "(CASE WHEN ua.id IS NOT NULL THEN 'db' ELSE NULL END) AS avatar_url, " +
+                       "u.status_message, u.is_online, u.last_seen, u.created_at " +
+                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, id);
@@ -150,7 +154,7 @@ public class UserRepository {
 
     /** Lay duong dan avatar tu DB. */
     public String getAvatarPath(long userId) {
-        String query = "SELECT avatar_url FROM users WHERE id = ?";
+        String query = "SELECT (CASE WHEN id IS NOT NULL THEN 'db' ELSE NULL END) AS avatar_url FROM user_avatars WHERE id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, userId);
@@ -168,7 +172,8 @@ public class UserRepository {
     /** Tim user theo tu khoa, dung cho search. */
     public JsonArray searchUsers(String keyword, long excludeUserId) {
         JsonArray results = new JsonArray();
-        String query = "SELECT id, username, avatar_url FROM users WHERE username LIKE ? AND id != ? LIMIT 15";
+        String query = "SELECT u.id, u.username, (CASE WHEN ua.id IS NOT NULL THEN 'db' ELSE NULL END) AS avatar_url " +
+                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.username LIKE ? AND u.id != ? LIMIT 15";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, "%" + keyword + "%");

@@ -84,7 +84,8 @@ public class ProfileHandler {
     }
 
     public JsonObject getUserProfile(long userId) {
-        String query = "SELECT username, email, avatar_url FROM users WHERE id = ?";
+        String query = "SELECT u.username, u.email, (CASE WHEN ua.id IS NOT NULL THEN 'db' ELSE NULL END) AS avatar_url " +
+                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.id = ?";
         try (Connection c = getConnection(); PreparedStatement pstmt = c.prepareStatement(query)) {
             pstmt.setLong(1, userId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -104,22 +105,14 @@ public class ProfileHandler {
     }
 
     public boolean updateUserProfile(long userId, String email, String avatarUrl) {
-        StringBuilder queryBuilder = new StringBuilder("UPDATE users SET ");
-        java.util.List<Object> params = new java.util.ArrayList<>();
-        if (email != null) { queryBuilder.append("email = ?, "); params.add(email); }
-        if (avatarUrl != null) { queryBuilder.append("avatar_url = ?, "); params.add(avatarUrl); }
-        if (params.isEmpty()) return false;
-        queryBuilder.setLength(queryBuilder.length() - 2);
-        queryBuilder.append(" WHERE id = ?");
-        params.add(userId);
+        // avatarUrl không còn được lưu trong bảng users nên nếu chỉ thay đổi avatarUrl, việc đổi avatar sẽ do AvatarService hoặc API tương ứng lo.
+        // Ở đây ta chỉ cập nhật email nếu có thay đổi.
+        if (email == null) return false;
+        String query = "UPDATE users SET email = ? WHERE id = ?";
 
-        try (Connection c = getConnection(); PreparedStatement pstmt = c.prepareStatement(queryBuilder.toString())) {
-            for (int i = 0; i < params.size(); i++) {
-                Object param = params.get(i);
-                if (param instanceof String) pstmt.setString(i + 1, (String) param);
-                else if (param instanceof Integer) pstmt.setInt(i + 1, (Integer) param);
-                else if (param instanceof Long) pstmt.setLong(i + 1, (Long) param);
-            }
+        try (Connection c = getConnection(); PreparedStatement pstmt = c.prepareStatement(query)) {
+            pstmt.setString(1, email);
+            pstmt.setLong(2, userId);
             return pstmt.executeUpdate() > 0;
         } catch (Exception e) {
             logger.error("DB error", e);
