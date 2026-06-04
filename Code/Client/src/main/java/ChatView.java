@@ -65,6 +65,7 @@ public class ChatView {
     private final java.util.Map<Long, Long> conversationIdByPeerId = new java.util.HashMap<>();
     private final java.util.Map<Long, Long> peerIdByConversationId = new java.util.HashMap<>();
     private final java.util.Map<Long, String> peerLastSeenByPeerId = new java.util.HashMap<>();
+    private final java.util.Map<Long, Label> messageStatusLabels = new java.util.HashMap<>();
     private final java.util.Map<Long, Boolean> peerOnlineByPeerId = new java.util.HashMap<>();
     private final java.util.Map<Long, Label> messageBubbleById = new java.util.HashMap<>();
     private final java.util.List<JsonObject> messageSearchMatches = new java.util.ArrayList<>();
@@ -95,7 +96,14 @@ public class ChatView {
     private boolean isLoadingMore = false;
     private static final int PAGE_SIZE = 50;
 
+    // Co nay ngan scroll listener khi dang load tin nhan lan dau (reset).
+    // Khi reset, VBox bi xoa trang -> vvalue giam ve 0 -> scroll listener se hieu nham
+    // la user keo len va load them tin nhan cu. Co nay chan hanh vi do.
+    private boolean pendingScrollToBottom = false;
+
     private final javafx.beans.value.ChangeListener<Number> scrollListener = (obs, oldVal, newVal) -> {
+        // Khi dang cho scroll xuong cuoi (reset) thi khong load them tin nhan cu.
+        if (pendingScrollToBottom) return;
         // Khi scroll len dau thi load them tin nhan cu.
         if (newVal.doubleValue() < 0.05 && hasMoreMessages && !isLoadingMore && currentConversationId > 0) {
             loadMessagesForCurrentConversation(false);
@@ -174,6 +182,7 @@ public class ChatView {
 
         tcpClient.setOnUserStatusChange(this::onUserStatusChange);
         tcpClient.setOnUserAvatarChanged(this::onUserAvatarChanged);
+        tcpClient.setOnMessageStatusChanged(this::onMessageStatusChanged);
 
 
         tcpClient.setOnConnected(() -> {
@@ -188,6 +197,7 @@ public class ChatView {
         tcpClient.join(currentUserId);
         loadUserAvatar();
     }
+
 
     /**
      * Tai avatar nguoi dung sau khi client ket noi server.
@@ -267,6 +277,7 @@ public class ChatView {
         String content = json.get("content").getAsString();
         long messageId = json.has("messageId") ? json.get("messageId").getAsLong() : -1;
 
+
         // Chi hien thi neu user dang mo dung conversation.
         if (conversationId == currentConversationId) {
             // An trang thai dang go.
@@ -275,16 +286,51 @@ public class ChatView {
             }
 
             if (senderId == currentUserId) {
-                addSentMessage(content, messageId);
+                String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
+                addSentMessage(content, messageId, status);
             } else {
                 addReceivedMessage(content, messageId);
+                // Mark as SEEN
+                if (messageId > 0 && tcpClient != null) {
+                    tcpClient.updateMessageStatus(currentConversationId, messageId, "SEEN");
+                }
             }
             scrollToBottom();
         }
 
+
         // Load lai danh sach conversation de item moi nhat duoc day len tren.
         Platform.runLater(this::loadConversations);
     }
+
+    private void onMessageStatusChanged(JsonObject json) {
+        long conversationId = json.has("conversationId") ? json.get("conversationId").getAsLong() : -1;
+        if (conversationId == currentConversationId) {
+            if (json.has("messageId")) {
+                long messageId = json.get("messageId").getAsLong();
+                String status = json.get("status").getAsString();
+                Platform.runLater(() -> {
+                    Label label = messageStatusLabels.get(messageId);
+                    if (label != null) {
+                        label.setText(getStatusLabelText(status));
+                    }
+                });
+            } else if (json.has("status") && "SEEN".equals(json.get("status").getAsString())) {
+                Platform.runLater(() -> {
+                    for (Label label : messageStatusLabels.values()) {
+                        label.setText("Read");
+                    }
+                });
+            }
+        }
+    }
+
+    private String getStatusLabelText(String status) {
+        if ("SEEN".equalsIgnoreCase(status)) return "Read";
+        if ("DELIVERED".equalsIgnoreCase(status)) return "Delivered";
+        return "Sent";
+    }
+
 
     /**
      * Xu ly khi nguoi ben kia dang go trong conversation hien tai.
@@ -349,10 +395,25 @@ public class ChatView {
 
     /**
      * Cuon xuong cuoi danh sach tin nhan.
+     * Dung applyCss() + layout() de dam bao JavaFX da tinh xong kich thuoc noi dung
+     * truoc khi dat vvalue = 1.0, tranh loi cuon khong den cuoi.
      */
     private void scrollToBottom() {
+        pendingScrollToBottom = true;
         javafx.application.Platform.runLater(() -> {
+            // Buoc JavaFX tinh lai layout truoc khi cuon.
+            messagesBox.applyCss();
+            messagesBox.layout();
+            scrollMessages.applyCss();
+            scrollMessages.layout();
             scrollMessages.setVvalue(1.0);
+
+            // Lan runLater thu hai: dam bao du cho truong hop layout chua xong hoan toan
+            // (vi du khi co nhieu tin nhan hoac hinh anh thay doi kich thuoc).
+            javafx.application.Platform.runLater(() -> {
+                scrollMessages.setVvalue(1.0);
+                pendingScrollToBottom = false;
+            });
         });
     }
 
@@ -485,7 +546,11 @@ public class ChatView {
                             return;
                         }
 
+                        if (reset) {
+                            messageStatusLabels.clear();
+                        }
                         renderMessagesPage(response.rawBody(), reset, capturedConversationId, offset);
+
 
                         // Load moi thi cuon xuong cuoi, load them thi giu vi tri.
                         if (reset) {
@@ -555,6 +620,7 @@ public class ChatView {
         if (reset) {
             messagesBox.getChildren().clear();
             messageBubbleById.clear();
+            messageStatusLabels.clear();
             highlightedMessageBubble = null;
             highlightedMessageStyle = null;
         }
@@ -566,8 +632,32 @@ public class ChatView {
             long messageId = msg.has("id") ? msg.get("id").getAsLong() : -1;
             long senderId = msg.get("senderId").getAsLong();
             String content = msg.get("content").getAsString();
+            String status = msg.has("status") ? msg.get("status").getAsString() : "SENT";
 
-            HBox wrapper = createMessageWrapper(senderId, content, messageId);
+            HBox wrapper;
+            if (senderId == currentUserId) {
+                wrapper = new HBox();
+                wrapper.setAlignment(Pos.CENTER_RIGHT);
+
+                VBox container = new VBox(2);
+                container.setAlignment(Pos.BOTTOM_RIGHT);
+
+                Label bubble = createMessageBubble(content, ACCENT, "18px 18px 4px 18px");
+                if (messageId > 0) {
+                    messageBubbleById.put(messageId, bubble);
+                }
+
+                Label statusLabel = new Label(getStatusLabelText(status));
+                statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
+                if (messageId > 0) {
+                    messageStatusLabels.put(messageId, statusLabel);
+                }
+
+                container.getChildren().addAll(bubble, statusLabel);
+                wrapper.getChildren().add(container);
+            } else {
+                wrapper = createMessageWrapper(senderId, content, messageId);
+            }
             messagesBox.getChildren().add(insertIndex++, wrapper);
         }
 
@@ -579,6 +669,7 @@ public class ChatView {
             hasMoreMessages = msgCount >= PAGE_SIZE;
         }
     }
+
 
     private void loadConversations() {
         statusDotsByPeerId.clear();
@@ -1677,9 +1768,29 @@ public class ChatView {
         messagesBox.getChildren().add(createMessageWrapper(-1, text, messageId));
     }
 
-    private void addSentMessage(String text, long messageId) {
-        messagesBox.getChildren().add(createMessageWrapper(currentUserId, text, messageId));
+    private void addSentMessage(String text, long messageId, String status) {
+        HBox wrapper = new HBox();
+        wrapper.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox container = new VBox(2);
+        container.setAlignment(Pos.BOTTOM_RIGHT);
+
+        Label bubble = createMessageBubble(text, ACCENT, "18px 18px 4px 18px");
+        if (messageId > 0) {
+            messageBubbleById.put(messageId, bubble);
+        }
+
+        Label statusLabel = new Label(getStatusLabelText(status));
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
+        if (messageId > 0) {
+            messageStatusLabels.put(messageId, statusLabel);
+        }
+
+        container.getChildren().addAll(bubble, statusLabel);
+        wrapper.getChildren().add(container);
+        messagesBox.getChildren().add(wrapper);
     }
+
 
     private Label createMessageBubble(String text, String backgroundColor, String radius) {
         Label bubble = new Label(text);
