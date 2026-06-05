@@ -1,4 +1,5 @@
 import java.util.concurrent.CompletableFuture;
+import javafx.scene.input.KeyCode;
 import java.util.function.Consumer;
 
 import javafx.application.Platform;
@@ -71,6 +72,17 @@ public class LoginView {
                         setMessage(message, response.message(), "#ff7777");
                     }
             );
+        });
+
+        // Nhấn Enter trên ô username hoặc password => thực hiện đăng nhập
+        usernameField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) loginButton.fire();
+        });
+        passwordField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) loginButton.fire();
+        });
+        visiblePassword.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) loginButton.fire();
         });
 
         Hyperlink forgotPassword = createLink("Qu\u00ean m\u1eadt kh\u1ea9u?");
