@@ -11,7 +11,16 @@ import org.slf4j.LoggerFactory;
  */
 public class RegisterHandler {
     private static final Logger logger = LoggerFactory.getLogger(RegisterHandler.class);
-    private final AuthService authService = new AuthService();
+    private static final java.util.regex.Pattern EMAIL_PATTERN =
+            java.util.regex.Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MAX_USERNAME_LENGTH = 50;
+    private static final int MIN_USERNAME_LENGTH = 3;
+    private final AuthService authService;
+
+    public RegisterHandler() {
+        this.authService = AuthService.getInstance();
+    }
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
@@ -24,9 +33,35 @@ public class RegisterHandler {
                 return response;
             }
 
-            String username = request.get("username").getAsString();
+            String username = request.get("username").getAsString().trim();
             String password = request.get("password").getAsString();
-            String email = request.get("email").getAsString();
+            String email = request.get("email").getAsString().trim();
+
+            // Validate username
+            if (username.length() < MIN_USERNAME_LENGTH || username.length() > MAX_USERNAME_LENGTH) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Username must be between " + MIN_USERNAME_LENGTH + " and " + MAX_USERNAME_LENGTH + " characters");
+                return response;
+            }
+            if (!username.matches("^[a-zA-Z0-9_]+$")) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Username can only contain letters, numbers, and underscores");
+                return response;
+            }
+
+            // Validate password
+            if (password.length() < MIN_PASSWORD_LENGTH) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
+                return response;
+            }
+
+            // Validate email
+            if (!EMAIL_PATTERN.matcher(email).matches()) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Invalid email format");
+                return response;
+            }
 
             logger.info("[REGISTER ATTEMPT] Remote={} | Username={} | Email={} | Registration attempt",
                     conn.getRemoteAddress(), username, email);

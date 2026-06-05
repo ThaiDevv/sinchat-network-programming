@@ -22,6 +22,19 @@ public class JoinHandler {
         }
 
         long userId = request.get("userId").getAsLong();
+
+        // Security: verify the user has logged in with this userId
+        // conn.getUserId() is set during LOGIN, so JOIN must match
+        Long authenticatedUserId = conn.getUserId();
+        if (authenticatedUserId == null || authenticatedUserId != userId) {
+            logger.warn("[JOIN] Remote={} | RequestedUserId={} | AuthenticatedUserId={} | Unauthorized JOIN",
+                    conn.getRemoteAddress(), userId, authenticatedUserId);
+            JsonObject error = new JsonObject();
+            error.addProperty("status", "error");
+            error.addProperty("message", "Unauthorized: must login before JOIN");
+            return error;
+        }
+
         Long previousUserId = conn.getUserId();
 
         logger.info("[JOIN] Remote={} | Joining with userId={} | PreviousUserId={}",

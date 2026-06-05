@@ -23,6 +23,12 @@ public class IdleConnectionSweeper {
         return t;
     });
 
+    private final java.util.concurrent.ExecutorService closeExecutor = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "idle-conn-closer");
+        t.setDaemon(true);
+        return t;
+    });
+
     public IdleConnectionSweeper(TcpConnectionManager connectionManager,
                                 long idleTimeoutMillis) {
         this.connectionManager = connectionManager;
@@ -35,6 +41,7 @@ public class IdleConnectionSweeper {
 
     public void stop() {
         scheduler.shutdownNow();
+        closeExecutor.shutdownNow();
     }
 
     private void sweepOnceSafe() {
@@ -56,7 +63,7 @@ public class IdleConnectionSweeper {
             long idleFor = now - conn.getLastActiveAt();
             if (idleFor > idleTimeoutMillis) {
                 logger.info("Closing idle connection (idle {} ms) from {}", idleFor, conn.getRemoteAddress());
-                conn.close();
+                closeExecutor.submit(conn::close);
             }
         }
     }

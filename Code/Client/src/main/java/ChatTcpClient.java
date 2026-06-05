@@ -10,7 +10,6 @@ import java.net.*;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class ChatTcpClient {
@@ -127,10 +126,12 @@ public class ChatTcpClient {
                     }
                 }
 
-                if (foundHost != null && !foundHost.equals(HOST) || PORT != foundPort) {
-                    System.out.println("[LAN] ✓ Discovered SinChat server at " + foundHost + ":" + foundPort);
-                    HOST = foundHost;
-                    PORT = foundPort;
+                if (foundHost != null) {
+                    if (!foundHost.equals(HOST) || PORT != foundPort) {
+                        System.out.println("[LAN] ✓ Discovered SinChat server at " + foundHost + ":" + foundPort);
+                        HOST = foundHost;
+                        PORT = foundPort;
+                    }
                     // Found — stop scanning
                     discoveryRunning = false;
                     break;
@@ -196,7 +197,6 @@ public class ChatTcpClient {
         result[1] = 254;  // common server
         int idx = 2;
         for (int i = 2; i <= 253; i++) {
-            if (i == 254) continue; // already placed
             result[idx++] = i;
         }
         return result;
@@ -211,6 +211,10 @@ public class ChatTcpClient {
             instance = new ChatTcpClient();
             instance.connectAsync();
         }
+        return instance;
+    }
+
+    public static synchronized ChatTcpClient getInstanceOrNull() {
         return instance;
     }
 
@@ -597,21 +601,21 @@ public class ChatTcpClient {
         return sendRequestSync(req);
     }
 
-    public void join(long userId) {
+    public ApiResponse join(long userId) {
         this.userId = userId;
         JsonObject req = new JsonObject();
         req.addProperty("action", "JOIN");
         req.addProperty("userId", userId);
-        if (isConnected()) writeLine(gson.toJson(req));
+        return sendRequestSync(req);
     }
 
-    public void sendMessage(long conversationId, long senderId, String content) {
+    public ApiResponse sendMessage(long conversationId, long senderId, String content) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "SEND_MESSAGE");
         req.addProperty("conversationId", conversationId);
         req.addProperty("senderId", senderId);
         req.addProperty("content", content);
-        if (isConnected()) writeLine(gson.toJson(req));
+        return sendRequestSync(req);
     }
 
     public void sendTyping(long conversationId, long memberId, boolean isTyping) {

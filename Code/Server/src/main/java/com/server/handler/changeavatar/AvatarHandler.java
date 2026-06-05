@@ -24,6 +24,16 @@ public class AvatarHandler {
             long userId = request.get("userId").getAsLong();
             String avatarUrl = request.get("avatarUrl").getAsString();
 
+            // Security: verify userId matches the authenticated connection
+            Long connUserId = conn.getUserId();
+            if (connUserId == null || connUserId != userId) {
+                logger.warn("[CHANGE_AVATAR] Remote={} | ConnUserId={} | RequestedUserId={} | Unauthorized",
+                        conn.getRemoteAddress(), connUserId, userId);
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized: userId mismatch");
+                return response;
+            }
+
             logger.info("[CHANGE_AVATAR] Remote={} | UserId={} | avatarUrl={} | Attempting avatar change",
                     conn.getRemoteAddress(), userId,
                     avatarUrl.substring(0, Math.min(30, avatarUrl.length())) + "...");
@@ -35,8 +45,8 @@ public class AvatarHandler {
                 response.addProperty("message", "Avatar updated successfully");
                 response.addProperty("avatarUrl", avatarUrl);
                 
-                // Broadcast to friends and peers
-                com.server.tcp.PresenceService.getInstance().broadcastAvatarChangeToPeers(userId, avatarUrl);
+                // Broadcast to friends and peers (userId only, peers will fetch themselves)
+                com.server.tcp.PresenceService.getInstance().broadcastAvatarChangeToPeers(userId, null);
             } else {
                 logger.warn("[CHANGE_AVATAR] Remote={} | UserId={} | Failed to update avatar",
                         conn.getRemoteAddress(), userId);

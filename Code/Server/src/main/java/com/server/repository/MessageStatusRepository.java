@@ -135,16 +135,15 @@ public class MessageStatusRepository {
             try (ResultSet rs = pstmt.executeQuery()) {
                 boolean hasSent = false;
                 boolean hasDelivered = false;
-                boolean hasSeen = false;
                 int count = 0;
                 while (rs.next()) {
                     count++;
                     String statusStr = rs.getString("status");
                     if ("SENT".equals(statusStr)) hasSent = true;
                     else if ("DELIVERED".equals(statusStr)) hasDelivered = true;
-                    else if ("SEEN".equals(statusStr)) hasSeen = true;
                 }
                 if (count == 0) return MessageStatus.Status.SENT;
+                // Return the lowest/worst status across all recipients
                 if (hasSent) return MessageStatus.Status.SENT;
                 if (hasDelivered) return MessageStatus.Status.DELIVERED;
                 return MessageStatus.Status.SEEN;

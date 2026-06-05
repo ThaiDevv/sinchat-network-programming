@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ForgotPasswordHandler {
     private static final Logger logger = LoggerFactory.getLogger(ForgotPasswordHandler.class);
-    private final AuthService authService = new AuthService();
+    private final AuthService authService = AuthService.getInstance();
     
     // Hash gia de can bang thoi gian xu ly, tranh lo username co ton tai hay khong.
     private static final String DUMMY_HASH = BCrypt.hashpw("dummy_password_for_timing_attacks", BCrypt.gensalt());

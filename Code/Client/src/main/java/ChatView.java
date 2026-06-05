@@ -84,7 +84,6 @@ public class ChatView {
     private ScheduledFuture<?> typingHideTask;
 
     // Theo doi trang thai hien tai cua header presence de cap nhat moi phut.
-    private volatile boolean currentHeaderIsOnline = false;
     private volatile String currentHeaderLastSeen = null;
     private ScheduledFuture<?> presenceRefreshTask;
     private long lastTypingSentTime = 0;
@@ -194,8 +193,10 @@ public class ChatView {
             System.out.println("TCP socket disconnected: " + reason);
         });
 
-        tcpClient.join(currentUserId);
-        loadUserAvatar();
+        CompletableFuture.runAsync(() -> {
+            tcpClient.join(currentUserId);
+            loadUserAvatar();
+        });
     }
 
 
@@ -497,6 +498,8 @@ public class ChatView {
                 HBox header = (HBox) headerChatName.getParent().getParent();
                 if (!header.getChildren().isEmpty() && header.getChildren().get(0) instanceof Circle) {
                     Circle headerAvatar = (Circle) header.getChildren().get(0);
+                    // Reset circle trước khi load avatar mới để tránh lặp ảnh cũ
+                    headerAvatar.setFill(Color.web("#444"));
                     peerAvatarCircles.computeIfAbsent(peerId, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(headerAvatar);
                     loadPeerAvatar(peerId, headerAvatar);
                 }
@@ -718,7 +721,6 @@ public class ChatView {
 
     private void updateHeaderPresence(boolean isOnline, String lastSeen) {
         // Luu trang thai moi nhat de bo dem 1 phut co the lam moi lai.
-        currentHeaderIsOnline = isOnline;
         currentHeaderLastSeen = lastSeen;
 
         // Huy bo dem cu va bat bo dem moi chi khi offline co lastSeen.
@@ -1418,8 +1420,6 @@ public class ChatView {
     }
 
     private VBox createMessageSearchResultItem(JsonObject message, int resultIndex) {
-        long messageId = message.has("id") ? message.get("id").getAsLong() : -1;
-        long conversationId = message.has("conversationId") ? message.get("conversationId").getAsLong() : currentConversationId;
         long senderId = message.has("senderId") ? message.get("senderId").getAsLong() : -1;
         String sender = senderId == currentUserId ? "Bạn" : "";
         String content = message.has("content") && !message.get("content").isJsonNull()
@@ -1482,10 +1482,6 @@ public class ChatView {
             nextIndex = 0;
         }
         selectMessageSearchResultAt(nextIndex);
-    }
-
-    private void openMessageSearchResultAt(int index) {
-        jumpToMessageSearchResultAt(index);
     }
 
     private void selectMessageSearchResultAt(int index) {
@@ -1817,7 +1813,12 @@ public class ChatView {
         if (!text.isEmpty()) {
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
                 // Gui qua TCP, server luu DB roi broadcast ve cho moi nguoi.
-                tcpClient.sendMessage(currentConversationId, currentUserId, text);
+                CompletableFuture.runAsync(() -> {
+                    ChatTcpClient.ApiResponse response = tcpClient.sendMessage(currentConversationId, currentUserId, text);
+                    if (!response.isSuccess()) {
+                        Platform.runLater(() -> showToast("Gửi tin nhắn thất bại: " + response.message()));
+                    }
+                });
                 
                 // Bao ngay la minh da dung go sau khi gui tin.
                 tcpClient.sendTyping(currentConversationId, -1, false);
@@ -2646,6 +2647,10 @@ public class ChatView {
 
         String avatarDataUrl = "data:image/png;base64," + Base64.getEncoder().encodeToString(pngBytes);
         return tcpClient.changeAvatar(currentUserId, avatarDataUrl);
+    }
+
+    private void showToast(String text) {
+        showAvatarToast(text, "#cc3333");
     }
 
     private void showAvatarToast(String text, String bgColor) {

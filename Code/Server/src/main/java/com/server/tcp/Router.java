@@ -16,19 +16,19 @@ public class Router {
     private static final Logger logger = LoggerFactory.getLogger(Router.class);
 
     // Dung chung handler de giam tao object va de thay mock khi test.
-    private static LoginHandler loginHandler = new LoginHandler();
-    private static RegisterHandler registerHandler = new RegisterHandler();
-    private static ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
-    private static ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
-    private static ProfileHandler profileHandler = new ProfileHandler();
-    private static GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
-    private static SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
-    private static SendMessageHandler sendMessageHandler = new SendMessageHandler();
-    private static ConversationHandle conversationHandle = new ConversationHandle();
-    private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
-    private static SearchUserHandler searchUserHandler = new SearchUserHandler();
-    private static AvatarHandler avatarHandler = new AvatarHandler();
-    private static GetAvatarHandler getAvatarHandler = new GetAvatarHandler();
+    private static final LoginHandler loginHandler = new LoginHandler();
+    private static final RegisterHandler registerHandler = new RegisterHandler();
+    private static final ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
+    private static final ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
+    private static final ProfileHandler profileHandler = new ProfileHandler();
+    private static final GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
+    private static final SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
+    private static final SendMessageHandler sendMessageHandler = new SendMessageHandler();
+    private static final ConversationHandler conversationHandler = new ConversationHandler();
+    private static final GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
+    private static final SearchUserHandler searchUserHandler = new SearchUserHandler();
+    private static final AvatarHandler avatarHandler = new AvatarHandler();
+    private static final GetAvatarHandler getAvatarHandler = new GetAvatarHandler();
     private static final JoinHandler joinHandler = new JoinHandler();
     private static final PingHandler pingHandler = new PingHandler();
     private static final TypingHandler typingHandler = new TypingHandler();
@@ -77,7 +77,7 @@ public class Router {
                     response = sendMessageHandler.handleTcp(request, conn);
                     break;
                 case "GET_OR_CREATE_CONVERSATION":
-                    response = conversationHandle.handleTcp(request, conn);
+                    response = conversationHandler.handleTcp(request, conn);
                     break;
                 case "GET_USER_CONVERSATIONS":
                     response = getConversationsHandler.handleTcp(request, conn);
@@ -89,7 +89,25 @@ public class Router {
                     response = avatarHandler.handleTcp(request, conn);
                     break;
                 case "GET_USER_PROFILE":
+                    if (!request.has("userId")) {
+                        logger.warn("[GET_USER_PROFILE] Remote={} | Missing userId",
+                                conn.getRemoteAddress());
+                        response = new JsonObject();
+                        response.addProperty("status", "error");
+                        response.addProperty("message", "Missing userId");
+                        break;
+                    }
                     long getProfileUserId = request.get("userId").getAsLong();
+                    // Security: verify userId matches the authenticated connection
+                    Long connProfileUserId = conn.getUserId();
+                    if (connProfileUserId == null || connProfileUserId != getProfileUserId) {
+                        logger.warn("[GET_USER_PROFILE] Remote={} | ConnUserId={} | RequestedUserId={} | Unauthorized",
+                                conn.getRemoteAddress(), connProfileUserId, getProfileUserId);
+                        response = new JsonObject();
+                        response.addProperty("status", "error");
+                        response.addProperty("message", "Unauthorized: userId mismatch");
+                        break;
+                    }
                     logger.info("[GET_USER_PROFILE] Remote={} | UserId={} | Fetching user profile",
                             conn.getRemoteAddress(), getProfileUserId);
                     JsonObject profile = profileHandler.getUserProfile(request.get("userId").getAsLong());

@@ -59,7 +59,7 @@ public class MessageRepository {
         List<Message> messages = new ArrayList<>();
         StringBuilder query = new StringBuilder(
                 "SELECT id, conversation_id, sender_id, type, content, created_at " +
-                "FROM messages WHERE conversation_id = ? ORDER BY created_at ASC");
+                "FROM messages WHERE conversation_id = ? ORDER BY created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
         if (offset > 0) query.append(" OFFSET ?");
         try (Connection conn = Database.getConnection();
@@ -79,6 +79,8 @@ public class MessageRepository {
 
     public List<MessageSearchResult> searchByConversation(long conversationId, String keyword, int limit, int offset) {
         List<MessageSearchResult> messages = new ArrayList<>();
+        // Escape SQL LIKE wildcards
+        String escapedKeyword = keyword.replace("%", "\\%").replace("_", "\\_");
         String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, " +
                 "m.type, m.content, m.created_at " +
                 "FROM messages m " +
@@ -88,7 +90,7 @@ public class MessageRepository {
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, conversationId);
-            pstmt.setString(2, "%" + keyword + "%");
+            pstmt.setString(2, "%" + escapedKeyword + "%");
             pstmt.setInt(3, limit);
             pstmt.setInt(4, offset);
             try (ResultSet rs = pstmt.executeQuery()) {

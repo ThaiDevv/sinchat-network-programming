@@ -11,10 +11,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class ConversationRepository {
+    private static final Logger logger = LoggerFactory.getLogger(ConversationRepository.class);
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    public Long findPrivateConversation(long user1Id, long user2Id) {
+    public Long findPrivateConversation(long user1Id, long user2Id) throws SQLException {
         String query = "SELECT c.id FROM conversations c " +
                 "JOIN conversation_members cm1 ON c.id = cm1.conversation_id " +
                 "JOIN conversation_members cm2 ON c.id = cm2.conversation_id " +
@@ -28,10 +32,72 @@ public class ConversationRepository {
                 if (rs.next())
                     return rs.getLong("id");
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
         return null;
+    }
+
+    /**
+     * Atomically find or create a private conversation within a single transaction.
+     * Prevents race condition where two concurrent calls could create duplicate conversations.
+     */
+    public long findOrCreatePrivateConversation(long user1Id, long user2Id) throws SQLException {
+        String findQuery = "SELECT c.id FROM conversations c " +
+                "JOIN conversation_members cm1 ON c.id = cm1.conversation_id " +
+                "JOIN conversation_members cm2 ON c.id = cm2.conversation_id " +
+                "WHERE c.type = 'PRIVATE' AND cm1.user_id = ? AND cm2.user_id = ? FOR UPDATE";
+        String createQuery = "INSERT INTO conversations (type, created_by) VALUES (?, ?)";
+        String addMemberQuery = "INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // Try to find existing conversation with row lock
+                try (PreparedStatement findStmt = conn.prepareStatement(findQuery)) {
+                    findStmt.setLong(1, user1Id);
+                    findStmt.setLong(2, user2Id);
+                    try (ResultSet rs = findStmt.executeQuery()) {
+                        if (rs.next()) {
+                            long existingId = rs.getLong("id");
+                            conn.commit();
+                            return existingId;
+                        }
+                    }
+                }
+
+                // Not found — create new conversation and add both members
+                long newId;
+                try (PreparedStatement createStmt = conn.prepareStatement(createQuery, Statement.RETURN_GENERATED_KEYS)) {
+                    createStmt.setString(1, "PRIVATE");
+                    createStmt.setLong(2, user1Id);
+                    createStmt.executeUpdate();
+                    try (ResultSet rs = createStmt.getGeneratedKeys()) {
+                        if (rs.next()) {
+                            newId = rs.getLong(1);
+                        } else {
+                            throw new SQLException("Failed to create conversation — no generated key");
+                        }
+                    }
+                }
+
+                try (PreparedStatement addStmt = conn.prepareStatement(addMemberQuery)) {
+                    addStmt.setLong(1, newId);
+                    addStmt.setLong(2, user1Id);
+                    addStmt.executeUpdate();
+
+                    addStmt.setLong(1, newId);
+                    addStmt.setLong(2, user2Id);
+                    addStmt.executeUpdate();
+                }
+
+                conn.commit();
+                return newId;
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        }
     }
 
     public long createConversation(Conversation.ConversationType type, Long createdBy) throws SQLException {
@@ -83,7 +149,7 @@ public class ConversationRepository {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error fetching conversations for userId: {}", userId, e);
         }
         return list;
     }
@@ -91,53 +157,23 @@ public class ConversationRepository {
     public JsonArray getConversationsWithDetails(long userId) {
         JsonArray array = new JsonArray();
         String query = "SELECT c.id, c.type, " +
-                "CASE " +
-                "  WHEN c.type = 'PRIVATE' THEN (" +
-                "    SELECT u.username FROM users u " +
-                "    JOIN conversation_members cm2 ON u.id = cm2.user_id " +
-                "    WHERE cm2.conversation_id = c.id AND cm2.user_id != ? LIMIT 1" +
-                "  ) " +
-                "  ELSE c.name " +
-                "END AS display_name, " +
-                "CASE " +
-                "  WHEN c.type = 'PRIVATE' THEN (" +
-                "    SELECT u.id FROM users u " +
-                "    JOIN conversation_members cm2 ON u.id = cm2.user_id " +
-                "    WHERE cm2.conversation_id = c.id AND cm2.user_id != ? LIMIT 1" +
-                "  ) " +
-                "  ELSE NULL " +
-                "END AS peer_id, " +
-                "CASE " +
-                "  WHEN c.type = 'PRIVATE' THEN (" +
-                "    SELECT u.is_online FROM users u " +
-                "    JOIN conversation_members cm2 ON u.id = cm2.user_id " +
-                "    WHERE cm2.conversation_id = c.id AND cm2.user_id != ? LIMIT 1" +
-                "  ) " +
-                "  ELSE 0 " +
-                "END AS is_online, " +
-                "CASE " +
-                "  WHEN c.type = 'PRIVATE' THEN (" +
-                "    SELECT u.last_seen FROM users u " +
-                "    JOIN conversation_members cm2 ON u.id = cm2.user_id " +
-                "    WHERE cm2.conversation_id = c.id AND cm2.user_id != ? LIMIT 1" +
-                "  ) " +
-                "  ELSE NULL " +
-                "END AS last_seen, " +
+                "CASE WHEN c.type = 'PRIVATE' THEN u.username ELSE c.name END AS display_name, " +
+                "u.id AS peer_id, " +
+                "CASE WHEN c.type = 'PRIVATE' THEN COALESCE(u.is_online, 0) ELSE 0 END AS is_online, " +
+                "u.last_seen AS last_seen, " +
                 "(SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message, " +
                 "(SELECT sender_id FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_sender_id, " +
                 "c.last_message_at " +
                 "FROM conversations c " +
                 "JOIN conversation_members cm ON c.id = cm.conversation_id " +
+                "LEFT JOIN conversation_members cm2 ON c.type = 'PRIVATE' AND c.id = cm2.conversation_id AND cm2.user_id != cm.user_id " +
+                "LEFT JOIN users u ON cm2.user_id = u.id " +
                 "WHERE cm.user_id = ? " +
                 "ORDER BY c.last_message_at DESC";
 
         try (Connection conn = Database.getConnection();
                 PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, userId);
-            pstmt.setLong(2, userId);
-            pstmt.setLong(3, userId);
-            pstmt.setLong(4, userId);
-            pstmt.setLong(5, userId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     JsonObject obj = new JsonObject();
@@ -174,7 +210,7 @@ public class ConversationRepository {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error fetching conversations with details for userId: {}", userId, e);
         }
         return array;
     }
@@ -191,7 +227,7 @@ public class ConversationRepository {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error fetching member IDs for conversationId: {}", conversationId, e);
         }
         return memberIds;
     }
@@ -216,7 +252,7 @@ public class ConversationRepository {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error finding conversation peers for userId: {}", userId, e);
         }
         return peerIds;
     }

@@ -9,8 +9,8 @@ import org.slf4j.LoggerFactory;
 /**
  * TCP handler for creating or retrieving a private conversation between two users.
  */
-public class ConversationHandle {
-    private static final Logger logger = LoggerFactory.getLogger(ConversationHandle.class);
+public class ConversationHandler {
+    private static final Logger logger = LoggerFactory.getLogger(ConversationHandler.class);
     private final ConversationService conversationService = new ConversationService();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
@@ -25,6 +25,16 @@ public class ConversationHandle {
             }
             long user1Id = request.get("user1Id").getAsLong();
             long user2Id = request.get("user2Id").getAsLong();
+
+            // Security: verify the requesting user is one of the two parties
+            Long connUserId = conn.getUserId();
+            if (connUserId == null || (connUserId != user1Id && connUserId != user2Id)) {
+                logger.warn("[GET_OR_CREATE_CONVERSATION] Remote={} | ConnUserId={} | user1Id={} | user2Id={} | Unauthorized",
+                        conn.getRemoteAddress(), connUserId, user1Id, user2Id);
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized: userId mismatch");
+                return response;
+            }
 
             logger.info("[GET_OR_CREATE_CONVERSATION] Remote={} | UserId={} | user1Id={} | user2Id={} | Getting or creating private conversation",
                     conn.getRemoteAddress(), conn.getUserId(), user1Id, user2Id);

@@ -26,6 +26,16 @@ public class GetConversationsHandler {
             }
             long userId = request.get("userId").getAsLong();
 
+            // Security: verify userId matches the authenticated connection
+            Long connUserId = conn.getUserId();
+            if (connUserId == null || connUserId != userId) {
+                logger.warn("[GET_USER_CONVERSATIONS] Remote={} | ConnUserId={} | RequestedUserId={} | Unauthorized",
+                        conn.getRemoteAddress(), connUserId, userId);
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized: userId mismatch");
+                return response;
+            }
+
             logger.info("[GET_USER_CONVERSATIONS] Remote={} | UserId={} | Fetching conversations",
                     conn.getRemoteAddress(), userId);
 

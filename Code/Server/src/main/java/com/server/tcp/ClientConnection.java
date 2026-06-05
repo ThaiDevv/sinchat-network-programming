@@ -72,6 +72,11 @@ public class ClientConnection implements Runnable {
 
     public synchronized void send(JsonObject json) {
         writer.println(json.toString());
+        if (writer.checkError()) {
+            logger.warn("[CONNECTION SEND_ERROR] Remote={} | UserId={} | PrintWriter error detected, closing connection",
+                    getRemoteAddress(), userId);
+            close();
+        }
     }
 
     public void sendError(String message) {

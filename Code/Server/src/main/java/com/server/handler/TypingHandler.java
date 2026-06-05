@@ -13,6 +13,10 @@ import java.util.List;
 
 public class TypingHandler {
     private static final Logger logger = LoggerFactory.getLogger(TypingHandler.class);
+    private final UserRepository userRepository = new UserRepository();
+    private final ConversationRepository conversationRepository = new ConversationRepository();
+    // Cache usernames to avoid DB query on every typing event
+    private final java.util.concurrent.ConcurrentHashMap<Long, String> usernameCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         if (!request.has("conversationId") || !request.has("isTyping")) {
@@ -37,14 +41,24 @@ public class TypingHandler {
         long conversationId = request.get("conversationId").getAsLong();
         boolean isTyping = request.get("isTyping").getAsBoolean();
 
+        // Security check: verify user is a member of this conversation
+        java.util.List<Long> memberIds = conversationRepository.getMemberIds(conversationId);
+        if (!memberIds.contains(fromUserId)) {
+            logger.warn("[TYPING UNAUTHORIZED] Remote={} | UserId={} | ConversationId={} | user is not a member of this conversation",
+                    conn.getRemoteAddress(), fromUserId, conversationId);
+            JsonObject error = new JsonObject();
+            error.addProperty("status", "error");
+            error.addProperty("message", "Unauthorized: not a member of this conversation");
+            return error;
+        }
+
         logger.info("[TYPING] Remote={} | UserId={} | ConversationId={} | isTyping={}",
                 conn.getRemoteAddress(), fromUserId, conversationId, isTyping);
 
-        String fromUsername = "Ai đó";
-        User senderUser = new UserRepository().findById(fromUserId);
-        if (senderUser != null) {
-            fromUsername = senderUser.getUsername();
-        }
+        String fromUsername = usernameCache.computeIfAbsent(fromUserId, id -> {
+            User user = userRepository.findById(id);
+            return user != null ? user.getUsername() : "Ai đó";
+        });
 
         JsonObject evt = new JsonObject();
         evt.addProperty("action", "TYPING_EVENT");
@@ -59,7 +73,6 @@ public class TypingHandler {
                     conversationId, fromUserId, memberId);
             TcpConnectionManager.getInstance().broadcastToUser(memberId, evt);
         } else {
-            List<Long> memberIds = new ConversationRepository().getMemberIds(conversationId);
             logger.info("[TYPING BROADCAST] ConversationId={} | FromUserId={} | Broadcasting to {} other members",
                     conversationId, fromUserId, memberIds.size() - 1);
             for (Long memberId : memberIds) {
