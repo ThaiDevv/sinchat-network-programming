@@ -917,7 +917,7 @@ public class ChatView {
 
         contactLastMsgLabels.put(conversationId, msgLabel);
 
-        // Badge so tin nhan chua doc.
+        // Badge so tin nhan chua doc — hien thi chong len avatar (goc tren-phai) giong Messenger.
         int unread = unreadCounts.getOrDefault(conversationId, 0);
         Label badge = new Label(unread > 99 ? "99+" : unread > 0 ? String.valueOf(unread) : "");
         badge.setVisible(unread > 0);
@@ -925,13 +925,18 @@ public class ChatView {
         badge.setStyle("""
                 -fx-background-color: #ff4444;
                 -fx-text-fill: white;
-                -fx-font-size: 11px;
+                -fx-font-size: 10px;
                 -fx-font-weight: bold;
-                -fx-background-radius: 10px;
-                -fx-padding: 2px 7px;
-                -fx-min-width: 20px;
+                -fx-background-radius: 8px;
+                -fx-padding: 1px 5px;
+                -fx-min-width: 16px;
+                -fx-min-height: 16px;
                 -fx-alignment: center;
                 """);
+        // Dat badge o goc tren-phai cua avatar, oi nhe ra ngoai mot chut.
+        StackPane.setAlignment(badge, Pos.TOP_RIGHT);
+        StackPane.setMargin(badge, new Insets(-5, -5, 0, 0));
+        avatarContainer.getChildren().add(badge);
         unreadBadgesByConvId.put(conversationId, badge);
 
         // Lam dam noi dung tin nhan chua doc de noi bat hon.
@@ -944,8 +949,7 @@ public class ChatView {
         }
 
         info.getChildren().addAll(nameLabel, msgLabel);
-        HBox.setHgrow(info, Priority.ALWAYS);
-        contact.getChildren().addAll(avatarContainer, info, badge);
+        contact.getChildren().addAll(avatarContainer, info);
 
         if (!selected) {
             contact.setOnMouseEntered(e ->
