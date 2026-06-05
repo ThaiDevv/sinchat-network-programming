@@ -1,8 +1,3 @@
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.time.LocalDateTime;
@@ -10,6 +5,18 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+import javax.imageio.ImageIO;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import javafx.application.Platform;
 import javafx.embed.swing.SwingFXUtils;
@@ -17,11 +24,25 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.SnapshotParameters;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.OverrunStyle;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Slider;
+import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
-import javafx.scene.layout.*;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.ImagePattern;
 import javafx.scene.shape.Circle;
@@ -29,12 +50,6 @@ import javafx.scene.shape.Rectangle;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-
-import javax.imageio.ImageIO;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 public class ChatView {
 
@@ -69,6 +84,11 @@ public class ChatView {
     private final java.util.Map<Long, Boolean> peerOnlineByPeerId = new java.util.HashMap<>();
     private final java.util.Map<Long, Label> messageBubbleById = new java.util.HashMap<>();
     private final java.util.List<JsonObject> messageSearchMatches = new java.util.ArrayList<>();
+    // Unread message tracking & notification
+    private final java.util.Map<Long, Integer> unreadCounts = new java.util.HashMap<>();
+    private final java.util.Map<Long, String> conversationDisplayNames = new java.util.HashMap<>();
+    private final java.util.Map<Long, Label> unreadBadgesByConvId = new java.util.HashMap<>();
+    private final java.util.List<Stage> activeNotificationStages = new java.util.ArrayList<>();
     private final java.util.List<VBox> messageSearchItems = new java.util.ArrayList<>();
     private Label highlightedMessageBubble;
     private String highlightedMessageStyle;
@@ -297,6 +317,12 @@ public class ChatView {
                 }
             }
             scrollToBottom();
+        } else {
+            // Tin nhan thuoc conversation khac → tang so tin chua doc va hien thong bao.
+            unreadCounts.merge(conversationId, 1, Integer::sum);
+            updateUnreadBadge(conversationId);
+            String senderName = conversationDisplayNames.getOrDefault(conversationId, "Ai đó");
+            showNewMessageNotification(senderName, content, conversationId);
         }
 
 
@@ -462,6 +488,9 @@ public class ChatView {
      */
     public void setCurrentConversation(long conversationId, String name) {
         this.currentConversationId = conversationId;
+        // Xoa unread count khi nguoi dung mo conversation nay.
+        unreadCounts.remove(conversationId);
+        updateUnreadBadge(conversationId);
         // Xoa tin nhan cu tren UI.
         messagesBox.getChildren().clear();
         messageBubbleById.clear();
@@ -805,6 +834,8 @@ public class ChatView {
     }
 
     private void addContactWithPresence(long conversationId, String name, String lastMsg, boolean selected, JsonObject conv) {
+        // Luu ten conversation de toast notification biet ten nguoi gui.
+        conversationDisplayNames.put(conversationId, name);
         HBox contact = new HBox(12);
         contact.setAlignment(Pos.CENTER_LEFT);
         contact.setPadding(new Insets(12, 14, 12, 14));
@@ -886,8 +917,35 @@ public class ChatView {
 
         contactLastMsgLabels.put(conversationId, msgLabel);
 
+        // Badge so tin nhan chua doc.
+        int unread = unreadCounts.getOrDefault(conversationId, 0);
+        Label badge = new Label(unread > 99 ? "99+" : unread > 0 ? String.valueOf(unread) : "");
+        badge.setVisible(unread > 0);
+        badge.setManaged(unread > 0);
+        badge.setStyle("""
+                -fx-background-color: #ff4444;
+                -fx-text-fill: white;
+                -fx-font-size: 11px;
+                -fx-font-weight: bold;
+                -fx-background-radius: 10px;
+                -fx-padding: 2px 7px;
+                -fx-min-width: 20px;
+                -fx-alignment: center;
+                """);
+        unreadBadgesByConvId.put(conversationId, badge);
+
+        // Lam dam noi dung tin nhan chua doc de noi bat hon.
+        if (unread > 0 && !selected) {
+            msgLabel.setStyle("""
+                    -fx-font-size: 12px;
+                    -fx-text-fill: %s;
+                    -fx-font-weight: bold;
+                    """.formatted(TEXT_WHITE));
+        }
+
         info.getChildren().addAll(nameLabel, msgLabel);
-        contact.getChildren().addAll(avatarContainer, info);
+        HBox.setHgrow(info, Priority.ALWAYS);
+        contact.getChildren().addAll(avatarContainer, info, badge);
 
         if (!selected) {
             contact.setOnMouseEntered(e ->
@@ -2684,5 +2742,163 @@ public class ChatView {
             2500,
             TimeUnit.MILLISECONDS
         );
+    }
+
+    /**
+    Cap nhat badge so tin chua doc cho mot conversation trong danh sach lien he.
+     */
+    private void updateUnreadBadge(long conversationId) {
+        Label badge = unreadBadgesByConvId.get(conversationId);
+        if (badge == null) return;
+        int count = unreadCounts.getOrDefault(conversationId, 0);
+        Platform.runLater(() -> {
+            if (count > 0) {
+                badge.setText(count > 99 ? "99+" : String.valueOf(count));
+                badge.setVisible(true);
+                badge.setManaged(true);
+            } else {
+                badge.setText("");
+                badge.setVisible(false);
+                badge.setManaged(false);
+            }
+        });
+    }
+
+    /**
+     * Hien thi toast thong bao tin nhan moi tu conversation khac.
+     * - Goc duoi-phai cua cua so chinh.
+     * - Slide-in tu phai, tu dong dong sau 4 giay voi fade-out.
+     * - Click vao → chuyen sang conversation tuong ung.
+     * - Stack toi da 3 toast cung luc.
+     */
+    private void showNewMessageNotification(String senderName, String content, long conversationId) {
+        // Don toast cu nhat neu da dat gioi han.
+        if (activeNotificationStages.size() >= 3) {
+            Stage oldest = activeNotificationStages.remove(0);
+            Platform.runLater(oldest::close);
+        }
+
+        String preview = content != null && content.length() > 60
+                ? content.substring(0, 60) + "\u2026"
+                : (content != null ? content : "");
+
+        // Icon + Ten nguoi gui.
+        Label iconLabel = new Label("\uD83D\uDCAC");
+        iconLabel.setStyle("-fx-font-size: 20px;");
+
+        Label nameLabel = new Label(senderName);
+        nameLabel.setStyle("""
+                -fx-font-size: 14px;
+                -fx-font-weight: bold;
+                -fx-text-fill: #ffffff;
+                """);
+
+        // Badge so tin chua doc trong toast.
+        int unread = unreadCounts.getOrDefault(conversationId, 0);
+        Label countBadge = new Label(unread > 99 ? "99+" : String.valueOf(unread));
+        countBadge.setStyle("""
+                -fx-background-color: #ff4444;
+                -fx-text-fill: white;
+                -fx-font-size: 11px;
+                -fx-font-weight: bold;
+                -fx-background-radius: 9px;
+                -fx-padding: 2px 6px;
+                """);
+
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+
+        Button closeBtn = new Button("\u2715");
+        closeBtn.setStyle("""
+                -fx-background-color: transparent;
+                -fx-text-fill: #888888;
+                -fx-font-size: 13px;
+                -fx-cursor: hand;
+                -fx-padding: 0 0 0 4;
+                """);
+
+        HBox headerRow = new HBox(8, iconLabel, nameLabel, countBadge, headerSpacer, closeBtn);
+        headerRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Preview noi dung tin nhan.
+        Label previewLabel = new Label(preview);
+        previewLabel.setWrapText(true);
+        previewLabel.setMaxWidth(270);
+        previewLabel.setStyle("""
+                -fx-font-size: 13px;
+                -fx-text-fill: #aaaaaa;
+                """);
+
+        VBox toastContent = new VBox(8, headerRow, previewLabel);
+        toastContent.setPadding(new Insets(14, 16, 14, 16));
+        toastContent.setMaxWidth(300);
+        toastContent.setStyle("""
+                -fx-background-color: #1e1e1e;
+                -fx-background-radius: 14px;
+                -fx-border-color: #7c5cfc;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 14px;
+                -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.65), 20, 0.35, 0, 5);
+                """);
+        toastContent.setCursor(javafx.scene.Cursor.HAND);
+
+        StackPane toastRoot = new StackPane(toastContent);
+        toastRoot.setStyle("-fx-background-color: transparent;");
+        toastRoot.setPadding(new Insets(6));
+
+        Stage toastStage = new Stage();
+        toastStage.initOwner(stage);
+        toastStage.initStyle(javafx.stage.StageStyle.TRANSPARENT);
+        toastStage.setAlwaysOnTop(true);
+
+        javafx.scene.Scene toastScene = new javafx.scene.Scene(toastRoot, 314, javafx.scene.layout.Region.USE_COMPUTED_SIZE);
+        toastScene.setFill(Color.TRANSPARENT);
+        toastStage.setScene(toastScene);
+
+        // Vi tri: goc duoi-phai, stack tu duoi len cho nhieu toast.
+        int stackIndex = activeNotificationStages.size();
+        toastStage.setX(stage.getX() + stage.getWidth() - 330);
+        toastStage.setY(stage.getY() + stage.getHeight() - 130 - stackIndex * 115);
+        toastStage.show();
+        activeNotificationStages.add(toastStage);
+
+        // Click toan bo toast → mo conversation.
+        toastContent.setOnMouseClicked(e -> {
+            toastStage.close();
+            activeNotificationStages.remove(toastStage);
+            setCurrentConversation(conversationId, senderName);
+        });
+
+        // Nut dong chi tat toast, khong mo conversation.
+        closeBtn.setOnMouseClicked(e -> {
+            e.consume();
+            toastStage.close();
+            activeNotificationStages.remove(toastStage);
+        });
+
+        // Animation slide-in tu phai + fade-in.
+        toastRoot.setOpacity(0);
+        toastRoot.setTranslateX(50);
+        javafx.animation.TranslateTransition slideIn = new javafx.animation.TranslateTransition(
+                javafx.util.Duration.millis(220), toastRoot);
+        slideIn.setToX(0);
+        javafx.animation.FadeTransition fadeIn = new javafx.animation.FadeTransition(
+                javafx.util.Duration.millis(220), toastRoot);
+        fadeIn.setToValue(1.0);
+        new javafx.animation.ParallelTransition(slideIn, fadeIn).play();
+
+        // Tu dong dong sau 4 giay voi fade-out.
+        scheduler.schedule(() -> Platform.runLater(() -> {
+            if (!toastStage.isShowing()) return;
+            javafx.animation.FadeTransition fadeOut = new javafx.animation.FadeTransition(
+                    javafx.util.Duration.millis(350), toastRoot);
+            fadeOut.setFromValue(1.0);
+            fadeOut.setToValue(0.0);
+            fadeOut.setOnFinished(e -> {
+                toastStage.close();
+                activeNotificationStages.remove(toastStage);
+            });
+            fadeOut.play();
+        }), 4000, TimeUnit.MILLISECONDS);
     }
 }
