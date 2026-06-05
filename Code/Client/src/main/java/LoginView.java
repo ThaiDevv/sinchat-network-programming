@@ -5,8 +5,16 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Control;
+import javafx.scene.control.Hyperlink;
+import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextField;
+import javafx.scene.input.KeyCode;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 public class LoginView {
@@ -71,6 +79,17 @@ public class LoginView {
                         setMessage(message, response.message(), "#ff7777");
                     }
             );
+        });
+
+        // Nhấn Enter trên ô username hoặc password => thực hiện đăng nhập
+        usernameField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) loginButton.fire();
+        });
+        passwordField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) loginButton.fire();
+        });
+        visiblePassword.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) loginButton.fire();
         });
 
         Hyperlink forgotPassword = createLink("Qu\u00ean m\u1eadt kh\u1ea9u?");
@@ -355,14 +374,20 @@ public class LoginView {
         return passwordPane;
     }
 
+    private static final String STYLE_EYE_NORMAL  =
+            "-fx-background-color: transparent; -fx-border-color: transparent;" +
+            "-fx-border-width: 2px; -fx-border-radius: 8px;" +
+            "-fx-text-fill: #aaa; -fx-font-size: 13px; -fx-cursor: hand;";
+    private static final String STYLE_EYE_FOCUSED =
+            "-fx-background-color: transparent; -fx-border-color: #e96161;" +
+            "-fx-border-width: 2px; -fx-border-radius: 8px;" +
+            "-fx-text-fill: #aaa; -fx-font-size: 13px; -fx-cursor: hand;";
+
     private Button createPasswordToggleButton() {
         Button eyeButton = new Button("Hi\u1ec7n");
-        eyeButton.setStyle("""
-                -fx-background-color: transparent;
-                -fx-text-fill: #aaa;
-                -fx-font-size: 13px;
-                -fx-cursor: hand;
-                """);
+        eyeButton.setStyle(STYLE_EYE_NORMAL);
+        eyeButton.focusedProperty().addListener((obs, was, isFocused) ->
+                eyeButton.setStyle(isFocused ? STYLE_EYE_FOCUSED : STYLE_EYE_NORMAL));
         return eyeButton;
     }
 
@@ -415,63 +440,76 @@ public class LoginView {
         return subtitle;
     }
 
+    private static final String STYLE_INPUT_BASE =
+            "-fx-background-color: black;" +
+            "-fx-border-width: 2px;" +
+            "-fx-border-radius: 24px;" +
+            "-fx-background-radius: 24px;" +
+            "-fx-text-fill: white;" +
+            "-fx-prompt-text-fill: #666;" +
+            "-fx-font-size: 18px;" +
+            "-fx-padding: 18px;";
+
+    private static final String STYLE_INPUT_NORMAL  = STYLE_INPUT_BASE + "-fx-border-color: #444;";
+    private static final String STYLE_INPUT_FOCUSED = STYLE_INPUT_BASE + "-fx-border-color: #e96161ff;";
+
+    /** Đổi viền đỏ khi focus, khôi phục khi mất focus. */
+    private void applyFocusHighlight(Control field) {
+        field.focusedProperty().addListener((obs, wasFocused, isFocused) ->
+                field.setStyle(isFocused ? STYLE_INPUT_FOCUSED : STYLE_INPUT_NORMAL));
+    }
+
     private TextField createInput(String prompt) {
         TextField input = new TextField();
         input.setPromptText(prompt);
-        input.setStyle("""
-                -fx-background-color: black;
-                -fx-border-color: #444;
-                -fx-border-width: 2px;
-                -fx-border-radius: 24px;
-                -fx-background-radius: 24px;
-                -fx-text-fill: white;
-                -fx-prompt-text-fill: #666;
-                -fx-font-size: 18px;
-                -fx-padding: 18px;
-                """);
+        input.setStyle(STYLE_INPUT_NORMAL);
         input.setPrefHeight(65);
+        applyFocusHighlight(input);
         return input;
     }
 
     private PasswordField createPasswordInput(String prompt) {
         PasswordField input = new PasswordField();
         input.setPromptText(prompt);
-        input.setStyle("""
-                -fx-background-color: black;
-                -fx-border-color: #444;
-                -fx-border-width: 2px;
-                -fx-border-radius: 24px;
-                -fx-background-radius: 24px;
-                -fx-text-fill: white;
-                -fx-prompt-text-fill: #666;
-                -fx-font-size: 18px;
-                -fx-padding: 18px;
-                """);
+        input.setStyle(STYLE_INPUT_NORMAL);
         input.setPrefHeight(65);
+        applyFocusHighlight(input);
         return input;
     }
 
+    private static final String STYLE_BTN_NORMAL  =
+            "-fx-background-color: white; -fx-text-fill: black;" +
+            "-fx-font-size: 20px; -fx-font-weight: bold;" +
+            "-fx-background-radius: 24px; -fx-border-radius: 24px;" +
+            "-fx-border-color: transparent; -fx-border-width: 3px; -fx-cursor: hand;";
+    private static final String STYLE_BTN_FOCUSED =
+            "-fx-background-color: white; -fx-text-fill: black;" +
+            "-fx-font-size: 20px; -fx-font-weight: bold;" +
+            "-fx-background-radius: 24px; -fx-border-radius: 24px;" +
+            "-fx-border-color: #e96161; -fx-border-width: 3px; -fx-cursor: hand;";
+
     private Button createPrimaryButton(String text) {
         Button button = new Button(text);
-        button.setStyle("""
-                -fx-background-color: white;
-                -fx-text-fill: black;
-                -fx-font-size: 20px;
-                -fx-font-weight: bold;
-                -fx-background-radius: 24px;
-                -fx-cursor: hand;
-                """);
+        button.setStyle(STYLE_BTN_NORMAL);
         button.setPrefHeight(65);
         button.setMaxWidth(Double.MAX_VALUE);
+        button.focusedProperty().addListener((obs, was, isFocused) ->
+                button.setStyle(isFocused ? STYLE_BTN_FOCUSED : STYLE_BTN_NORMAL));
         return button;
     }
 
+    private static final String STYLE_LINK_NORMAL  =
+            "-fx-text-fill: #aaa; -fx-border-color: transparent;" +
+            "-fx-border-width: 1px; -fx-border-radius: 6px;";
+    private static final String STYLE_LINK_FOCUSED =
+            "-fx-text-fill: #e96161; -fx-border-color: #e96161;" +
+            "-fx-border-width: 1px; -fx-border-radius: 6px;";
+
     private Hyperlink createLink(String text) {
         Hyperlink link = new Hyperlink(text);
-        link.setStyle("""
-                -fx-text-fill: #aaa;
-                -fx-border-color: transparent;
-                """);
+        link.setStyle(STYLE_LINK_NORMAL);
+        link.focusedProperty().addListener((obs, was, isFocused) ->
+                link.setStyle(isFocused ? STYLE_LINK_FOCUSED : STYLE_LINK_NORMAL));
         return link;
     }
 
