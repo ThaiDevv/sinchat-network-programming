@@ -17,8 +17,10 @@ public class Main extends Application {
     public void stop() {
         // Properly disconnect from server when the application window is closed
         System.out.println("[Main] Application stopping - disconnecting from server...");
-        ChatTcpClient client = ChatTcpClient.getInstance();
-        client.shutdown();
+        ChatTcpClient client = ChatTcpClient.getInstanceOrNull();
+        if (client != null) {
+            client.shutdown();
+        }
     }
 
     public static void main(String[] args) {

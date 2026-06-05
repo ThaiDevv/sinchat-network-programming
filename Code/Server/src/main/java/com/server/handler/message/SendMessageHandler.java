@@ -11,7 +11,10 @@ import org.slf4j.LoggerFactory;
  */
 public class SendMessageHandler {
     private static final Logger logger = LoggerFactory.getLogger(SendMessageHandler.class);
+    private static final int MAX_MESSAGE_LENGTH = 10000;
     private final MessageService messageService = new MessageService();
+    private final com.server.repository.ConversationRepository conversationRepository = new com.server.repository.ConversationRepository();
+    private final com.server.repository.MessageStatusRepository messageStatusRepository = new com.server.repository.MessageStatusRepository();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
@@ -28,6 +31,15 @@ public class SendMessageHandler {
             long senderId = request.get("senderId").getAsLong();
             String content = request.has("content") ? request.get("content").getAsString() : "";
 
+            // Validate message length
+            if (content.length() > MAX_MESSAGE_LENGTH) {
+                logger.warn("[SEND_MESSAGE] Remote={} | UserId={} | ContentLength={} | Message too long (max {})",
+                        conn.getRemoteAddress(), senderId, content.length(), MAX_MESSAGE_LENGTH);
+                response.addProperty("status", "error");
+                response.addProperty("message", "Message too long. Maximum " + MAX_MESSAGE_LENGTH + " characters.");
+                return response;
+            }
+
             // Security check: verify senderId matches the authenticated user
             Long connectedUserId = conn.getUserId();
             if (connectedUserId == null || senderId != connectedUserId) {
@@ -35,6 +47,16 @@ public class SendMessageHandler {
                         conn.getRemoteAddress(), connectedUserId, senderId);
                 response.addProperty("status", "error");
                 response.addProperty("message", "Unauthorized: senderId mismatch");
+                return response;
+            }
+
+            // Security check: verify sender is a member of this conversation
+            java.util.List<Long> memberIds = conversationRepository.getMemberIds(conversationId);
+            if (!memberIds.contains(senderId)) {
+                logger.warn("[SEND_MESSAGE UNAUTHORIZED] Remote={} | UserId={} | ConversationId={} | sender is not a member of this conversation",
+                        conn.getRemoteAddress(), senderId, conversationId);
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized: not a member of this conversation");
                 return response;
             }
 
@@ -52,7 +74,7 @@ public class SendMessageHandler {
             long msgId = messageService.sendMessage(conversationId, senderId, content);
             logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored",
                     conn.getRemoteAddress(), senderId, conversationId, msgId);
-            com.server.model.MessageStatus.Status collectiveStatus = new com.server.repository.MessageStatusRepository().getCollectiveStatus(msgId);
+            com.server.model.MessageStatus.Status collectiveStatus = messageStatusRepository.getCollectiveStatus(msgId);
 
             response.addProperty("status", "success");
             response.addProperty("messageId", msgId);
@@ -61,8 +83,7 @@ public class SendMessageHandler {
             response.addProperty("content", content);
             response.addProperty("messageStatus", collectiveStatus.name());
 
-            // Broadcast new message to all members in the conversation
-            java.util.List<Long> memberIds = getMemberIds(conversationId);
+            // Broadcast new message to all members in the conversation (reuse memberIds from above)
 
             logger.info("[SEND_MESSAGE BROADCAST] Remote={} | UserId={} | ConversationId={} | MessageId={} | Broadcasting to {} members",
                     conn.getRemoteAddress(), senderId, conversationId, msgId, memberIds.size());
@@ -91,6 +112,6 @@ public class SendMessageHandler {
     }
 
     protected java.util.List<Long> getMemberIds(long conversationId) {
-        return new com.server.repository.ConversationRepository().getMemberIds(conversationId);
+        return conversationRepository.getMemberIds(conversationId);
     }
 }

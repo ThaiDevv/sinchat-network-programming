@@ -8,16 +8,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class TcpConnectionManager {
     private static final Logger logger = LoggerFactory.getLogger(TcpConnectionManager.class);
-    private static TcpConnectionManager instance;
+    private static final TcpConnectionManager instance = new TcpConnectionManager();
     private final ConcurrentHashMap<Long, Set<ClientConnection>> userConnections = new ConcurrentHashMap<>();
     private final Set<ClientConnection> activeConnections = ConcurrentHashMap.newKeySet();
 
     private TcpConnectionManager() {}
 
-    public static synchronized TcpConnectionManager getInstance() {
-        if (instance == null) {
-            instance = new TcpConnectionManager();
-        }
+    public static TcpConnectionManager getInstance() {
         return instance;
     }
 

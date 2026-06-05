@@ -111,7 +111,6 @@ public class PresenceService {
         JsonObject event = new JsonObject();
         event.addProperty("action", "USER_AVATAR_CHANGED_EVENT");
         event.addProperty("userId", userId);
-        event.addProperty("avatarUrl", avatarUrl);
 
         TcpConnectionManager manager = TcpConnectionManager.getInstance();
         for (Long targetId : targetIds) {

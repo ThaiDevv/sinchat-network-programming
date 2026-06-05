@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 
 public class ChangePasswordHandler {
     private static final Logger logger = LoggerFactory.getLogger(ChangePasswordHandler.class);
-    private final AuthService authService = new AuthService();
+    private final AuthService authService = AuthService.getInstance();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();

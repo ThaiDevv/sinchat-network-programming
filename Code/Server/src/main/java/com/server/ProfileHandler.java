@@ -25,6 +25,15 @@ public class ProfileHandler {
                     return response;
                 }
                 long userId = request.get("userId").getAsLong();
+                // Security: verify userId matches the authenticated connection
+                Long connUserId = conn.getUserId();
+                if (connUserId == null || connUserId != userId) {
+                    logger.warn("[PROFILE GET] Remote={} | ConnUserId={} | RequestedUserId={} | Unauthorized",
+                            conn.getRemoteAddress(), connUserId, userId);
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Unauthorized: userId mismatch");
+                    return response;
+                }
                 logger.info("[PROFILE GET] Remote={} | UserId={} | Fetching profile",
                         conn.getRemoteAddress(), userId);
                 JsonObject profile = getUserProfile(userId);
@@ -47,6 +56,15 @@ public class ProfileHandler {
                     return response;
                 }
                 long userId = request.get("userId").getAsLong();
+                // Security: verify userId matches the authenticated connection
+                Long connUserId = conn.getUserId();
+                if (connUserId == null || connUserId != userId) {
+                    logger.warn("[PROFILE UPDATE] Remote={} | ConnUserId={} | RequestedUserId={} | Unauthorized",
+                            conn.getRemoteAddress(), connUserId, userId);
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Unauthorized: userId mismatch");
+                    return response;
+                }
                 String email = request.has("email") && !request.get("email").isJsonNull() ? request.get("email").getAsString() : null;
                 String avatarUrl = request.has("avatar_url") && !request.get("avatar_url").isJsonNull() ? request.get("avatar_url").getAsString() : null;
 

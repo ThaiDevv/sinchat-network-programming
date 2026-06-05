@@ -22,6 +22,14 @@ public class SearchUserHandler {
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
         try {
+            // Security check: require login
+            Long userId = conn.getUserId();
+            if (userId == null) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized");
+                return response;
+            }
+
             if (!request.has("query")) {
                 logger.warn("[SEARCH_USERS] Remote={} | Missing query parameter",
                         conn.getRemoteAddress());
@@ -31,15 +39,14 @@ public class SearchUserHandler {
             }
 
             String query = request.get("query").getAsString();
-            long currentUserId = conn.getUserId() != null ? conn.getUserId() : -1;
 
             logger.info("[SEARCH_USERS] Remote={} | UserId={} | query='{}' | Searching users",
-                    conn.getRemoteAddress(), currentUserId, query);
+                    conn.getRemoteAddress(), userId, query);
 
-            JsonArray users = userRepository.searchUsers(query, currentUserId);
+            JsonArray users = userRepository.searchUsers(query, userId);
 
             logger.info("[SEARCH_USERS] Remote={} | UserId={} | query='{}' | Found {} users",
-                    conn.getRemoteAddress(), currentUserId, query, users.size());
+                    conn.getRemoteAddress(), userId, query, users.size());
 
             response.addProperty("status", "success");
             response.add("users", users);

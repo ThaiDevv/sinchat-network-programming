@@ -17,6 +17,8 @@ public class GetMessagesHandler {
     private static final Logger logger = LoggerFactory.getLogger(GetMessagesHandler.class);
     private final Gson gson = new Gson();
     private final MessageService messageService = new MessageService();
+    private final com.server.repository.MessageStatusRepository messageStatusRepository = new com.server.repository.MessageStatusRepository();
+    private final com.server.repository.ConversationRepository conversationRepository = new com.server.repository.ConversationRepository();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
@@ -39,25 +41,18 @@ public class GetMessagesHandler {
             int limit = request.has("limit") ? request.get("limit").getAsInt() : 0;
             int offset = request.has("offset") ? request.get("offset").getAsInt() : 0;
 
+            // Security check: verify user is a member of this conversation
+            java.util.List<Long> memberIds = conversationRepository.getMemberIds(conversationId);
+            if (!memberIds.contains(userId)) {
+                logger.warn("[GET_MESSAGES UNAUTHORIZED] Remote={} | UserId={} | ConversationId={} | user is not a member of this conversation",
+                        conn.getRemoteAddress(), userId, conversationId);
+                response.addProperty("status", "error");
+                response.addProperty("message", "Unauthorized: not a member of this conversation");
+                return response;
+            }
+
             logger.info("[GET_MESSAGES] Remote={} | UserId={} | ConversationId={} | limit={} | offset={} | Fetching messages",
                     conn.getRemoteAddress(), userId, conversationId, limit, offset);
-
-            // Update statuses to SEEN for the recipient fetching them
-            com.server.repository.MessageStatusRepository msRepo = new com.server.repository.MessageStatusRepository();
-            msRepo.markAllAsSeen(conversationId, userId);
-
-            // Notify other members that this user has SEEN the messages in the conversation
-            java.util.List<Long> memberIds = new com.server.repository.ConversationRepository().getMemberIds(conversationId);
-            JsonObject statusEvent = new JsonObject();
-            statusEvent.addProperty("action", "MESSAGE_STATUS_EVENT");
-            statusEvent.addProperty("conversationId", conversationId);
-            statusEvent.addProperty("status", "SEEN");
-            statusEvent.addProperty("userId", userId);
-            for (Long memberId : memberIds) {
-                if (!memberId.equals(userId)) {
-                    com.server.tcp.TcpConnectionManager.getInstance().broadcastToUser(memberId, statusEvent);
-                }
-            }
 
             List<Message> messages;
             if (limit > 0) {
@@ -79,7 +74,7 @@ public class GetMessagesHandler {
             }
 
             // Populate status in messages
-            java.util.Map<Long, com.server.model.MessageStatus.Status> statuses = msRepo.getStatusesForConversation(conversationId);
+            java.util.Map<Long, com.server.model.MessageStatus.Status> statuses = messageStatusRepository.getStatusesForConversation(conversationId);
             for (Message msg : messages) {
                 com.server.model.MessageStatus.Status status = statuses.get(msg.getId());
                 if (status != null) {

@@ -5,7 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.server.handler.message.GetMessagesHandler;
 import com.server.handler.message.SendMessageHandler;
-import com.server.handler.message.ConversationHandle;
+import com.server.handler.message.ConversationHandler;
 import com.server.handler.message.GetConversationsHandler;
 import com.server.service.MessageService;
 import com.server.service.ConversationService;
@@ -43,7 +43,7 @@ class MessageEndpointIntegrationTest {
         mockConvService = mock(ConversationService.class);
 
         GetMessagesHandler getMessagesHandler = (GetMessagesHandler) getStaticField(Router.class, "getMessagesHandler");
-        ConversationHandle conversationHandle = (ConversationHandle) getStaticField(Router.class, "conversationHandle");
+        ConversationHandler conversationHandler = (ConversationHandler) getStaticField(Router.class, "conversationHandler");
         GetConversationsHandler getConversationsHandler = (GetConversationsHandler) getStaticField(Router.class, "getConversationsHandler");
 
         // Subclass SendMessageHandler to avoid database dependency
@@ -58,7 +58,7 @@ class MessageEndpointIntegrationTest {
         injectField(sendMessageHandler, "messageService", mockMsgService);
         injectField(Router.class, "sendMessageHandler", sendMessageHandler); // Inject custom handler into Router
 
-        injectField(conversationHandle, "conversationService", mockConvService);
+        injectField(conversationHandler, "conversationService", mockConvService);
         injectField(getConversationsHandler, "conversationService", mockConvService);
 
         server = new TcpServer(0); // Ephemeral port

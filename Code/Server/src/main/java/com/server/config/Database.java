@@ -11,9 +11,10 @@ import java.sql.SQLException;
 
 public class Database {
     private static final Logger logger = LoggerFactory.getLogger(Database.class);
-    private static final HikariDataSource dataSource;
+    private static volatile HikariDataSource dataSource;
+    private static final Object lock = new Object();
 
-    static {
+    private static HikariDataSource initDataSource() {
         Dotenv dotenv;
         if (new java.io.File("./Code/Server/.env").exists()) {
             dotenv = Dotenv.configure().directory("./Code/Server").ignoreIfMissing().load();
@@ -34,11 +35,15 @@ public class Database {
                 if (dotenv.get("DB_PASSWORD") == null) {
                     throw new RuntimeException("DB_PASSWORD is not configured in .env file");
                 }
-            // Add SSL disable parameters to avoid timeout issues
+            // SSL config: configurable via env var USE_SSL (default: false for dev)
+            boolean useSSL = "true".equalsIgnoreCase(dotenv.get("USE_SSL"));
+            boolean allowPublicKey = !"true".equalsIgnoreCase(dotenv.get("USE_SSL")); // only in dev
+            String sslParam = "useSSL=" + useSSL;
+            String publicKeyParam = allowPublicKey ? "&allowPublicKeyRetrieval=true" : "";
             if (!dbUrl.contains("?")) {
-                dbUrl += "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+                dbUrl += "?" + sslParam + publicKeyParam + "&serverTimezone=UTC";
             } else {
-                dbUrl += "&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+                dbUrl += "&" + sslParam + publicKeyParam + "&serverTimezone=UTC";
             }
             config.setJdbcUrl(dbUrl);
         config.setUsername(dotenv.get("DB_USER"));
@@ -59,11 +64,30 @@ public class Database {
 
         config.setPoolName("SinChatPool");
 
-        dataSource = new HikariDataSource(config);
-        logger.info("HikariCP connection pool initialized.");
+        return new HikariDataSource(config);
     }
 
     public static Connection getConnection() throws SQLException {
+        if (dataSource == null) {
+            synchronized (lock) {
+                if (dataSource == null) {
+                    int maxRetries = 3;
+                    for (int i = 1; i <= maxRetries; i++) {
+                        try {
+                            dataSource = initDataSource();
+                            logger.info("HikariCP connection pool initialized (attempt {}).", i);
+                            break;
+                        } catch (Exception e) {
+                            logger.error("Failed to initialize database pool (attempt {}/{}): {}", i, maxRetries, e.getMessage());
+                            if (i == maxRetries) {
+                                throw new SQLException("Could not initialize database after " + maxRetries + " attempts", e);
+                            }
+                            try { Thread.sleep(2000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                        }
+                    }
+                }
+            }
+        }
         return dataSource.getConnection();
     }
 }

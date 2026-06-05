@@ -10,6 +10,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class AuthService {
 
+    private static final AuthService INSTANCE = new AuthService();
+
+    public static AuthService getInstance() {
+        return INSTANCE;
+    }
+
     public enum ChangePasswordResult {
         SUCCESS,
         USER_NOT_FOUND,
@@ -97,11 +103,11 @@ public class AuthService {
         }
 
         synchronized (state) {
-            if (state.attempts >= 5) {
+            state.attempts++;
+            if (state.attempts > 5) {
                 passwordResetCodes.remove(code);
                 return false; // Block brute force: too many attempts, code is now invalidated
             }
-            state.attempts++;
         }
 
         // Hash new password

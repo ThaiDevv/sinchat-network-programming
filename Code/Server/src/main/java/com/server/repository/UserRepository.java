@@ -172,11 +172,13 @@ public class UserRepository {
     /** Tim user theo tu khoa, dung cho search. */
     public JsonArray searchUsers(String keyword, long excludeUserId) {
         JsonArray results = new JsonArray();
+        // Escape SQL LIKE wildcards to prevent unexpected query behavior
+        String escapedKeyword = keyword.replace("%", "\\%").replace("_", "\\_");
         String query = "SELECT u.id, u.username, (CASE WHEN ua.id IS NOT NULL THEN 'db' ELSE NULL END) AS avatar_url " +
-                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.username LIKE ? AND u.id != ? LIMIT 15";
+                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.username LIKE ? ESCAPE '\\' AND u.id != ? LIMIT 15";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
-            pstmt.setString(1, "%" + keyword + "%");
+            pstmt.setString(1, "%" + escapedKeyword + "%");
             pstmt.setLong(2, excludeUserId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
@@ -191,6 +193,19 @@ public class UserRepository {
             logger.error("Error searching users with keyword: {}", keyword, e);
         }
         return results;
+    }
+
+    public boolean updateEmail(long userId, String email) {
+        String query = "UPDATE users SET email = ? WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, email);
+            pstmt.setLong(2, userId);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            logger.error("Error updating email for userId: {}", userId, e);
+        }
+        return false;
     }
 
     private User mapRow(ResultSet rs) throws SQLException {
