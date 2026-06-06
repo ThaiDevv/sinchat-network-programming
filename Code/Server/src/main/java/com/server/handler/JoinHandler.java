@@ -56,14 +56,13 @@ public class JoinHandler {
         conn.setUserId(userId);
         TcpConnectionManager.getInstance().addConnection(userId, conn);
 
-        if (previousUserId == null) {
-            logger.info("[JOIN] Remote={} | userId={} - New login, broadcasting online status",
-                    conn.getRemoteAddress(), userId);
-            presenceService.onUserOnline(userId);
-        } else {
-            logger.info("[JOIN] Remote={} | userId={} - Re-JOIN (previousUserId={}), skipping online broadcast",
-                    conn.getRemoteAddress(), userId, previousUserId);
-        }
+        // Broadcast online status when user successfully JOINs.
+        // NOTE: LOGIN already set conn.userId, so previousUserId is never null
+        // when JOIN arrives after a successful LOGIN. We must always broadcast
+        // online here to update the database and notify peers.
+        logger.info("[JOIN] Remote={} | userId={} - Broadcasting online status (previousUserId={})",
+                conn.getRemoteAddress(), userId, previousUserId);
+        presenceService.onUserOnline(userId);
 
         JsonObject response = new JsonObject();
         response.addProperty("status", "success");
