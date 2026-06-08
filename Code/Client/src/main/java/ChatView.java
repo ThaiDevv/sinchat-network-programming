@@ -657,9 +657,17 @@ public class ChatView {
             highlightedMessageStyle = null;
         }
 
-        // Gan messageId vao bubble de ket qua search co the cuon toi dung tin.
+        // Server tra ve tin nhan theo thu tu DESC (moi nhat truoc).
+        // Can dao nguoc lai truoc khi chen vao VBox de tin cu hien tren dau,
+        // tin moi hien o cuoi — scrollToBottom se hien dung tin moi nhat.
+        java.util.List<JsonElement> msgList = new java.util.ArrayList<>();
+        for (JsonElement e : messages) msgList.add(e);
+        java.util.Collections.reverse(msgList); // Dao thanh ASC (cu nhat truoc)
+
+        // insertIndex=0: lan reset -> them tu dau VBox lan luot, tin cu nhat o index 0
+        // load-more (scroll len): prepend dung thu tu -> [tin_cu_hon, ..., tin_moi_hon, hien_tai...]
         int insertIndex = 0;
-        for (JsonElement element : messages) {
+        for (JsonElement element : msgList) {
             JsonObject msg = element.getAsJsonObject();
             long messageId = msg.has("id") ? msg.get("id").getAsLong() : -1;
             long senderId = msg.get("senderId").getAsLong();
@@ -917,7 +925,7 @@ public class ChatView {
 
         contactLastMsgLabels.put(conversationId, msgLabel);
 
-        // Badge so tin nhan chua doc — hien thi chong len avatar (goc tren-phai) giong Messenger.
+        // Hien thi so tin nhan chua doc
         int unread = unreadCounts.getOrDefault(conversationId, 0);
         Label badge = new Label(unread > 99 ? "99+" : unread > 0 ? String.valueOf(unread) : "");
         badge.setVisible(unread > 0);
