@@ -69,6 +69,8 @@ public class ChatView {
     private final java.util.Map<Long, Boolean> peerOnlineByPeerId = new java.util.HashMap<>();
     private final java.util.Map<Long, Label> messageBubbleById = new java.util.HashMap<>();
     private final java.util.List<JsonObject> messageSearchMatches = new java.util.ArrayList<>();
+    // Field to hold the displayed name label for updates
+    private Label nameLabel;
     private final java.util.List<VBox> messageSearchItems = new java.util.ArrayList<>();
     private Label highlightedMessageBubble;
     private String highlightedMessageStyle;
@@ -1860,7 +1862,7 @@ public class ChatView {
             menu.show(profileAvatarCircle, e.getScreenX(), e.getScreenY());
         });
 
-        Label nameLabel = new Label("Sinh vi\u00ean");
+        nameLabel = new Label("Sinh viên");
         nameLabel.setStyle("""
                 -fx-font-size: 20px;
                 -fx-font-weight: bold;
@@ -1875,6 +1877,7 @@ public class ChatView {
         });
 
         Button nameBtn = createProfileButton("\u0110\u1ed5i t\u00ean ng\u01b0\u1eddi d\u00f9ng", false);
+        nameBtn.setOnAction(e -> showChangeUsernameDialog());
         Button passBtn = createProfileButton("\u0110\u1ed5i m\u1eadt kh\u1ea9u", false);
         passBtn.setOnAction(e -> showChangePasswordDialog());
 
@@ -1904,6 +1907,91 @@ public class ChatView {
         );
 
         return panel;
+    }
+
+    private void showChangeUsernameDialog() {
+        Stage dialog = new Stage();
+        dialog.initOwner(stage);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        dialog.setTitle("Đổi tên người dùng");
+        dialog.setResizable(false);
+
+        VBox content = new VBox(14);
+        content.setPadding(new Insets(28, 28, 24, 28));
+        content.setPrefWidth(360);
+        content.setStyle("""
+                -fx-background-color: %s;
+                """.formatted(PANEL_DARK));
+
+        Label title = new Label("Đổi tên người dùng");
+        title.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 22px;
+                -fx-font-weight: bold;
+                """.formatted(TEXT_WHITE));
+
+        Label subtitle = new Label("Nhập tên mới cho tài khoản của bạn.");
+        subtitle.setWrapText(true);
+        subtitle.setStyle("""
+                -fx-text-fill: %s;
+                -fx-font-size: 13px;
+                """.formatted(TEXT_MUTED));
+
+        TextField newNameField = new TextField();
+        newNameField.setPromptText("Tên người dùng mới");
+        newNameField.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 8px;
+                -fx-background-radius: 8px;
+                -fx-text-fill: %s;
+                -fx-prompt-text-fill: %s;
+                -fx-font-size: 14px;
+                -fx-padding: 10px 14px;
+                """.formatted(BG_BLACK, INPUT_BORDER, TEXT_WHITE, TEXT_DIM));
+
+        Label msgLabel = new Label("");
+        msgLabel.setWrapText(true);
+        msgLabel.setMinHeight(20);
+        msgLabel.setStyle("-fx-text-fill: transparent; -fx-font-size: 12px;");
+
+        Button cancelBtn = createPasswordDialogButton("Hủy", false);
+        cancelBtn.setOnAction(e -> dialog.close());
+
+        Button confirmBtn = createPasswordDialogButton("Xác nhận", true);
+        confirmBtn.setOnAction(e -> {
+            String newName = newNameField.getText().trim();
+            if (newName.isEmpty()) {
+                msgLabel.setText("Tên không được để trống.");
+                msgLabel.setStyle("-fx-text-fill: #ff7777; -fx-font-size: 12px;");
+                return;
+            }
+            CompletableFuture.supplyAsync(() -> tcpClient.changeUsername(currentUserId, newName))
+                .thenAccept(resp -> Platform.runLater(() -> {
+                    if (resp.isSuccess()) {
+                        if (nameLabel != null) nameLabel.setText(newName);
+                        showToast("Đổi tên thành công!");
+                        dialog.close();
+                    } else {
+                        String errMsg = resp.message() != null && !resp.message().isBlank()
+                                ? resp.message()
+                                : "Không thể đổi tên. Vui lòng thử lại.";
+                        msgLabel.setText(errMsg);
+                        msgLabel.setStyle("-fx-text-fill: #ff7777; -fx-font-size: 12px;");
+                    }
+                }));
+        });
+
+        HBox buttons = new HBox(10, cancelBtn, confirmBtn);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
+
+        content.getChildren().addAll(title, subtitle, newNameField, msgLabel, buttons);
+
+        Scene scene = new Scene(content);
+        scene.setFill(Color.web(PANEL_DARK));
+        dialog.setScene(scene);
+        dialog.show();
     }
 
     private void showChangePasswordDialog() {

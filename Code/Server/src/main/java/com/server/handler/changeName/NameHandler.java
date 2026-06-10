@@ -2,7 +2,7 @@ package com.server.handler.changeName;
 
 import com.google.gson.JsonObject;
 import com.server.service.UserNameService;
-import com.server.tcp.Connection;
+import com.server.tcp.ClientConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,7 +10,8 @@ public class NameHandler {
     private static final Logger logger = LoggerFactory.getLogger(NameHandler.class);
     private final UserNameService userNameService = new UserNameService();
 
-    public JsonObject handle(Connection conn, JsonObject request) {
+    public JsonObject handle(ClientConnection conn, JsonObject request) {
+
         JsonObject response = new JsonObject();
 
         try {
@@ -26,7 +27,7 @@ public class NameHandler {
 
             // 2. Security: verify userId matches the authenticated connection
             Long connUserId = conn.getUserId();
-            if (connUserId == null || connUserId != userId) {
+            if (connUserId == null || connUserId.longValue() != userId) {
                 logger.warn("[CHANGE_NAME] Remote={} | ConnUserId={} | RequestedUserId={} | Unauthorized",
                         conn.getRemoteAddress(), connUserId, userId);
                 response.addProperty("status", "error");

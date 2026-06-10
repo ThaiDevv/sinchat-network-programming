@@ -5,6 +5,7 @@ import com.server.handler.auth.*;
 import com.server.handler.message.*;
 import com.server.handler.changeavatar.*;
 import com.server.handler.avatar.GetAvatarHandler;
+import com.server.handler.changeName.NameHandler;
 import com.server.handler.JoinHandler;
 import com.server.handler.PingHandler;
 import com.server.handler.TypingHandler;
@@ -33,6 +34,7 @@ public class Router {
     private static final PingHandler pingHandler = new PingHandler();
     private static final TypingHandler typingHandler = new TypingHandler();
     private static final UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
+    private static final NameHandler nameHandler = new NameHandler();
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -137,6 +139,9 @@ public class Router {
                     break;
                 case "UPDATE_MESSAGE_STATUS":
                     response = updateMessageStatusHandler.handleTcp(request, conn);
+                    break;
+                case "CHANGE_NAME":
+                    response = nameHandler.handle(conn, request);
                     break;
 
                 default:
