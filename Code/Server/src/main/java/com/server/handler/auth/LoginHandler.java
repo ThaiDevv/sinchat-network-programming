@@ -97,7 +97,7 @@ public class LoginHandler {
                         conn.getRemoteAddress(), username);
                 response.addProperty("status", "error");
                 response.addProperty("message",
-                        "Invalid username or password");
+                        "Sai tên đăng nhập hoặc mật khẩu");
             }
 
         } catch (Exception e) {
