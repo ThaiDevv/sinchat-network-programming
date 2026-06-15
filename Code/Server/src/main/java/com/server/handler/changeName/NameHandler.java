@@ -3,6 +3,7 @@ package com.server.handler.changeName;
 import com.google.gson.JsonObject;
 import com.server.service.UserNameService;
 import com.server.tcp.ClientConnection;
+import com.server.tcp.PresenceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,8 +47,18 @@ public class NameHandler {
                 response.addProperty("message", "Username changed successfully");
                 response.addProperty("newUsername", newUsername);
 
-                // Broadcast changes to peers (nếu có)
-                com.server.tcp.PresenceService.getInstance().broadcastNameChangeToPeers(userId, newUsername);
+                // Broadcast changes to peers ASYNCHRONOUSLY
+                // để không chặn response gửi về client (tránh timeout 10s)
+                final long broadcastUserId = userId;
+                final String broadcastNewUsername = newUsername;
+                Thread.startVirtualThread(() -> {
+                    try {
+                        PresenceService.getInstance().broadcastNameChangeToPeers(broadcastUserId, broadcastNewUsername);
+                    } catch (Exception ex) {
+                        logger.error("[CHANGE_NAME BROADCAST ERROR] UserId={} | Error: {}",
+                                broadcastUserId, ex.getMessage(), ex);
+                    }
+                });
             } else {
                 logger.warn("[CHANGE_NAME] Remote={} | UserId={} | Failed to update username",
                         conn.getRemoteAddress(), userId);
