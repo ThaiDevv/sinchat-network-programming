@@ -115,7 +115,8 @@ public class ChatView {
     private int currentMessageOffset = 0;
     private boolean hasMoreMessages = true;
     private boolean isLoadingMore = false;
-    private static final int PAGE_SIZE = 50;
+    private static final int PAGE_SIZE = 20;
+    private Label loadingIndicator; // Hien thi khi dang tai tin nhan cu hon
 
     // Co nay ngan scroll listener khi dang load tin nhan lan dau (reset).
     // Khi reset, VBox bi xoa trang -> vvalue giam ve 0 -> scroll listener se hieu nham
@@ -526,6 +527,7 @@ public class ChatView {
         currentMessageOffset = 0;
         hasMoreMessages = true;
         isLoadingMore = false;
+        hideLoadingIndicator();
         
         // Cap nhat ten tren header.
         if (headerChatName != null) {
@@ -581,6 +583,16 @@ public class ChatView {
         if (reset) {
             currentMessageOffset = 0;
             hasMoreMessages = true;
+        } else {
+            // Hien thi loading indicator khi keo load tin nhan cu
+            Platform.runLater(() -> {
+                if (loadingIndicator != null) {
+                    loadingIndicator.setVisible(true);
+                    if (!messagesBox.getChildren().contains(loadingIndicator)) {
+                        messagesBox.getChildren().add(0, loadingIndicator);
+                    }
+                }
+            });
         }
 
         long capturedConversationId = currentConversationId;
@@ -600,6 +612,7 @@ public class ChatView {
                         // Neu user da chuyen conversation thi bo qua ket qua cu.
                         if (this.currentConversationId != capturedConversationId) {
                             isLoadingMore = false;
+                            hideLoadingIndicator();
                             return;
                         }
 
@@ -617,12 +630,21 @@ public class ChatView {
                         System.err.println("Failed to parse messages JSON: " + e.getMessage());
                     } finally {
                         isLoadingMore = false;
+                        hideLoadingIndicator();
                     }
                 });
             } else {
                 isLoadingMore = false;
+                Platform.runLater(this::hideLoadingIndicator);
             }
         });
+    }
+
+    private void hideLoadingIndicator() {
+        if (loadingIndicator != null) {
+            loadingIndicator.setVisible(false);
+            messagesBox.getChildren().remove(loadingIndicator);
+        }
     }
 
     private void loadPeerAvatar(long peerId, Circle targetCircle) {
@@ -745,9 +767,7 @@ public class ChatView {
         }
 
         // Chỉ hiển thị trạng thái cho tin nhắn CUỐI CÙNG do người dùng hiện tại gửi
-        if (reset) {
-            hideAllStatusLabelsExceptLast();
-        }
+        hideAllStatusLabelsExceptLast();
     }
 
     /**
@@ -791,6 +811,7 @@ public class ChatView {
     }
 
 
+    private void loadConversations() {
         statusDotsByPeerId.clear();
         conversationIdByPeerId.clear();
         peerIdByConversationId.clear();
@@ -1336,6 +1357,18 @@ public class ChatView {
         // Vung hien thi tin nhan.
         messagesBox = new VBox(12);
         messagesBox.setPadding(new Insets(20, 24, 20, 24));
+
+        // Loading indicator khi keo tin nhan cu hon
+        loadingIndicator = new Label("\u0110ang t\u1ea3i tin nh\u1eafn c\u0169 h\u01a1n...");
+        loadingIndicator.setVisible(false);
+        loadingIndicator.setMaxWidth(Double.MAX_VALUE);
+        loadingIndicator.setAlignment(Pos.CENTER);
+        loadingIndicator.setStyle("""
+                -fx-font-size: 12px;
+                -fx-text-fill: %s;
+                -fx-padding: 8px 0;
+                -fx-background-color: transparent;
+                """.formatted(TEXT_MUTED));
 
         scrollMessages = new ScrollPane(messagesBox);
         scrollMessages.setFitToWidth(true);
