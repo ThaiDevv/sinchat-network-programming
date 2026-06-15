@@ -117,4 +117,37 @@ public class PresenceService {
             manager.broadcastToUser(targetId, event);
         }
     }
+
+    /**
+     * Broadcast username change to:
+     * 1. All accepted friends
+     * 2. All users who share a conversation with this user
+     */
+    public void broadcastNameChangeToPeers(long userId, String newUsername) {
+        Set<Long> targetIds = new HashSet<>();
+
+        List<Long> friendIds = userRepository.findAcceptedFriendIds(userId);
+        if (friendIds != null) {
+            targetIds.addAll(friendIds);
+        }
+
+        List<Long> conversationPeers = conversationRepository.findConversationPeers(userId);
+        if (conversationPeers != null) {
+            targetIds.addAll(conversationPeers);
+        }
+
+        if (targetIds.isEmpty()) return;
+
+        logger.info("[PRESENCE BROADCAST] UserId={} | NameChanged='{}' | TargetCount={}", userId, newUsername, targetIds.size());
+
+        JsonObject event = new JsonObject();
+        event.addProperty("action", "USER_NAME_CHANGED_EVENT");
+        event.addProperty("userId", userId);
+        event.addProperty("newUsername", newUsername);
+
+        TcpConnectionManager manager = TcpConnectionManager.getInstance();
+        for (Long targetId : targetIds) {
+            manager.broadcastToUser(targetId, event);
+        }
+    }
 }

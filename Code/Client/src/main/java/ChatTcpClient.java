@@ -544,6 +544,15 @@ public class ChatTcpClient {
         return sendRequestSync(req);
     }
 
+    // Method to change username
+    public ApiResponse changeUsername(long userId, String newUsername) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "CHANGE_NAME");
+        req.addProperty("userId", userId);
+        req.addProperty("newUsername", newUsername);
+        return sendRequestSync(req);
+    }
+
     public ApiResponse changePassword(long userId, String oldPassword, String newPassword) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "CHANGE_PASSWORD");
