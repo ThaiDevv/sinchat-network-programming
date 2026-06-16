@@ -1,3 +1,7 @@
+package com.client;
+
+import com.client.service.ChatService;
+import com.client.view.LoginView;
 import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
@@ -15,9 +19,8 @@ public class Main extends Application {
 
     @Override
     public void stop() {
-        // Properly disconnect from server when the application window is closed
         System.out.println("[Main] Application stopping - disconnecting from server...");
-        ChatTcpClient client = ChatTcpClient.getInstanceOrNull();
+        ChatService client = ChatService.getInstanceOrNull();
         if (client != null) {
             client.shutdown();
         }
