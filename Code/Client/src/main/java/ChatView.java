@@ -72,6 +72,7 @@ public class ChatView {
     private Label chatStatus;
 
     private ChatTcpClient tcpClient;
+    private Long editingMessageId = null;
     private final long currentUserId;
     private long currentConversationId;
     private final Gson gson = new Gson();
@@ -202,6 +203,8 @@ public class ChatView {
         tcpClient.setOnUserStatusChange(this::onUserStatusChange);
         tcpClient.setOnUserAvatarChanged(this::onUserAvatarChanged);
         tcpClient.setOnMessageStatusChanged(this::onMessageStatusChanged);
+        tcpClient.setOnMessageEdited(this::onMessageEditedReceived);
+        tcpClient.setOnMessageRecalled(this::onMessageRecalledReceived);
 
 
         tcpClient.setOnConnected(() -> {
@@ -673,6 +676,9 @@ public class ChatView {
             long senderId = msg.get("senderId").getAsLong();
             String content = msg.get("content").getAsString();
             String status = msg.has("status") ? msg.get("status").getAsString() : "SENT";
+            boolean isEdited = msg.has("isEdited") && msg.get("isEdited").getAsBoolean();
+            String type = msg.has("type") ? msg.get("type").getAsString() : "TEXT";
+            boolean isRecalled = "SYSTEM".equals(type) && "Tin nhắn đã bị thu hồi".equals(content);
 
             HBox wrapper;
             if (senderId == currentUserId) {
@@ -682,7 +688,16 @@ public class ChatView {
                 VBox container = new VBox(2);
                 container.setAlignment(Pos.BOTTOM_RIGHT);
 
-                Label bubble = createMessageBubble(content, ACCENT, "18px 18px 4px 18px");
+                Label bubble;
+                if (isRecalled) {
+                    bubble = createMessageBubble(content, "#333333", "18px 18px 4px 18px");
+                    bubble.setStyle(bubble.getStyle() + "; -fx-text-fill: #888888; -fx-font-style: italic;");
+                } else {
+                    bubble = createMessageBubble(content + (isEdited ? " (đã chỉnh sửa)" : ""), ACCENT, "18px 18px 4px 18px");
+                    if (messageId > 0) {
+                        setupMessageContextMenu(bubble, messageId);
+                    }
+                }
                 if (messageId > 0) {
                     messageBubbleById.put(messageId, bubble);
                 }
@@ -696,7 +711,14 @@ public class ChatView {
                 container.getChildren().addAll(bubble, statusLabel);
                 wrapper.getChildren().add(container);
             } else {
-                wrapper = createMessageWrapper(senderId, content, messageId);
+                String dispContent = isRecalled ? content : content + (isEdited ? " (đã chỉnh sửa)" : "");
+                wrapper = createMessageWrapper(senderId, dispContent, messageId);
+                if (isRecalled) {
+                    Label bubble = messageBubbleById.get(messageId);
+                    if (bubble != null) {
+                        bubble.setStyle(bubble.getStyle() + "; -fx-background-color: #333333; -fx-text-fill: #888888; -fx-font-style: italic;");
+                    }
+                }
             }
             messagesBox.getChildren().add(insertIndex++, wrapper);
         }
@@ -1346,6 +1368,13 @@ public class ChatView {
                 """.formatted(TEXT_WHITE, BG_BLACK));
         sendBtn.setOnAction(e -> sendMessage());
         messageInput.setOnAction(e -> sendMessage());
+        messageInput.setOnKeyPressed(event -> {
+            if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                if (editingMessageId != null) {
+                    cancelEditing();
+                }
+            }
+        });
 
         inputBar.getChildren().addAll(attachBtn, messageInput, sendBtn);
         panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, inputBar);
@@ -1822,6 +1851,9 @@ public class ChatView {
         Label bubble = isMine
                 ? createMessageBubble(text, ACCENT, "18px 18px 4px 18px")
                 : createMessageBubble(text, "#1e1e1e", "18px 18px 18px 4px");
+        if ("Tin nhắn đã bị thu hồi".equals(text)) {
+            bubble.setStyle(bubble.getStyle() + "; -fx-background-color: #333333; -fx-text-fill: #888888; -fx-font-style: italic;");
+        }
         if (messageId > 0) {
             // Luu bubble theo id de ket qua search co the nhay toi dung tin.
             messageBubbleById.put(messageId, bubble);
@@ -1842,6 +1874,13 @@ public class ChatView {
         container.setAlignment(Pos.BOTTOM_RIGHT);
 
         Label bubble = createMessageBubble(text, ACCENT, "18px 18px 4px 18px");
+        if ("Tin nhắn đã bị thu hồi".equals(text)) {
+            bubble.setStyle(bubble.getStyle() + "; -fx-background-color: #333333; -fx-text-fill: #888888; -fx-font-style: italic;");
+        } else {
+            if (messageId > 0) {
+                setupMessageContextMenu(bubble, messageId);
+            }
+        }
         if (messageId > 0) {
             messageBubbleById.put(messageId, bubble);
         }
@@ -1882,18 +1921,29 @@ public class ChatView {
 
         if (!text.isEmpty()) {
             if (tcpClient != null && tcpClient.isConnected() && currentConversationId > 0) {
-                // Gui qua TCP, server luu DB roi broadcast ve cho moi nguoi.
-                CompletableFuture.runAsync(() -> {
-                    ChatTcpClient.ApiResponse response = tcpClient.sendMessage(currentConversationId, currentUserId, text);
-                    if (!response.isSuccess()) {
-                        Platform.runLater(() -> showToast("Gửi tin nhắn thất bại: " + response.message()));
-                    }
-                });
-                
-                // Bao ngay la minh da dung go sau khi gui tin.
-                tcpClient.sendTyping(currentConversationId, -1, false);
+                if (editingMessageId != null) {
+                    long msgId = editingMessageId;
+                    CompletableFuture.runAsync(() -> {
+                        ChatTcpClient.ApiResponse response = tcpClient.editMessage(msgId, currentConversationId, text);
+                        if (!response.isSuccess()) {
+                            Platform.runLater(() -> showToast("Chỉnh sửa tin nhắn thất bại: " + response.message()));
+                        }
+                    });
+                    cancelEditing();
+                } else {
+                    // Gui qua TCP, server luu DB roi broadcast ve cho moi nguoi.
+                    CompletableFuture.runAsync(() -> {
+                        ChatTcpClient.ApiResponse response = tcpClient.sendMessage(currentConversationId, currentUserId, text);
+                        if (!response.isSuccess()) {
+                            Platform.runLater(() -> showToast("Gửi tin nhắn thất bại: " + response.message()));
+                        }
+                    });
+                    
+                    // Bao ngay la minh da dung go sau khi gui tin.
+                    tcpClient.sendTyping(currentConversationId, -1, false);
+                    messageInput.clear();
+                }
             }
-        messageInput.clear();
         }
     }
 
@@ -2717,6 +2767,121 @@ public class ChatView {
 
         String avatarDataUrl = "data:image/png;base64," + Base64.getEncoder().encodeToString(pngBytes);
         return tcpClient.changeAvatar(currentUserId, avatarDataUrl);
+    }
+
+    private void setupMessageContextMenu(Label bubble, long messageId) {
+        if (messageId <= 0) return;
+        ContextMenu contextMenu = new ContextMenu();
+
+        MenuItem editItem = new MenuItem("Chỉnh sửa");
+        editItem.setOnAction(e -> startEditingMessage(messageId, bubble));
+
+        MenuItem recallItem = new MenuItem("Thu hồi");
+        recallItem.setOnAction(e -> confirmRecallMessage(messageId));
+
+        contextMenu.getItems().addAll(editItem, recallItem);
+
+        bubble.setOnContextMenuRequested(event -> {
+            if (!"Tin nhắn đã bị thu hồi".equals(bubble.getText())) {
+                contextMenu.show(bubble, event.getScreenX(), event.getScreenY());
+            }
+        });
+    }
+
+    private void startEditingMessage(long messageId, Label bubble) {
+        editingMessageId = messageId;
+        String text = bubble.getText();
+        if (text.endsWith(" (đã chỉnh sửa)")) {
+            text = text.substring(0, text.length() - " (đã chỉnh sửa)".length());
+        }
+        messageInput.setText(text);
+        messageInput.requestFocus();
+        messageInput.positionCaret(text.length());
+        messageInput.setPromptText("Đang sửa tin nhắn... (Nhấn Esc để hủy)");
+        messageInput.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: #ff9f43;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 24px;
+                -fx-background-radius: 24px;
+                -fx-text-fill: %s;
+                -fx-prompt-text-fill: #ff9f43;
+                -fx-font-size: 15px;
+                -fx-padding: 12px 18px;
+                """.formatted(BG_BLACK, TEXT_WHITE));
+    }
+
+    private void cancelEditing() {
+        editingMessageId = null;
+        messageInput.clear();
+        messageInput.setPromptText("Nhập tin nhắn...");
+        messageInput.setStyle("""
+                -fx-background-color: %s;
+                -fx-border-color: %s;
+                -fx-border-width: 1.5px;
+                -fx-border-radius: 24px;
+                -fx-background-radius: 24px;
+                -fx-text-fill: %s;
+                -fx-prompt-text-fill: %s;
+                -fx-font-size: 15px;
+                -fx-padding: 12px 18px;
+                """.formatted(BG_BLACK, INPUT_BORDER, TEXT_WHITE, TEXT_DIM));
+    }
+
+    private void confirmRecallMessage(long messageId) {
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Thu hồi tin nhắn");
+        alert.setHeaderText("Bạn có chắc chắn muốn thu hồi tin nhắn này?");
+        alert.setContentText("Hành động này không thể hoàn tác.");
+
+        alert.showAndWait().ifPresent(response -> {
+            if (response == javafx.scene.control.ButtonType.OK) {
+                CompletableFuture.runAsync(() -> {
+                    ChatTcpClient.ApiResponse apiResponse = tcpClient.recallMessage(messageId, currentConversationId);
+                    if (!apiResponse.isSuccess()) {
+                        Platform.runLater(() -> showToast("Thu hồi thất bại: " + apiResponse.message()));
+                    }
+                });
+            }
+        });
+    }
+
+    private void onMessageEditedReceived(JsonObject json) {
+        long conversationId = json.get("conversationId").getAsLong();
+        if (conversationId == currentConversationId) {
+            long messageId = json.get("messageId").getAsLong();
+            String newContent = json.get("content").getAsString();
+            Platform.runLater(() -> {
+                Label bubble = messageBubbleById.get(messageId);
+                if (bubble != null) {
+                    bubble.setText(newContent + " (đã chỉnh sửa)");
+                }
+            });
+        }
+        Platform.runLater(this::loadConversations);
+    }
+
+    private void onMessageRecalledReceived(JsonObject json) {
+        long conversationId = json.get("conversationId").getAsLong();
+        if (conversationId == currentConversationId) {
+            long messageId = json.get("messageId").getAsLong();
+            Platform.runLater(() -> {
+                Label bubble = messageBubbleById.get(messageId);
+                if (bubble != null) {
+                    bubble.setText("Tin nhắn đã bị thu hồi");
+                    bubble.setStyle("""
+                            -fx-background-color: #333333;
+                            -fx-text-fill: #888888;
+                            -fx-font-size: 15px;
+                            -fx-padding: 12px 18px;
+                            -fx-background-radius: 18px;
+                            -fx-font-style: italic;
+                            """);
+                    bubble.setOnContextMenuRequested(null);
+                }
+            });
+        }
+        Platform.runLater(this::loadConversations);
     }
 
     private void showToast(String text) {

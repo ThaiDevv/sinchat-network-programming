@@ -13,6 +13,7 @@ public class Message {
     private String content;             // text - noi dung tin nhan
     private Timestamp createdAt;        // timestamp DEFAULT CURRENT_TIMESTAMP
     private String status;              // Trạng thái tin nhắn (SENT, DELIVERED, SEEN) - join từ bảng message_status
+    private boolean isEdited;           // Trạng thái đã chỉnh sửa hay chưa
 
     public Message() {}
 
@@ -46,5 +47,8 @@ public class Message {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public boolean isEdited() { return isEdited; }
+    public void setEdited(boolean edited) { isEdited = edited; }
 }
 

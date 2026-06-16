@@ -58,7 +58,7 @@ public class MessageRepository {
     public List<Message> getByConversationId(long conversationId, int limit, int offset) {
         List<Message> messages = new ArrayList<>();
         StringBuilder query = new StringBuilder(
-                "SELECT id, conversation_id, sender_id, type, content, created_at " +
+                "SELECT id, conversation_id, sender_id, type, content, created_at, is_edited " +
                 "FROM messages WHERE conversation_id = ? ORDER BY created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
         if (offset > 0) query.append(" OFFSET ?");
@@ -75,6 +75,41 @@ public class MessageRepository {
             logger.error("Error fetching messages for conversation: {}", conversationId, e);
         }
         return messages;
+    }
+
+    public Message getById(long messageId) {
+        String query = "SELECT id, conversation_id, sender_id, type, content, created_at, is_edited FROM messages WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, messageId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching message by id: {}", messageId, e);
+        }
+        return null;
+    }
+
+    public boolean updateContent(long messageId, String newContent) throws SQLException {
+        String query = "UPDATE messages SET content = ?, is_edited = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, newContent);
+            pstmt.setLong(2, messageId);
+            return pstmt.executeUpdate() > 0;
+        }
+    }
+
+    public boolean recall(long messageId) throws SQLException {
+        String query = "UPDATE messages SET content = 'Tin nhắn đã bị thu hồi', type = 'SYSTEM', updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, messageId);
+            return pstmt.executeUpdate() > 0;
+        }
     }
 
     public List<MessageSearchResult> searchByConversation(long conversationId, String keyword, int limit, int offset) {
@@ -103,7 +138,7 @@ public class MessageRepository {
     }
 
     private Message mapRow(ResultSet rs) throws SQLException {
-        return new Message(
+        Message msg = new Message(
                 rs.getLong("id"),
                 rs.getLong("conversation_id"),
                 rs.getLong("sender_id"),
@@ -111,6 +146,8 @@ public class MessageRepository {
                 rs.getString("content"),
                 rs.getTimestamp("created_at")
         );
+        msg.setEdited(rs.getBoolean("is_edited"));
+        return msg;
     }
 
     private MessageSearchResult mapSearchRow(ResultSet rs) throws SQLException {

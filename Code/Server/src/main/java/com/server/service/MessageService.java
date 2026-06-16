@@ -50,5 +50,17 @@ public class MessageService {
     public List<MessageSearchResult> searchMessages(long conversationId, String keyword, int limit, int offset) {
         return messageRepository.searchByConversation(conversationId, keyword, limit, offset);
     }
+
+    public Message getMessageById(long messageId) {
+        return messageRepository.getById(messageId);
+    }
+
+    public boolean editMessage(long messageId, String newContent) throws SQLException {
+        return messageRepository.updateContent(messageId, newContent);
+    }
+
+    public boolean recallMessage(long messageId) throws SQLException {
+        return messageRepository.recall(messageId);
+    }
 }
 

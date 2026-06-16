@@ -60,6 +60,8 @@ public class ChatTcpClient {
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
     private Consumer<JsonObject> onMessageStatusChanged;
+    private Consumer<JsonObject> onMessageEdited;
+    private Consumer<JsonObject> onMessageRecalled;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -376,6 +378,12 @@ public class ChatTcpClient {
                 case "USER_AVATAR_CHANGED_EVENT":
                     if (onUserAvatarChanged != null) Platform.runLater(() -> onUserAvatarChanged.accept(json));
                     break;
+                case "MESSAGE_EDITED_EVENT":
+                    if (onMessageEdited != null) Platform.runLater(() -> onMessageEdited.accept(json));
+                    break;
+                case "MESSAGE_RECALLED_EVENT":
+                    if (onMessageRecalled != null) Platform.runLater(() -> onMessageRecalled.accept(json));
+                    break;
                 case "PING_RESPONSE":
                     pongReceived = true;
                     break;
@@ -451,6 +459,8 @@ public class ChatTcpClient {
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
     public void setOnMessageStatusChanged(Consumer<JsonObject> callback) { this.onMessageStatusChanged = callback; }
+    public void setOnMessageEdited(Consumer<JsonObject> callback) { this.onMessageEdited = callback; }
+    public void setOnMessageRecalled(Consumer<JsonObject> callback) { this.onMessageRecalled = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 
@@ -615,6 +625,23 @@ public class ChatTcpClient {
         req.addProperty("conversationId", conversationId);
         req.addProperty("senderId", senderId);
         req.addProperty("content", content);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse editMessage(long messageId, long conversationId, String content) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "EDIT_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("content", content);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse recallMessage(long messageId, long conversationId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "RECALL_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
         return sendRequestSync(req);
     }
 

@@ -33,6 +33,8 @@ public class Router {
     private static final PingHandler pingHandler = new PingHandler();
     private static final TypingHandler typingHandler = new TypingHandler();
     private static final UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
+    private static final EditMessageHandler editMessageHandler = new EditMessageHandler();
+    private static final RecallMessageHandler recallMessageHandler = new RecallMessageHandler();
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -109,7 +111,7 @@ public class Router {
                         break;
                     }
                     logger.info("[GET_USER_PROFILE] Remote={} | UserId={} | Fetching user profile",
-                            conn.getRemoteAddress(), getProfileUserId);
+                             conn.getRemoteAddress(), getProfileUserId);
                     JsonObject profile = profileHandler.getUserProfile(request.get("userId").getAsLong());
                     if (profile != null) {
                         logger.info("[GET_USER_PROFILE] Remote={} | UserId={} | Profile found",
@@ -137,6 +139,12 @@ public class Router {
                     break;
                 case "UPDATE_MESSAGE_STATUS":
                     response = updateMessageStatusHandler.handleTcp(request, conn);
+                    break;
+                case "EDIT_MESSAGE":
+                    response = editMessageHandler.handleTcp(request, conn);
+                    break;
+                case "RECALL_MESSAGE":
+                    response = recallMessageHandler.handleTcp(request, conn);
                     break;
 
                 default:
