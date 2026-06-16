@@ -51,16 +51,24 @@ public class ChatController {
         );
     }
 
-    public void searchUsers(String query, Consumer<JsonArray> onSuccess) {
+    public void searchUsers(String query, Consumer<JsonArray> onSuccess, Consumer<String> onError) {
         asyncCall(
-                () -> chatService.searchUsers(query),
+                () -> chatService.searchUsers(currentUserId, query),
                 response -> {
                     if (response.isSuccess() && response.rawBody() != null) {
                         try {
                             JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
                             JsonArray users = json.getAsJsonArray("users");
                             Platform.runLater(() -> onSuccess.accept(users));
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) {
+                            System.err.println("[searchUsers] Failed to parse response: " + e.getMessage());
+                            if (onError != null) Platform.runLater(() -> onError.accept("Không đọc được kết quả tìm kiếm."));
+                        }
+                    } else {
+                        String errMsg = response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể tìm kiếm người dùng.";
+                        System.err.println("[searchUsers] Server error: " + errMsg);
+                        if (onError != null) Platform.runLater(() -> onError.accept(errMsg));
                     }
                 }
         );
@@ -117,6 +125,11 @@ public class ChatController {
 
     public void markMessageSeen(long conversationId, long messageId) {
         chatService.updateMessageStatus(conversationId, messageId, "SEEN");
+    }
+
+    /** Mark all messages in a conversation as seen for the current user. */
+    public void markAllMessagesSeen(long conversationId) {
+        chatService.updateMessageStatus(conversationId, "SEEN");
     }
 
     // ---- message search ----

@@ -53,7 +53,7 @@
 - [x] TCP heartbeat keep-alive (PING every 15s)
 - [x] Idle connection sweeper (closes idle connections after 60s)
 - [x] Update profile (email)
-- [ ] Change username
+- [x] Change username
 
 ### Network & Infrastructure
 - [x] LAN auto-discovery (TCP broadcast on port 9999, subnet sweep)

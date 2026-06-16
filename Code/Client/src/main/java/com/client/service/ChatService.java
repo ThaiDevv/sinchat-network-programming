@@ -177,6 +177,12 @@ public class ChatService {
                 System.out.println("[TCP] Waiting for LAN discovery to find a SinChat server...");
                 int waited = 0;
                 while ("discovering...".equals(HOST) && !shutdownRequested.get() && waited < 600) {
+                    // Check if LAN discovery has already found a server
+                    if (lanDiscovery.hasDiscovered()) {
+                        HOST = lanDiscovery.getDiscoveredHost();
+                        PORT = lanDiscovery.getDiscoveredPort();
+                        break;
+                    }
                     try { Thread.sleep(500); waited++; }
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
                 }
@@ -185,11 +191,6 @@ public class ChatService {
                     try { Thread.sleep(2000); }
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
                     continue;
-                }
-                // Update HOST/PORT from LAN discovery
-                if (lanDiscovery.hasDiscovered()) {
-                    HOST = lanDiscovery.getDiscoveredHost();
-                    PORT = lanDiscovery.getDiscoveredPort();
                 }
                 System.out.println("[TCP] LAN discovery resolved: " + HOST + ":" + PORT);
             }
@@ -403,10 +404,11 @@ public class ChatService {
         return sendRequestSync(req);
     }
 
-    public ApiResponse searchUsers(String query) {
+    public ApiResponse searchUsers(long userId, String query) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "SEARCH_USERS");
         req.addProperty("query", query);
+        req.addProperty("userId", userId);
         return sendRequestSync(req);
     }
 

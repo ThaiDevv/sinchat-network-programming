@@ -208,20 +208,37 @@ public class ChatView {
                 Label label = messageStatusLabels.get(messageId);
                 if (label != null) {
                     label.setText(ChatController.getStatusLabelText(status));
-                    label.setVisible(true);
+                    // Only show status if this is the last sent message
+                    if (isLastMessageMine() && isLastSentMessage(messageId)) {
+                        label.setVisible(true);
+                    }
                 }
             });
         } else if (json.has("status") && "SEEN".equals(json.get("status").getAsString())) {
             Platform.runLater(() -> {
                 if (!messageStatusLabels.isEmpty()) {
+                    // Update all visible sent message labels to "Read"
                     long maxId = messageStatusLabels.keySet().stream().max(Long::compare).orElse(-1L);
                     if (maxId > 0) {
                         Label lastLabel = messageStatusLabels.get(maxId);
-                        if (lastLabel != null) lastLabel.setText("Read");
+                        if (lastLabel != null) {
+                            lastLabel.setText("Read");
+                            // Show the status if the last message overall is mine
+                            if (isLastMessageMine()) {
+                                lastLabel.setVisible(true);
+                            }
+                        }
                     }
                 }
             });
         }
+    }
+
+    /** Returns true if the given messageId belongs to the last sent (right-aligned) message bubble. */
+    private boolean isLastSentMessage(long messageId) {
+        if (messageStatusLabels.isEmpty()) return false;
+        long maxId = messageStatusLabels.keySet().stream().max(Long::compare).orElse(-1L);
+        return messageId == maxId;
     }
 
     private void onUserTyping(JsonObject json) {
@@ -410,6 +427,10 @@ public class ChatView {
 
         loadConversations();
         loadMessagesForCurrentConversation(true);
+
+        // Mark all messages in this conversation as SEEN for the current user
+        // This triggers the server to broadcast MESSAGE_STATUS_EVENT to the sender
+        controller.markAllMessagesSeen(conversationId);
     }
 
     private void loadConversations() {
@@ -641,6 +662,17 @@ public class ChatView {
 
     private void hideAllStatusLabelsExceptLast() {
         if (messageStatusLabels.isEmpty()) return;
+
+        // Check if the VERY LAST message in the conversation is mine
+        boolean lastMessageIsMine = isLastMessageMine();
+
+        if (!lastMessageIsMine) {
+            // Last message is from the other party — hide all status labels
+            for (Label label : messageStatusLabels.values()) label.setVisible(false);
+            return;
+        }
+
+        // Last message is mine — find and show only the last sent message's status
         long lastSentId = -1;
         for (int i = messagesBox.getChildren().size() - 1; i >= 0; i--) {
             if (messagesBox.getChildren().get(i) instanceof HBox wrapper
@@ -659,6 +691,16 @@ public class ChatView {
         for (var e : messageStatusLabels.entrySet()) e.getValue().setVisible(e.getKey() == lastSentId);
     }
 
+    /** Returns true if the last message bubble in the chat is right-aligned (sent by me). */
+    private boolean isLastMessageMine() {
+        for (int i = messagesBox.getChildren().size() - 1; i >= 0; i--) {
+            if (messagesBox.getChildren().get(i) instanceof HBox wrapper) {
+                return wrapper.getAlignment() == Pos.CENTER_RIGHT;
+            }
+        }
+        return false;
+    }
+
     // ==================== MESSAGE BUBBLES ====================
 
     private HBox createMessageWrapper(long senderId, String text, long messageId) {
@@ -674,6 +716,8 @@ public class ChatView {
 
     private void addReceivedMessage(String text, long messageId) {
         messagesBox.getChildren().add(createMessageWrapper(-1, text, messageId));
+        // Last message is now from the other party — hide all status labels
+        for (Label label : messageStatusLabels.values()) label.setVisible(false);
     }
 
     private void addSentMessage(String text, long messageId, String status) {
@@ -981,6 +1025,8 @@ public class ChatView {
                         String username = user.get("username").getAsString();
                         addSearchResultContact(uId, username, searchField);
                     }
+                }, errMsg -> {
+                    System.err.println("[ChatView] Search users failed: " + errMsg);
                 });
             }
         });
