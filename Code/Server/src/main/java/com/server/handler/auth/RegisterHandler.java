@@ -56,6 +56,12 @@ public class RegisterHandler {
                 return response;
             }
 
+            if (!password.matches("^[a-zA-Z0-9_]+$")) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Password can only contain letters, numbers, and underscores");
+                return response;
+            }
+
             // Validate email
             if (!EMAIL_PATTERN.matcher(email).matches()) {
                 response.addProperty("status", "error");
