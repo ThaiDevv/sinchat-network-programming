@@ -30,6 +30,18 @@ public class SearchUserHandler {
                 return response;
             }
 
+            // If userId is provided in request, verify it matches the authenticated connection
+            if (request.has("userId")) {
+                long requestUserId = request.get("userId").getAsLong();
+                if (requestUserId != userId) {
+                    logger.warn("[SEARCH_USERS] Remote={} | ConnUserId={} | RequestUserId={} | Unauthorized",
+                            conn.getRemoteAddress(), userId, requestUserId);
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Unauthorized: userId mismatch");
+                    return response;
+                }
+            }
+
             if (!request.has("query")) {
                 logger.warn("[SEARCH_USERS] Remote={} | Missing query parameter",
                         conn.getRemoteAddress());
