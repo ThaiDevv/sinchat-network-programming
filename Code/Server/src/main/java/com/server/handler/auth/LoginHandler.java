@@ -19,6 +19,8 @@ public class LoginHandler {
 
     private static final int MAX_ATTEMPTS = 5;
     private static final long LOCKOUT_DURATION_MS = 60_000; // 1 minute
+    private static final int MAX_USERNAME_LENGTH = 100;
+    private static final int MAX_PASSWORD_LENGTH = 100;
 
     // Rate limiting: track failed attempts per username
     private static final ConcurrentHashMap<String, long[]> loginAttempts = new ConcurrentHashMap<>();
@@ -47,6 +49,12 @@ public class LoginHandler {
 
             String password =
                     request.get("password").getAsString();
+
+            if (username.length() > MAX_USERNAME_LENGTH || password.length() > MAX_PASSWORD_LENGTH) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Username or password is too long");
+                return response;
+            }
 
             // Rate limiting check
             long now = System.currentTimeMillis();

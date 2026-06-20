@@ -12,6 +12,10 @@ import org.slf4j.LoggerFactory;
  */
 public class ForgotPasswordHandler {
     private static final Logger logger = LoggerFactory.getLogger(ForgotPasswordHandler.class);
+    private static final int MAX_USERNAME_LENGTH = 50;
+    private static final int MAX_RESET_CODE_LENGTH = 6;
+    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MAX_PASSWORD_LENGTH = 100;
     private final AuthService authService = AuthService.getInstance();
     
     // Hash gia de can bang thoi gian xu ly, tranh lo username co ton tai hay khong.
@@ -28,6 +32,12 @@ public class ForgotPasswordHandler {
                             conn.getRemoteAddress());
                     response.addProperty("status", "error");
                     response.addProperty("message", "Invalid username");
+                    return response;
+                }
+                username = username.trim();
+                if (username.length() > MAX_USERNAME_LENGTH) {
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Username is too long");
                     return response;
                 }
 
@@ -60,6 +70,22 @@ public class ForgotPasswordHandler {
             if (request.has("code") && request.has("password")) {
                 String code = request.get("code").getAsString();
                 String password = request.get("password").getAsString();
+
+                if (code.length() > MAX_RESET_CODE_LENGTH) {
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Invalid reset code");
+                    return response;
+                }
+                if (password.length() < MIN_PASSWORD_LENGTH) {
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
+                    return response;
+                }
+                if (password.length() > MAX_PASSWORD_LENGTH) {
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Password must not exceed " + MAX_PASSWORD_LENGTH + " characters");
+                    return response;
+                }
 
                 logger.info("[FORGOT_PASSWORD RESET_ATTEMPT] Remote={} | Code={} | Attempting password reset",
                         conn.getRemoteAddress(), code);
