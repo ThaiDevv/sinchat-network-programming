@@ -14,8 +14,10 @@ public class RegisterHandler {
     private static final java.util.regex.Pattern EMAIL_PATTERN =
             java.util.regex.Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MAX_PASSWORD_LENGTH = 100;
     private static final int MAX_USERNAME_LENGTH = 50;
     private static final int MIN_USERNAME_LENGTH = 3;
+    private static final int MAX_EMAIL_LENGTH = 100;
     private final AuthService authService;
 
     public RegisterHandler() {
@@ -55,6 +57,11 @@ public class RegisterHandler {
                 response.addProperty("message", "Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
                 return response;
             }
+            if (password.length() > MAX_PASSWORD_LENGTH) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Password must not exceed " + MAX_PASSWORD_LENGTH + " characters");
+                return response;
+            }
 
             if (!password.matches("^[a-zA-Z0-9_]+$")) {
                 response.addProperty("status", "error");
@@ -63,6 +70,11 @@ public class RegisterHandler {
             }
 
             // Validate email
+            if (email.length() > MAX_EMAIL_LENGTH) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Email must not exceed " + MAX_EMAIL_LENGTH + " characters");
+                return response;
+            }
             if (!EMAIL_PATTERN.matcher(email).matches()) {
                 response.addProperty("status", "error");
                 response.addProperty("message", "Invalid email format");

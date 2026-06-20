@@ -58,6 +58,7 @@ public class ChatView {
     private Label messageSearchStatus;
     private HBox messageSearchNavigator;
     private Label messageSearchCounter;
+    private Button messageSearchButton;
     private Button messageSearchPrevBtn, messageSearchNextBtn;
 
     // Avatar
@@ -96,6 +97,7 @@ public class ChatView {
     private boolean hasMoreMessages = true;
     private boolean isLoadingMore = false;
     private static final int PAGE_SIZE = 20;
+    private static final int MAX_MESSAGE_SEARCH_KEYWORD_LENGTH = 100;
     private boolean pendingScrollToBottom = false;
 
     // Typing
@@ -770,13 +772,18 @@ public class ChatView {
         long capturedConvId = currentConversationId;
         showMessageSearchStatus("Đang tìm tin nhắn...", false);
         resetMessageSearchState(false);
+        setMessageSearchBusy(true);
 
         controller.searchMessages(capturedConvId, keyword, 20, 0,
                 json -> renderMessageSearchResults(capturedConvId, keyword, json),
-                err -> showMessageSearchStatus(err, true));
+                err -> {
+                    setMessageSearchBusy(false);
+                    showMessageSearchStatus(err, true);
+                });
     }
 
     private void renderMessageSearchResults(long capturedConvId, String keyword, JsonObject json) {
+        setMessageSearchBusy(false);
         if (currentConversationId != capturedConvId) return;
         JsonArray messages = json.getAsJsonArray("messages");
         messageSearchResults.getChildren().clear();
@@ -870,6 +877,11 @@ public class ChatView {
         }
         if (scrollMessages != null) { scrollMessages.setVisible(!show); scrollMessages.setManaged(!show); }
         if (typingLabel != null) { typingLabel.setManaged(!show); if (show) typingLabel.setVisible(false); }
+    }
+
+    private void setMessageSearchBusy(boolean busy) {
+        if (messageSearchButton != null) messageSearchButton.setDisable(busy);
+        if (messageSearchField != null) messageSearchField.setDisable(busy);
     }
 
     private void updateMessageSearchNavigator() {
@@ -993,6 +1005,15 @@ public class ChatView {
         activeMessageSearchKeyword = "";
     }
 
+    private void limitTextInput(TextInputControl input, int maxLength) {
+        input.textProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue != null && newValue.length() > maxLength) {
+                input.setText(newValue.substring(0, maxLength));
+                input.positionCaret(maxLength);
+            }
+        });
+    }
+
     // ==================== UI LAYOUT ====================
 
     private VBox createLeftPanel() {
@@ -1103,16 +1124,17 @@ public class ChatView {
         messageSearchField = new TextField();
         messageSearchField.setPromptText("Tìm tin nhắn...");
         messageSearchField.setPrefWidth(190);
+        limitTextInput(messageSearchField, MAX_MESSAGE_SEARCH_KEYWORD_LENGTH);
         messageSearchField.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: " + StyleConstants.INPUT_BORDER
                 + "; -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-background-radius: 18px; -fx-text-fill: "
                 + StyleConstants.TEXT_WHITE + "; -fx-prompt-text-fill: " + StyleConstants.TEXT_DIM
                 + "; -fx-font-size: 13px; -fx-padding: 8px 12px;");
 
-        Button searchMsgBtn = createIconButton("Tìm");
-        searchMsgBtn.setOnAction(e -> searchMessagesInCurrentConversation());
+        messageSearchButton = createIconButton("Tìm");
+        messageSearchButton.setOnAction(e -> searchMessagesInCurrentConversation());
         messageSearchField.setOnAction(e -> searchMessagesInCurrentConversation());
 
-        actions.getChildren().addAll(messageSearchField, searchMsgBtn,
+        actions.getChildren().addAll(messageSearchField, messageSearchButton,
                 createIconButton("Call"), createIconButton("Video"), createIconButton("..."));
         chatHeader.getChildren().addAll(headerAvatar, headerInfo, spacer, actions);
 

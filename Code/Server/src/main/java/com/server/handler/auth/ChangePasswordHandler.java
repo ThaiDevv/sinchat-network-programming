@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 
 public class ChangePasswordHandler {
     private static final Logger logger = LoggerFactory.getLogger(ChangePasswordHandler.class);
+    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MAX_PASSWORD_LENGTH = 100;
     private final AuthService authService = AuthService.getInstance();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
@@ -29,9 +31,15 @@ public class ChangePasswordHandler {
                 return response;
             }
 
-            if (newPassword.length() < 6) {
+            if (oldPassword.length() > MAX_PASSWORD_LENGTH || newPassword.length() > MAX_PASSWORD_LENGTH) {
                 response.addProperty("status", "error");
-                response.addProperty("message", "New password must be at least 6 characters");
+                response.addProperty("message", "Password must not exceed " + MAX_PASSWORD_LENGTH + " characters");
+                return response;
+            }
+
+            if (newPassword.length() < MIN_PASSWORD_LENGTH) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "New password must be at least " + MIN_PASSWORD_LENGTH + " characters");
                 return response;
             }
 

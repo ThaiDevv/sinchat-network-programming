@@ -19,6 +19,7 @@ import javafx.stage.Stage;
  * Extracted from ChatView.
  */
 public class ChangePasswordDialog {
+    private static final int MAX_PASSWORD_LENGTH = 100;
 
     private final Stage owner;
     private final ChatController chatController;
@@ -50,8 +51,11 @@ public class ChangePasswordDialog {
         subtitle.setStyle("-fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 14px;");
 
         PasswordField oldPasswordField = createField("Mật khẩu hiện tại");
+        limitTextInput(oldPasswordField, MAX_PASSWORD_LENGTH);
         PasswordField newPasswordField = createField("Mật khẩu mới");
+        limitTextInput(newPasswordField, MAX_PASSWORD_LENGTH);
         PasswordField confirmPasswordField = createField("Nhập lại mật khẩu mới");
+        limitTextInput(confirmPasswordField, MAX_PASSWORD_LENGTH);
 
         Label message = new Label("");
         message.setWrapText(true);
@@ -166,5 +170,14 @@ public class ChangePasswordDialog {
     private void setMessage(Label label, String text, String color) {
         label.setText(text);
         label.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 13px;");
+    }
+
+    private void limitTextInput(PasswordField input, int maxLength) {
+        input.textProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue != null && newValue.length() > maxLength) {
+                input.setText(newValue.substring(0, maxLength));
+                input.positionCaret(maxLength);
+            }
+        });
     }
 }
