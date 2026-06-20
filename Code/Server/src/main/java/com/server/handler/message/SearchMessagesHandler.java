@@ -15,6 +15,7 @@ public class SearchMessagesHandler {
     private static final Logger logger = LoggerFactory.getLogger(SearchMessagesHandler.class);
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 50;
+    private static final int MAX_KEYWORD_LENGTH = 100;
 
     private final Gson gson = new Gson();
     private final MessageService messageService = new MessageService();
@@ -37,6 +38,11 @@ public class SearchMessagesHandler {
             if (conversationId <= 0 || keyword.isBlank()) {
                 response.addProperty("status", "error");
                 response.addProperty("message", "Invalid message search request");
+                return response;
+            }
+            if (keyword.length() > MAX_KEYWORD_LENGTH) {
+                response.addProperty("status", "error");
+                response.addProperty("message", "Search keyword is too long");
                 return response;
             }
 

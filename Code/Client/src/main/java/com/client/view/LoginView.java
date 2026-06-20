@@ -18,6 +18,11 @@ import javafx.stage.Stage;
  * UI layout only — all TCP calls are delegated to {@link AuthController}.
  */
 public class LoginView {
+    private static final int MAX_ACCOUNT_LENGTH = 100;
+    private static final int MAX_USERNAME_LENGTH = 50;
+    private static final int MAX_EMAIL_LENGTH = 100;
+    private static final int MAX_PASSWORD_LENGTH = 100;
+    private static final int MAX_RESET_CODE_LENGTH = 6;
 
     private final BorderPane root;
     private final Stage stage;
@@ -44,9 +49,12 @@ public class LoginView {
 
         TextField usernameField = createInput("Tên người dùng / Email");
         usernameField.setText(username);
+        limitTextInput(usernameField, MAX_ACCOUNT_LENGTH);
 
         PasswordField passwordField = createPasswordInput("Mật khẩu");
+        limitTextInput(passwordField, MAX_PASSWORD_LENGTH);
         TextField visiblePassword = createInput("Mật khẩu");
+        limitTextInput(visiblePassword, MAX_PASSWORD_LENGTH);
         visiblePassword.setManaged(false);
         visiblePassword.setVisible(false);
 
@@ -108,10 +116,14 @@ public class LoginView {
 
         TextField usernameField = createInput("Tên người dùng");
         usernameField.setText(username);
+        limitTextInput(usernameField, MAX_USERNAME_LENGTH);
 
         TextField emailField = createInput("Email");
+        limitTextInput(emailField, MAX_EMAIL_LENGTH);
         PasswordField passwordField = createPasswordInput("Mật khẩu");
+        limitTextInput(passwordField, MAX_PASSWORD_LENGTH);
         PasswordField confirmPasswordField = createPasswordInput("Nhập lại mật khẩu");
+        limitTextInput(confirmPasswordField, MAX_PASSWORD_LENGTH);
         Label message = createMessageLabel();
 
         Button registerButton = createPrimaryButton("Đăng ký");
@@ -154,6 +166,7 @@ public class LoginView {
 
         TextField accountField = createInput("Tên người dùng");
         accountField.setText(username);
+        limitTextInput(accountField, MAX_USERNAME_LENGTH);
 
         Label message = createMessageLabel();
 
@@ -197,6 +210,7 @@ public class LoginView {
         Label accountLabel = createSubtitle("Tài khoản: " + resetAccount);
 
         TextField codeField = createInput("Nhập mã xác nhận");
+        limitTextInput(codeField, MAX_RESET_CODE_LENGTH);
         Label message = createMessageLabel();
 
         Button confirmButton = createPrimaryButton("Xác nhận");
@@ -227,7 +241,9 @@ public class LoginView {
         Label subtitle = createSubtitle("Nhập mật khẩu mới cho tài khoản: " + resetAccount);
 
         PasswordField newPasswordField = createPasswordInput("Mật khẩu mới");
+        limitTextInput(newPasswordField, MAX_PASSWORD_LENGTH);
         PasswordField confirmPasswordField = createPasswordInput("Nhập lại mật khẩu mới");
+        limitTextInput(confirmPasswordField, MAX_PASSWORD_LENGTH);
         Label message = createMessageLabel();
 
         Button saveButton = createPrimaryButton("Đổi mật khẩu");
@@ -413,6 +429,15 @@ public class LoginView {
     private void setCenter(VBox content) {
         root.setCenter(content);
         BorderPane.setAlignment(content, Pos.CENTER);
+    }
+
+    private void limitTextInput(TextInputControl input, int maxLength) {
+        input.textProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue != null && newValue.length() > maxLength) {
+                input.setText(newValue.substring(0, maxLength));
+                input.positionCaret(maxLength);
+            }
+        });
     }
 
     private void runTcpCall(Button actionButton, Label message, String loadingText,
