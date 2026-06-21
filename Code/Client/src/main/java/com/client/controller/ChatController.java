@@ -144,8 +144,12 @@ public class ChatController {
     }
 
     public void sendMessage(long conversationId, String text, Consumer<String> onError) {
+        sendMessage(conversationId, text, null, onError);
+    }
+
+    public void sendMessage(long conversationId, String text, Long replyToId, Consumer<String> onError) {
         asyncCall(
-                () -> chatService.sendMessage(conversationId, currentUserId, text),
+                () -> chatService.sendMessage(conversationId, currentUserId, text, replyToId),
                 response -> {
                     if (!response.isSuccess()) {
                         Platform.runLater(() -> onError.accept(response.message()));

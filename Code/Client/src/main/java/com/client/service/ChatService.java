@@ -460,11 +460,18 @@ public class ChatService {
     }
 
     public ApiResponse sendMessage(long conversationId, long senderId, String content) {
+        return sendMessage(conversationId, senderId, content, null);
+    }
+
+    public ApiResponse sendMessage(long conversationId, long senderId, String content, Long replyToId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "SEND_MESSAGE");
         req.addProperty("conversationId", conversationId);
         req.addProperty("senderId", senderId);
         req.addProperty("content", content);
+        if (replyToId != null) {
+            req.addProperty("replyToId", replyToId);
+        }
         return sendRequestSync(req);
     }
 

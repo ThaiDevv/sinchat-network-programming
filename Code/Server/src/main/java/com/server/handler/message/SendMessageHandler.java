@@ -69,13 +69,36 @@ public class SendMessageHandler {
                 return response;
             }
 
-            logger.info("[SEND_MESSAGE ATTEMPT] Remote={} | UserId={} | ConversationId={} | ContentLength={}",
-                    conn.getRemoteAddress(), senderId, conversationId, content.length());
+            Long replyToId = null;
+            com.server.model.Message repliedMessage = null;
+            if (request.has("replyToId") && !request.get("replyToId").isJsonNull()) {
+                replyToId = request.get("replyToId").getAsLong();
+                repliedMessage = messageService.getMessageById(replyToId);
+                if (repliedMessage == null || repliedMessage.getConversationId() != conversationId) {
+                    logger.warn("[SEND_MESSAGE] Remote={} | UserId={} | ConversationId={} | Invalid replyToId={}",
+                            conn.getRemoteAddress(), senderId, conversationId, replyToId);
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Reply target is not in this conversation");
+                    return response;
+                }
+            }
 
-            long msgId = messageService.sendMessage(conversationId, senderId, content);
+            logger.info("[SEND_MESSAGE ATTEMPT] Remote={} | UserId={} | ConversationId={} | ContentLength={} | ReplyToId={}",
+                    conn.getRemoteAddress(), senderId, conversationId, content.length(), replyToId);
+
+            long msgId = messageService.sendMessage(conversationId, senderId, content, replyToId);
             logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored",
                     conn.getRemoteAddress(), senderId, conversationId, msgId);
             com.server.model.MessageStatus.Status collectiveStatus = messageStatusRepository.getCollectiveStatus(msgId);
+
+            Long resolvedReplyToId = null;
+            String replyToUsername = null;
+            String replyToContent = null;
+            if (repliedMessage != null) {
+                resolvedReplyToId = repliedMessage.getId();
+                replyToUsername = repliedMessage.getSenderUsername();
+                replyToContent = repliedMessage.getContent();
+            }
 
             response.addProperty("status", "success");
             response.addProperty("messageId", msgId);
@@ -83,6 +106,11 @@ public class SendMessageHandler {
             response.addProperty("senderId", senderId);
             response.addProperty("content", content);
             response.addProperty("messageStatus", collectiveStatus.name());
+            if (resolvedReplyToId != null) {
+                response.addProperty("replyToId", resolvedReplyToId);
+                response.addProperty("replyToUsername", replyToUsername);
+                response.addProperty("replyToContent", replyToContent);
+            }
 
             // Broadcast new message to all members in the conversation (reuse memberIds from above)
 
@@ -103,6 +131,11 @@ public class SendMessageHandler {
             broadcastMsg.addProperty("content", content);
             broadcastMsg.addProperty("messageId", msgId);
             broadcastMsg.addProperty("messageStatus", collectiveStatus.name());
+            if (resolvedReplyToId != null) {
+                broadcastMsg.addProperty("replyToId", resolvedReplyToId);
+                broadcastMsg.addProperty("replyToUsername", replyToUsername);
+                broadcastMsg.addProperty("replyToContent", replyToContent);
+            }
 
 
             for (Long memberId : memberIds) {

@@ -14,6 +14,9 @@ public class Message {
     private Timestamp createdAt;        // timestamp DEFAULT CURRENT_TIMESTAMP
     private String status;              // Trạng thái tin nhắn (SENT, DELIVERED, SEEN) - join từ bảng message_status
     private String senderUsername;
+    private Long replyToId;
+    private String replyToUsername;
+    private String replyToContent;
 
     public Message() {}
 
@@ -50,6 +53,15 @@ public class Message {
 
     public String getSenderUsername() { return senderUsername; }
     public void setSenderUsername(String senderUsername) { this.senderUsername = senderUsername; }
+
+    public Long getReplyToId() { return replyToId; }
+    public void setReplyToId(Long replyToId) { this.replyToId = replyToId; }
+
+    public String getReplyToUsername() { return replyToUsername; }
+    public void setReplyToUsername(String replyToUsername) { this.replyToUsername = replyToUsername; }
+
+    public String getReplyToContent() { return replyToContent; }
+    public void setReplyToContent(String replyToContent) { this.replyToContent = replyToContent; }
 
     public static class SeenUserInfo {
         private long userId;
