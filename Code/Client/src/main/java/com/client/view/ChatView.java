@@ -94,6 +94,12 @@ public class ChatView {
     private int activeMessageSearchIndex = -1;
     private String activeMessageSearchKeyword = "";
 
+    // Message reply state
+    private HBox replyPreviewBar;
+    private Label replyPreviewUserLabel;
+    private Label replyPreviewContentLabel;
+    private Long activeReplyToId = null;
+
     // Pagination
     private long currentConversationId = -1;
     private int currentMessageOffset = 0;
@@ -185,14 +191,21 @@ public class ChatView {
         String senderUsername = json.has("senderUsername") && !json.get("senderUsername").isJsonNull()
                 ? json.get("senderUsername").getAsString() : "Unknown";
 
+        Long replyToId = json.has("replyToId") && !json.get("replyToId").isJsonNull()
+                ? json.get("replyToId").getAsLong() : null;
+        String replyToUsername = json.has("replyToUsername") && !json.get("replyToUsername").isJsonNull()
+                ? json.get("replyToUsername").getAsString() : null;
+        String replyToContent = json.has("replyToContent") && !json.get("replyToContent").isJsonNull()
+                ? json.get("replyToContent").getAsString() : null;
+
         if (conversationId == currentConversationId) {
             if (typingLabel != null) typingLabel.setVisible(false);
 
             if (senderId == currentUserId) {
                 String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
-                addSentMessage(content, messageId, status);
+                addSentMessage(content, messageId, status, replyToId, replyToUsername, replyToContent);
             } else {
-                addReceivedMessage(senderId, senderUsername, content, messageId);
+                addReceivedMessage(senderId, senderUsername, content, messageId, replyToId, replyToUsername, replyToContent);
                 if (messageId > 0) controller.markMessageSeen(currentConversationId, messageId);
             }
             scrollToBottom();
@@ -740,6 +753,13 @@ public class ChatView {
                 messageSeenUsers.put(messageId, seenUsers);
             }
 
+            Long replyToId = msg.has("replyToId") && !msg.get("replyToId").isJsonNull()
+                    ? msg.get("replyToId").getAsLong() : null;
+            String replyToUsername = msg.has("replyToUsername") && !msg.get("replyToUsername").isJsonNull()
+                    ? msg.get("replyToUsername").getAsString() : null;
+            String replyToContent = msg.has("replyToContent") && !msg.get("replyToContent").isJsonNull()
+                    ? msg.get("replyToContent").getAsString() : null;
+
             boolean isMine = (senderId == currentUserId);
             HBox seenContainer = createSeenContainer(isMine);
             if (messageId > 0) {
@@ -755,17 +775,27 @@ public class ChatView {
 
                 Label bubble = createMessageBubble(content, StyleConstants.ACCENT, "18px 18px 4px 18px");
                 if (messageId > 0) messageBubbleById.put(messageId, bubble);
+                addContextMenuToBubble(bubble, messageId, "Bạn", content);
+
+                VBox bubbleGroup = new VBox(4);
+                bubbleGroup.setAlignment(Pos.TOP_RIGHT);
+                if (replyToId != null) {
+                    VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
+                    quoteBox.setMaxWidth(360);
+                    bubbleGroup.getChildren().add(quoteBox);
+                }
+                bubbleGroup.getChildren().add(bubble);
 
                 Label statusLabel = new Label(ChatController.getStatusLabelText(status));
                 statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
                 if (messageId > 0) messageStatusLabels.put(messageId, statusLabel);
 
-                container.getChildren().addAll(bubble, statusLabel, seenContainer);
+                container.getChildren().addAll(bubbleGroup, statusLabel, seenContainer);
                 wrapper.getChildren().add(container);
             } else {
                 String senderUsername = msg.has("senderUsername") && !msg.get("senderUsername").isJsonNull()
                         ? msg.get("senderUsername").getAsString() : "Unknown";
-                wrapper = createMessageWrapper(senderId, senderUsername, content, messageId, seenContainer);
+                wrapper = createMessageWrapper(senderId, senderUsername, content, messageId, seenContainer, replyToId, replyToUsername, replyToContent);
             }
             messagesBox.getChildren().add(insertIndex++, wrapper);
 
@@ -824,6 +854,10 @@ public class ChatView {
     // ==================== MESSAGE BUBBLES ====================
 
     private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer) {
+        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, null, null, null);
+    }
+
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer, Long replyToId, String replyToUsername, String replyToContent) {
         HBox wrapper = new HBox(8);
         wrapper.setAlignment(senderId == currentUserId ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
@@ -832,7 +866,18 @@ public class ChatView {
             String radius = "18px 18px 4px 18px";
             Label bubble = createMessageBubble(text, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
-            wrapper.getChildren().add(bubble);
+            addContextMenuToBubble(bubble, messageId, "Bạn", text);
+
+            VBox bubbleGroup = new VBox(4);
+            bubbleGroup.setAlignment(Pos.TOP_RIGHT);
+            if (replyToId != null) {
+                VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
+                quoteBox.setMaxWidth(360);
+                bubbleGroup.getChildren().add(quoteBox);
+            }
+            bubbleGroup.getChildren().add(bubble);
+
+            wrapper.getChildren().add(bubbleGroup);
         } else {
             Circle avatar = new Circle(16);
             avatar.setFill(Color.web("#444"));
@@ -849,25 +894,42 @@ public class ChatView {
             String radius = "18px 18px 18px 4px";
             Label bubble = createMessageBubble(text, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
+            addContextMenuToBubble(bubble, messageId, senderUsername, text);
 
-            container.getChildren().addAll(nameLbl, bubble, seenContainer);
+            VBox bubbleGroup = new VBox(4);
+            bubbleGroup.setAlignment(Pos.TOP_LEFT);
+            if (replyToId != null) {
+                VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, false);
+                quoteBox.setMaxWidth(360);
+                bubbleGroup.getChildren().add(quoteBox);
+            }
+            bubbleGroup.getChildren().add(bubble);
+
+            container.getChildren().addAll(nameLbl, bubbleGroup, seenContainer);
             wrapper.getChildren().addAll(avatar, container);
         }
         return wrapper;
     }
 
     private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId) {
+        addReceivedMessage(senderId, senderUsername, text, messageId, null, null, null);
+    }
+
+    private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId, Long replyToId, String replyToUsername, String replyToContent) {
         HBox seenContainer = createSeenContainer(false);
         if (messageId > 0) {
             messageSeenContainers.put(messageId, seenContainer);
             messageSeenUsers.put(messageId, new ArrayList<>());
         }
-        messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer));
-        // Last message is now from the other party — hide all status labels
+        messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, replyToId, replyToUsername, replyToContent));
         for (Label label : messageStatusLabels.values()) label.setVisible(false);
     }
 
     private void addSentMessage(String text, long messageId, String status) {
+        addSentMessage(text, messageId, status, null, null, null);
+    }
+
+    private void addSentMessage(String text, long messageId, String status, Long replyToId, String replyToUsername, String replyToContent) {
         for (Label oldLabel : messageStatusLabels.values()) oldLabel.setVisible(false);
 
         HBox wrapper = new HBox();
@@ -877,6 +939,16 @@ public class ChatView {
 
         Label bubble = createMessageBubble(text, StyleConstants.ACCENT, "18px 18px 4px 18px");
         if (messageId > 0) messageBubbleById.put(messageId, bubble);
+        addContextMenuToBubble(bubble, messageId, "Bạn", text);
+
+        VBox bubbleGroup = new VBox(4);
+        bubbleGroup.setAlignment(Pos.TOP_RIGHT);
+        if (replyToId != null) {
+            VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
+            quoteBox.setMaxWidth(360);
+            bubbleGroup.getChildren().add(quoteBox);
+        }
+        bubbleGroup.getChildren().add(bubble);
 
         Label statusLabel = new Label(ChatController.getStatusLabelText(status));
         statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
@@ -888,7 +960,7 @@ public class ChatView {
             messageSeenUsers.put(messageId, new ArrayList<>());
         }
 
-        container.getChildren().addAll(bubble, statusLabel, seenContainer);
+        container.getChildren().addAll(bubbleGroup, statusLabel, seenContainer);
         wrapper.getChildren().add(container);
         messagesBox.getChildren().add(wrapper);
     }
@@ -900,6 +972,20 @@ public class ChatView {
         bubble.setStyle("-fx-background-color: " + bg + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 15px; -fx-padding: 12px 18px; -fx-background-radius: " + radius + ";");
         return bubble;
+    }
+
+    private void addContextMenuToBubble(Label bubble, long messageId, String senderUsername, String content) {
+        if (messageId <= 0) return;
+        ContextMenu menu = new ContextMenu();
+        menu.setStyle("-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
+
+        MenuItem replyItem = new MenuItem("Phản hồi");
+        replyItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+        replyItem.setOnAction(e -> setReplyTarget(messageId, senderUsername, content));
+
+        menu.getItems().add(replyItem);
+
+        bubble.setContextMenu(menu);
     }
 
     private HBox createSeenContainer(boolean isMine) {
@@ -955,10 +1041,67 @@ public class ChatView {
     private void sendMessage() {
         String text = messageInput.getText().trim();
         if (!text.isEmpty() && controller.getChatService().isConnected() && currentConversationId > 0) {
-            controller.sendMessage(currentConversationId, text,
+            Long replyId = activeReplyToId;
+            controller.sendMessage(currentConversationId, text, replyId,
                     err -> showToast("Gửi tin nhắn thất bại: " + err));
             messageInput.clear();
+            cancelReply();
         }
+    }
+
+    private void setReplyTarget(long messageId, String senderUsername, String content) {
+        activeReplyToId = messageId;
+        String safeUsername = senderUsername != null && !senderUsername.isBlank() ? senderUsername : "tin nhan";
+        String safeContent = content != null ? content : "";
+        replyPreviewUserLabel.setText("Dang tra loi " + safeUsername);
+        replyPreviewContentLabel.setText(truncateText(safeContent, 80));
+        if (replyPreviewBar != null) {
+            replyPreviewBar.setVisible(true);
+            replyPreviewBar.setManaged(true);
+        }
+        messageInput.requestFocus();
+    }
+
+    private void cancelReply() {
+        activeReplyToId = null;
+        if (replyPreviewBar != null) {
+            replyPreviewBar.setVisible(false);
+            replyPreviewBar.setManaged(false);
+        }
+    }
+
+    private VBox createQuoteBox(long replyToId, String username, String content, boolean isMine) {
+        VBox quote = new VBox(2);
+        quote.setPadding(new Insets(6, 10, 6, 10));
+        String borderCol = isMine ? "#ffffff" : StyleConstants.ACCENT;
+        String bgCol = isMine ? "rgba(255, 255, 255, 0.15)" : "#2a2a2a";
+        quote.setStyle("-fx-background-color: " + bgCol + "; -fx-border-color: " + borderCol + "; -fx-border-width: 0 0 0 3px; -fx-background-radius: 4px; -fx-border-radius: 0;");
+        quote.setCursor(javafx.scene.Cursor.HAND);
+
+        Label userLabel = new Label(username != null && !username.isBlank() ? username : "Tin nhan");
+        userLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: " + (isMine ? "#ffd166" : StyleConstants.ACCENT) + ";");
+
+        Label contentLabel = new Label(truncateText(content != null ? content : "", 60));
+        contentLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #dddddd;");
+
+        quote.getChildren().addAll(userLabel, contentLabel);
+
+        quote.setOnMouseClicked(e -> {
+            e.consume();
+            if (messageBubbleById.containsKey(replyToId)) {
+                scrollToAndHighlightMessage(replyToId);
+            } else {
+                openMessageFromSearch(currentConversationId, replyToId);
+            }
+        });
+
+        return quote;
+    }
+
+    private String truncateText(String text, int maxLength) {
+        if (text == null) return "";
+        if (text.length() <= maxLength) return text;
+        return text.substring(0, Math.max(0, maxLength - 3)) + "...";
     }
 
     // ==================== MESSAGE SEARCH ====================
@@ -1514,7 +1657,29 @@ public class ChatView {
         messageInput.setOnAction(e -> sendMessage());
 
         inputBar.getChildren().addAll(attachBtn, messageInput, sendBtn);
-        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, inputBar);
+
+        // Construct replyPreviewBar (hidden by default)
+        replyPreviewBar = new HBox(12);
+        replyPreviewBar.setAlignment(Pos.CENTER_LEFT);
+        replyPreviewBar.setPadding(new Insets(8, 24, 8, 24));
+        replyPreviewBar.setStyle("-fx-background-color: #141026; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 1 0 0 0;");
+        replyPreviewBar.setVisible(false);
+        replyPreviewBar.setManaged(false);
+
+        VBox replyInfo = new VBox(2);
+        replyPreviewUserLabel = new Label("Đang trả lời ai đó");
+        replyPreviewUserLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + StyleConstants.ACCENT + "; -fx-font-size: 12px;");
+        replyPreviewContentLabel = new Label("Nội dung trích dẫn");
+        replyPreviewContentLabel.setStyle("-fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 13px;");
+        replyInfo.getChildren().addAll(replyPreviewUserLabel, replyPreviewContentLabel);
+        HBox.setHgrow(replyInfo, Priority.ALWAYS);
+
+        Button cancelReplyBtn = new Button("✕");
+        cancelReplyBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 4px;");
+        cancelReplyBtn.setOnAction(e -> cancelReply());
+        replyPreviewBar.getChildren().addAll(replyInfo, cancelReplyBtn);
+
+        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar, inputBar);
         return panel;
     }
 

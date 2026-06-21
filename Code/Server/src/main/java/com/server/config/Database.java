@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.ResultSet;
 
 public class Database {
     private static final Logger logger = LoggerFactory.getLogger(Database.class);
@@ -90,4 +92,26 @@ public class Database {
         }
         return dataSource.getConnection();
     }
+
+    public static void runMigrations() {
+        String checkColumnQuery = "SHOW COLUMNS FROM messages LIKE 'reply_to_message_id'";
+        String addColumnQuery = "ALTER TABLE messages ADD COLUMN reply_to_message_id BIGINT DEFAULT NULL, " +
+                "ADD CONSTRAINT fk_reply_to_message FOREIGN KEY (reply_to_message_id) REFERENCES messages(id) ON DELETE SET NULL";
+        
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkColumnQuery)) {
+            
+            if (!rs.next()) {
+                logger.info("Column 'reply_to_message_id' not found in table 'messages'. Running migration...");
+                stmt.executeUpdate(addColumnQuery);
+                logger.info("Database migration completed: added 'reply_to_message_id' to 'messages'.");
+            } else {
+                logger.info("Database schema is up to date. Column 'reply_to_message_id' already exists.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration failed: {}", e.getMessage(), e);
+        }
+    }
 }
+
