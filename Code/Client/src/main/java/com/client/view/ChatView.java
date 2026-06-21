@@ -864,16 +864,11 @@ public class ChatView {
     private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer, Long replyToId, String replyToUsername, String replyToContent) {
         HBox wrapper = new HBox(8);
         wrapper.setAlignment(senderId == currentUserId ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-        String bg = senderId == currentUserId ? StyleConstants.ACCENT : "#1e1e1e";
-        String radius = senderId == currentUserId ? "18px 18px 4px 18px" : "18px 18px 18px 4px";
-        Node bubble = createMessageBubble(text, bg, radius);
-        if (messageId > 0) messageBubbleById.put(messageId, bubble);
-        wrapper.getChildren().add(bubble);
 
         if (senderId == currentUserId) {
             String bg = StyleConstants.ACCENT;
             String radius = "18px 18px 4px 18px";
-            Label bubble = createMessageBubble(text, bg, radius);
+            Node bubble = createMessageBubble(text, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
             addContextMenuToBubble(bubble, messageId, "Bạn", text);
 
@@ -901,7 +896,7 @@ public class ChatView {
 
             String bg = "#1e1e1e";
             String radius = "18px 18px 18px 4px";
-            Label bubble = createMessageBubble(text, bg, radius);
+            Node bubble = createMessageBubble(text, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
             addContextMenuToBubble(bubble, messageId, senderUsername, text);
 
@@ -1005,7 +1000,7 @@ public class ChatView {
         return content;
     }
 
-    private void addContextMenuToBubble(Label bubble, long messageId, String senderUsername, String content) {
+    private void addContextMenuToBubble(Node bubble, long messageId, String senderUsername, String content) {
         if (messageId <= 0) return;
         ContextMenu menu = new ContextMenu();
         menu.setStyle("-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
@@ -1016,7 +1011,9 @@ public class ChatView {
 
         menu.getItems().add(replyItem);
 
-        bubble.setContextMenu(menu);
+        if (bubble instanceof javafx.scene.control.Control) {
+            ((javafx.scene.control.Control) bubble).setContextMenu(menu);
+        }
     }
 
     private HBox createSeenContainer(boolean isMine) {
@@ -1136,6 +1133,8 @@ public class ChatView {
         // Show popup above the emoji button
         javafx.geometry.Bounds bounds = owner.localToScreen(owner.getBoundsInLocal());
         emojiPopup.show(owner, bounds.getMinX() - 200, bounds.getMinY() - 320);
+    }
+
     private VBox createQuoteBox(long replyToId, String username, String content, boolean isMine) {
         VBox quote = new VBox(2);
         quote.setPadding(new Insets(6, 10, 6, 10));
@@ -1733,8 +1732,6 @@ public class ChatView {
         messageInput.setOnAction(e -> sendMessage());
 
         inputBar.getChildren().addAll(attachBtn, emojiBtn, messageInput, sendBtn);
-        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, inputBar);
-        inputBar.getChildren().addAll(attachBtn, messageInput, sendBtn);
 
         // Construct replyPreviewBar (hidden by default)
         replyPreviewBar = new HBox(12);
