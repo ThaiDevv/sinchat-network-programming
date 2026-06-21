@@ -6,10 +6,12 @@ import com.server.handler.message.*;
 import com.server.handler.changeavatar.*;
 import com.server.handler.avatar.GetAvatarHandler;
 import com.server.handler.changeName.NameHandler;
+import com.server.handler.friendship.*;
 import com.server.handler.JoinHandler;
 import com.server.handler.PingHandler;
 import com.server.handler.TypingHandler;
 import com.server.ProfileHandler;
+import com.server.service.FriendshipService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +37,15 @@ public class Router {
     private static final TypingHandler typingHandler = new TypingHandler();
     private static final UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
     private static final NameHandler nameHandler = new NameHandler();
+    // Friendship handlers
+    private static final FriendshipService friendshipService = new FriendshipService();
+    private static final SendFriendRequestHandler sendFriendRequestHandler = new SendFriendRequestHandler(friendshipService);
+    private static final RespondFriendRequestHandler respondFriendRequestHandler = new RespondFriendRequestHandler(friendshipService);
+    private static final GetFriendsHandler getFriendsHandler = new GetFriendsHandler(friendshipService);
+    private static final GetFriendRequestsHandler getFriendRequestsHandler = new GetFriendRequestsHandler(friendshipService);
+    private static final UnfriendHandler unfriendHandler = new UnfriendHandler(friendshipService);
+    private static final BlockUserHandler blockUserHandler = new BlockUserHandler(friendshipService);
+    private static final UnblockUserHandler unblockUserHandler = new UnblockUserHandler(friendshipService);
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -142,6 +153,27 @@ public class Router {
                     break;
                 case "CHANGE_NAME":
                     response = nameHandler.handle(conn, request);
+                    break;
+                case "SEND_FRIEND_REQUEST":
+                    response = sendFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "RESPOND_FRIEND_REQUEST":
+                    response = respondFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIENDS":
+                    response = getFriendsHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIEND_REQUESTS":
+                    response = getFriendRequestsHandler.handleTcp(request, conn);
+                    break;
+                case "UNFRIEND":
+                    response = unfriendHandler.handleTcp(request, conn);
+                    break;
+                case "BLOCK_USER":
+                    response = blockUserHandler.handleTcp(request, conn);
+                    break;
+                case "UNBLOCK_USER":
+                    response = unblockUserHandler.handleTcp(request, conn);
                     break;
 
                 default:
