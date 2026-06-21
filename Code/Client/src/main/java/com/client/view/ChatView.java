@@ -49,6 +49,7 @@ public class ChatView {
     private Label nameLabel;
     private Label typingLabel;
     private Label loadingIndicator;
+    private Button leaveGroupBtn;
 
     // Message search fields
     private TextField messageSearchField;
@@ -82,6 +83,8 @@ public class ChatView {
     private final List<Stage> activeNotificationStages = new ArrayList<>();
     private final Map<Long, List<Circle>> peerAvatarCircles = new ConcurrentHashMap<>();
     private final Map<Long, Image> peerAvatarCache = new ConcurrentHashMap<>();
+    private final Map<Long, HBox> messageSeenContainers = new HashMap<>();
+    private final Map<Long, List<ReaderInfo>> messageSeenUsers = new HashMap<>();
 
     // Message search state
     private final List<JsonObject> messageSearchMatches = new ArrayList<>();
@@ -162,6 +165,7 @@ public class ChatView {
         tcp.setOnUserStatusChange(this::onUserStatusChange);
         tcp.setOnUserAvatarChanged(this::onUserAvatarChanged);
         tcp.setOnMessageStatusChanged(this::onMessageStatusChanged);
+        tcp.setOnLeftGroup(this::onLeftGroupReceived);
         tcp.setOnConnected(() -> System.out.println("TCP socket connected for user " + currentUserId));
         tcp.setOnDisconnected(reason -> System.out.println("TCP socket disconnected: " + reason));
 
@@ -178,6 +182,8 @@ public class ChatView {
         long senderId = json.get("senderId").getAsLong();
         String content = json.get("content").getAsString();
         long messageId = json.has("messageId") ? json.get("messageId").getAsLong() : -1;
+        String senderUsername = json.has("senderUsername") && !json.get("senderUsername").isJsonNull()
+                ? json.get("senderUsername").getAsString() : "Unknown";
 
         if (conversationId == currentConversationId) {
             if (typingLabel != null) typingLabel.setVisible(false);
@@ -186,15 +192,37 @@ public class ChatView {
                 String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
                 addSentMessage(content, messageId, status);
             } else {
-                addReceivedMessage(content, messageId);
+                addReceivedMessage(senderId, senderUsername, content, messageId);
                 if (messageId > 0) controller.markMessageSeen(currentConversationId, messageId);
             }
             scrollToBottom();
         } else {
             unreadCounts.merge(conversationId, 1, Integer::sum);
             updateUnreadBadge(conversationId);
-            String senderName = conversationDisplayNames.getOrDefault(conversationId, "Ai đó");
+            String senderName = json.has("senderUsername") ? json.get("senderUsername").getAsString()
+                    : conversationDisplayNames.getOrDefault(conversationId, "Ai đó");
             showNewMessageNotification(senderName, content, conversationId);
+        }
+        Platform.runLater(this::loadConversations);
+    }
+
+    private void onLeftGroupReceived(JsonObject json) {
+        long conversationId = json.get("conversationId").getAsLong();
+        long leftUserId = json.get("userId").getAsLong();
+
+        if (leftUserId == currentUserId) {
+            if (currentConversationId == conversationId) {
+                Platform.runLater(() -> {
+                    currentConversationId = -1;
+                    messagesBox.getChildren().clear();
+                    if (headerChatName != null) headerChatName.setText("Chọn người để chat");
+                    if (chatStatus != null) chatStatus.setText("Offline");
+                    if (leaveGroupBtn != null) {
+                        leaveGroupBtn.setVisible(false);
+                        leaveGroupBtn.setManaged(false);
+                    }
+                });
+            }
         }
         Platform.runLater(this::loadConversations);
     }
@@ -206,6 +234,22 @@ public class ChatView {
         if (json.has("messageId")) {
             long messageId = json.get("messageId").getAsLong();
             String status = json.get("status").getAsString();
+
+            if ("SEEN".equals(status) && json.has("username")) {
+                long readerId = json.has("userId") ? json.get("userId").getAsLong() : -1;
+                String readerUsername = json.get("username").getAsString();
+                if (readerId > 0) {
+                    Platform.runLater(() -> {
+                        List<ReaderInfo> readers = messageSeenUsers.computeIfAbsent(messageId, k -> new ArrayList<>());
+                        ReaderInfo newReader = new ReaderInfo(readerId, readerUsername);
+                        if (!readers.contains(newReader)) {
+                            readers.add(newReader);
+                            updateSeenAvatars(messageId, readers);
+                        }
+                    });
+                }
+            }
+
             Platform.runLater(() -> {
                 Label label = messageStatusLabels.get(messageId);
                 if (label != null) {
@@ -217,6 +261,24 @@ public class ChatView {
                 }
             });
         } else if (json.has("status") && "SEEN".equals(json.get("status").getAsString())) {
+            if (json.has("username")) {
+                long readerId = json.has("userId") ? json.get("userId").getAsLong() : -1;
+                String readerUsername = json.get("username").getAsString();
+                if (readerId > 0) {
+                    Platform.runLater(() -> {
+                        for (Map.Entry<Long, HBox> entry : messageSeenContainers.entrySet()) {
+                            long mId = entry.getKey();
+                            List<ReaderInfo> readers = messageSeenUsers.computeIfAbsent(mId, k -> new ArrayList<>());
+                            ReaderInfo newReader = new ReaderInfo(readerId, readerUsername);
+                            if (!readers.contains(newReader)) {
+                                readers.add(newReader);
+                                updateSeenAvatars(mId, readers);
+                            }
+                        }
+                    });
+                }
+            }
+
             Platform.runLater(() -> {
                 if (!messageStatusLabels.isEmpty()) {
                     // Update all visible sent message labels to "Read"
@@ -381,14 +443,12 @@ public class ChatView {
                 dataUrl -> {
                     Image img = decodeAvatarDataUrl(dataUrl);
                     if (img != null) {
-                        peerAvatarCache.put(peerId, img);
-                        targetCircle.setFill(new ImagePattern(img));
+                        updateAvatarCircles(peerId, img);
                     }
                 },
                 () -> {
                     Image defaultImg = ImageUtils.createDefaultAvatarImage();
-                    peerAvatarCache.put(peerId, defaultImg);
-                    targetCircle.setFill(new ImagePattern(defaultImg));
+                    updateAvatarCircles(peerId, defaultImg);
                 });
     }
 
@@ -400,6 +460,8 @@ public class ChatView {
         updateUnreadBadge(conversationId);
         messagesBox.getChildren().clear();
         messageBubbleById.clear();
+        messageSeenContainers.clear();
+        messageSeenUsers.clear();
         highlightedMessageBubble = null;
         highlightedMessageStyle = null;
         clearMessageSearchResults();
@@ -424,6 +486,26 @@ public class ChatView {
                     peerAvatarCircles.computeIfAbsent(peerId, k -> new ArrayList<>()).add(headerAvatar);
                     loadPeerAvatar(peerId, headerAvatar);
                 }
+            }
+            if (leaveGroupBtn != null) {
+                leaveGroupBtn.setVisible(false);
+                leaveGroupBtn.setManaged(false);
+            }
+        } else {
+            // Group conversation — show "Members" in status and a group icon colour
+            if (chatStatus != null) {
+                chatStatus.setText("Nhóm chat");
+                chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.ACCENT + ";");
+            }
+            if (headerChatName != null && headerChatName.getParent() != null
+                    && headerChatName.getParent().getParent() instanceof HBox header) {
+                if (!header.getChildren().isEmpty() && header.getChildren().get(0) instanceof Circle headerAvatar) {
+                    headerAvatar.setFill(Color.web("#2d2250"));
+                }
+            }
+            if (leaveGroupBtn != null && conversationId > 0) {
+                leaveGroupBtn.setVisible(true);
+                leaveGroupBtn.setManaged(true);
             }
         }
 
@@ -483,7 +565,9 @@ public class ChatView {
         avatar.setStroke(Color.web(StyleConstants.BORDER_COLOR));
         avatarContainer.getChildren().add(avatar);
 
-        if (conv.has("peerId")) {
+        boolean isGroup = conv.has("type") && "GROUP".equals(conv.get("type").getAsString());
+
+        if (!isGroup && conv.has("peerId")) {
             long peerId = conv.get("peerId").getAsLong();
             conversationIdByPeerId.put(peerId, conversationId);
             peerIdByConversationId.put(conversationId, peerId);
@@ -495,7 +579,13 @@ public class ChatView {
             loadPeerAvatar(peerId, avatar);
         }
 
-        if (conv.has("isOnline")) {
+        if (isGroup) {
+            // Group icon — show a group emoji label centered
+            Label groupIcon = new Label("👥");
+            groupIcon.setStyle("-fx-font-size: 16px;");
+            avatarContainer.getChildren().add(groupIcon);
+            avatar.setFill(Color.web("#2d2250"));
+        } else if (conv.has("isOnline")) {
             boolean online = conv.get("isOnline").getAsBoolean();
             Circle statusDot = new Circle(6);
             statusDot.setFill(Color.web(online ? "#4ade80" : "#888888"));
@@ -634,8 +724,30 @@ public class ChatView {
             String content = msg.get("content").getAsString();
             String status = msg.has("status") ? msg.get("status").getAsString() : "SENT";
 
+            List<ReaderInfo> seenUsers = new ArrayList<>();
+            if (msg.has("seenByUsers") && msg.get("seenByUsers").isJsonArray()) {
+                JsonArray seenArr = msg.getAsJsonArray("seenByUsers");
+                for (int i = 0; i < seenArr.size(); i++) {
+                    if (seenArr.get(i).isJsonObject()) {
+                        JsonObject uObj = seenArr.get(i).getAsJsonObject();
+                        long uId = uObj.get("userId").getAsLong();
+                        String uName = uObj.get("username").getAsString();
+                        seenUsers.add(new ReaderInfo(uId, uName));
+                    }
+                }
+            }
+            if (messageId > 0) {
+                messageSeenUsers.put(messageId, seenUsers);
+            }
+
+            boolean isMine = (senderId == currentUserId);
+            HBox seenContainer = createSeenContainer(isMine);
+            if (messageId > 0) {
+                messageSeenContainers.put(messageId, seenContainer);
+            }
+
             HBox wrapper;
-            if (senderId == currentUserId) {
+            if (isMine) {
                 wrapper = new HBox();
                 wrapper.setAlignment(Pos.CENTER_RIGHT);
                 VBox container = new VBox(2);
@@ -648,12 +760,18 @@ public class ChatView {
                 statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
                 if (messageId > 0) messageStatusLabels.put(messageId, statusLabel);
 
-                container.getChildren().addAll(bubble, statusLabel);
+                container.getChildren().addAll(bubble, statusLabel, seenContainer);
                 wrapper.getChildren().add(container);
             } else {
-                wrapper = createMessageWrapper(senderId, content, messageId);
+                String senderUsername = msg.has("senderUsername") && !msg.get("senderUsername").isJsonNull()
+                        ? msg.get("senderUsername").getAsString() : "Unknown";
+                wrapper = createMessageWrapper(senderId, senderUsername, content, messageId, seenContainer);
             }
             messagesBox.getChildren().add(insertIndex++, wrapper);
+
+            if (messageId > 0) {
+                updateSeenAvatars(messageId, seenUsers);
+            }
         }
 
         int msgCount = messages.size();
@@ -705,19 +823,46 @@ public class ChatView {
 
     // ==================== MESSAGE BUBBLES ====================
 
-    private HBox createMessageWrapper(long senderId, String text, long messageId) {
-        HBox wrapper = new HBox();
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer) {
+        HBox wrapper = new HBox(8);
         wrapper.setAlignment(senderId == currentUserId ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-        String bg = senderId == currentUserId ? StyleConstants.ACCENT : "#1e1e1e";
-        String radius = senderId == currentUserId ? "18px 18px 4px 18px" : "18px 18px 18px 4px";
-        Label bubble = createMessageBubble(text, bg, radius);
-        if (messageId > 0) messageBubbleById.put(messageId, bubble);
-        wrapper.getChildren().add(bubble);
+
+        if (senderId == currentUserId) {
+            String bg = StyleConstants.ACCENT;
+            String radius = "18px 18px 4px 18px";
+            Label bubble = createMessageBubble(text, bg, radius);
+            if (messageId > 0) messageBubbleById.put(messageId, bubble);
+            wrapper.getChildren().add(bubble);
+        } else {
+            Circle avatar = new Circle(16);
+            avatar.setFill(Color.web("#444"));
+            peerAvatarCircles.computeIfAbsent(senderId, k -> new ArrayList<>()).add(avatar);
+            loadPeerAvatar(senderId, avatar);
+
+            VBox container = new VBox(2);
+            container.setAlignment(Pos.TOP_LEFT);
+
+            Label nameLbl = new Label(senderUsername);
+            nameLbl.setStyle("-fx-font-size: 11px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-weight: bold; -fx-padding: 0 0 2px 4px;");
+
+            String bg = "#1e1e1e";
+            String radius = "18px 18px 18px 4px";
+            Label bubble = createMessageBubble(text, bg, radius);
+            if (messageId > 0) messageBubbleById.put(messageId, bubble);
+
+            container.getChildren().addAll(nameLbl, bubble, seenContainer);
+            wrapper.getChildren().addAll(avatar, container);
+        }
         return wrapper;
     }
 
-    private void addReceivedMessage(String text, long messageId) {
-        messagesBox.getChildren().add(createMessageWrapper(-1, text, messageId));
+    private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId) {
+        HBox seenContainer = createSeenContainer(false);
+        if (messageId > 0) {
+            messageSeenContainers.put(messageId, seenContainer);
+            messageSeenUsers.put(messageId, new ArrayList<>());
+        }
+        messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer));
         // Last message is now from the other party — hide all status labels
         for (Label label : messageStatusLabels.values()) label.setVisible(false);
     }
@@ -737,7 +882,13 @@ public class ChatView {
         statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
         if (messageId > 0) messageStatusLabels.put(messageId, statusLabel);
 
-        container.getChildren().addAll(bubble, statusLabel);
+        HBox seenContainer = createSeenContainer(true);
+        if (messageId > 0) {
+            messageSeenContainers.put(messageId, seenContainer);
+            messageSeenUsers.put(messageId, new ArrayList<>());
+        }
+
+        container.getChildren().addAll(bubble, statusLabel, seenContainer);
         wrapper.getChildren().add(container);
         messagesBox.getChildren().add(wrapper);
     }
@@ -749,6 +900,56 @@ public class ChatView {
         bubble.setStyle("-fx-background-color: " + bg + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 15px; -fx-padding: 12px 18px; -fx-background-radius: " + radius + ";");
         return bubble;
+    }
+
+    private HBox createSeenContainer(boolean isMine) {
+        HBox container = new HBox(-4); // overlapping avatars
+        container.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        container.setPadding(new Insets(2, 4, 0, 4));
+        container.setVisible(false);
+        container.setManaged(false);
+        return container;
+    }
+
+    private void updateSeenAvatars(long messageId, List<ReaderInfo> readers) {
+        HBox container = messageSeenContainers.get(messageId);
+        if (container == null) return;
+
+        container.getChildren().clear();
+
+        List<ReaderInfo> filteredReaders = new ArrayList<>();
+        if (readers != null) {
+            for (ReaderInfo reader : readers) {
+                if (reader.userId != currentUserId) {
+                    filteredReaders.add(reader);
+                }
+            }
+        }
+
+        if (filteredReaders.isEmpty()) {
+            container.setVisible(false);
+            container.setManaged(false);
+            return;
+        }
+
+        container.setVisible(true);
+        container.setManaged(true);
+
+        for (ReaderInfo reader : filteredReaders) {
+            Circle readerAvatar = new Circle(8); // radius = 8px (16px diameter)
+            readerAvatar.setFill(Color.web("#444"));
+            readerAvatar.setStroke(Color.web("#1e1e1e"));
+            readerAvatar.setStrokeWidth(1);
+
+            Tooltip tooltip = new Tooltip(reader.username);
+            tooltip.setStyle("-fx-font-size: 11px;");
+            Tooltip.install(readerAvatar, tooltip);
+
+            peerAvatarCircles.computeIfAbsent(reader.userId, k -> new ArrayList<>()).add(readerAvatar);
+            loadPeerAvatar(reader.userId, readerAvatar);
+
+            container.getChildren().add(readerAvatar);
+        }
     }
 
     private void sendMessage() {
@@ -1022,8 +1223,54 @@ public class ChatView {
         panel.setPadding(new Insets(20));
         panel.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 1 0 0;");
 
+        // Header row with title + create group button
+        HBox headerRow = new HBox(8);
+        headerRow.setAlignment(Pos.CENTER_LEFT);
+
         Label header = new Label("SinChat");
         header.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
+
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+
+        Button newGroupBtn = new Button("+ Nhóm");
+        newGroupBtn.setStyle(
+                "-fx-background-color: " + StyleConstants.ACCENT + ";" +
+                "-fx-text-fill: white;" +
+                "-fx-font-size: 12px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10px;" +
+                "-fx-padding: 6px 12px;" +
+                "-fx-cursor: hand;"
+        );
+        newGroupBtn.setOnMouseEntered(e -> newGroupBtn.setStyle(
+                "-fx-background-color: #6a4ee8;" +
+                "-fx-text-fill: white;" +
+                "-fx-font-size: 12px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10px;" +
+                "-fx-padding: 6px 12px;" +
+                "-fx-cursor: hand;"
+        ));
+        newGroupBtn.setOnMouseExited(e -> newGroupBtn.setStyle(
+                "-fx-background-color: " + StyleConstants.ACCENT + ";" +
+                "-fx-text-fill: white;" +
+                "-fx-font-size: 12px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10px;" +
+                "-fx-padding: 6px 12px;" +
+                "-fx-cursor: hand;"
+        ));
+        newGroupBtn.setOnAction(e -> {
+            CreateGroupDialog dlg = new CreateGroupDialog(stage, controller,
+                    (convId, groupName) -> {
+                        loadConversations();
+                        setCurrentConversation(convId, groupName);
+                    });
+            dlg.show();
+        });
+
+        headerRow.getChildren().addAll(header, headerSpacer, newGroupBtn);
 
         TextField searchField = new TextField();
         searchField.setPromptText("Tìm kiếm...");
@@ -1058,7 +1305,7 @@ public class ChatView {
         scrollContacts.setStyle("-fx-background: " + StyleConstants.PANEL_DARK + "; -fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: transparent;");
         VBox.setVgrow(scrollContacts, Priority.ALWAYS);
 
-        panel.getChildren().addAll(header, searchField, scrollContacts);
+        panel.getChildren().addAll(headerRow, searchField, scrollContacts);
         return panel;
     }
 
@@ -1134,8 +1381,38 @@ public class ChatView {
         messageSearchButton.setOnAction(e -> searchMessagesInCurrentConversation());
         messageSearchField.setOnAction(e -> searchMessagesInCurrentConversation());
 
+        leaveGroupBtn = new Button("Rời nhóm");
+        leaveGroupBtn.setStyle("-fx-background-color: rgba(255, 59, 48, 0.15); -fx-text-fill: #ff453a; -fx-border-color: rgba(255, 69, 58, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;");
+        leaveGroupBtn.setOnMouseEntered(e -> leaveGroupBtn.setStyle("-fx-background-color: #ff3b30; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
+        leaveGroupBtn.setOnMouseExited(e -> leaveGroupBtn.setStyle("-fx-background-color: rgba(255, 59, 48, 0.15); -fx-text-fill: #ff453a; -fx-border-color: rgba(255, 69, 58, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
+        leaveGroupBtn.setVisible(false);
+        leaveGroupBtn.setManaged(false);
+
+        leaveGroupBtn.setOnAction(evt -> {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Xác nhận thoát nhóm");
+            alert.setHeaderText(null);
+            alert.setContentText("Bạn có chắc chắn muốn thoát khỏi nhóm này không?");
+
+            Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                controller.leaveGroup(currentConversationId, () -> {
+                    showToast("Đã thoát nhóm thành công!");
+                    currentConversationId = -1;
+                    messagesBox.getChildren().clear();
+                    if (headerChatName != null) headerChatName.setText("Chọn người để chat");
+                    if (chatStatus != null) chatStatus.setText("Offline");
+                    if (leaveGroupBtn != null) {
+                        leaveGroupBtn.setVisible(false);
+                        leaveGroupBtn.setManaged(false);
+                    }
+                    loadConversations();
+                }, err -> showToast("Không thể thoát nhóm: " + err));
+            }
+        });
+
         actions.getChildren().addAll(messageSearchField, messageSearchButton,
-                createIconButton("Call"), createIconButton("Video"), createIconButton("..."));
+                createIconButton("Call"), createIconButton("Video"), leaveGroupBtn);
         chatHeader.getChildren().addAll(headerAvatar, headerInfo, spacer, actions);
 
         // Search results panel
@@ -1530,5 +1807,28 @@ public class ChatView {
 
     public Scene createScene() {
         return new Scene(root, 1400, 800);
+    }
+
+    public static class ReaderInfo {
+        public final long userId;
+        public final String username;
+
+        public ReaderInfo(long userId, String username) {
+            this.userId = userId;
+            this.username = username;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            ReaderInfo other = (ReaderInfo) obj;
+            return userId == other.userId;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(userId);
+        }
     }
 }

@@ -89,6 +89,43 @@ public class ChatController {
         );
     }
 
+    public void createGroup(String groupName, java.util.List<Long> memberIds,
+                            Consumer<Long> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.createGroup(currentUserId, groupName, memberIds),
+                response -> {
+                    if (response.isSuccess() && response.rawBody() != null) {
+                        try {
+                            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+                            long convId = json.get("conversationId").getAsLong();
+                            Platform.runLater(() -> onSuccess.accept(convId));
+                        } catch (Exception e) {
+                            if (onError != null) Platform.runLater(() -> onError.accept("Không đọc được phản hồi từ server."));
+                        }
+                    } else {
+                        String err = response != null && response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể tạo nhóm chat.";
+                        if (onError != null) Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    public void leaveGroup(long conversationId, Runnable onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.leaveGroup(conversationId, currentUserId),
+                response -> {
+                    if (response != null && response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response != null && response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể rời nhóm.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
     // ---- messages ----
 
     public void loadMessages(long conversationId, int limit, int offset,

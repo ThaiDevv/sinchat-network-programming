@@ -58,8 +58,8 @@ public class MessageRepository {
     public List<Message> getByConversationId(long conversationId, int limit, int offset) {
         List<Message> messages = new ArrayList<>();
         StringBuilder query = new StringBuilder(
-                "SELECT id, conversation_id, sender_id, type, content, created_at " +
-                "FROM messages WHERE conversation_id = ? ORDER BY created_at DESC");
+                "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at " +
+                "FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.conversation_id = ? ORDER BY m.created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
         if (offset > 0) query.append(" OFFSET ?");
         try (Connection conn = Database.getConnection();
@@ -103,7 +103,7 @@ public class MessageRepository {
     }
 
     private Message mapRow(ResultSet rs) throws SQLException {
-        return new Message(
+        Message msg = new Message(
                 rs.getLong("id"),
                 rs.getLong("conversation_id"),
                 rs.getLong("sender_id"),
@@ -111,6 +111,10 @@ public class MessageRepository {
                 rs.getString("content"),
                 rs.getTimestamp("created_at")
         );
+        try {
+            msg.setSenderUsername(rs.getString("sender_username"));
+        } catch (SQLException ignored) {}
+        return msg;
     }
 
     private MessageSearchResult mapSearchRow(ResultSet rs) throws SQLException {
