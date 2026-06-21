@@ -90,6 +90,7 @@ public class ChatService {
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
     private Consumer<JsonObject> onMessageStatusChanged;
+    private Consumer<JsonObject> onLeftGroup;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -105,6 +106,7 @@ public class ChatService {
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
     public void setOnMessageStatusChanged(Consumer<JsonObject> callback) { this.onMessageStatusChanged = callback; }
+    public void setOnLeftGroup(Consumer<JsonObject> callback) { this.onLeftGroup = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 
@@ -289,6 +291,9 @@ public class ChatService {
                     break;
                 case "PING_RESPONSE":
                     pongReceived = true;
+                    break;
+                case "LEFT_GROUP":
+                    if (onLeftGroup != null) Platform.runLater(() -> onLeftGroup.accept(json));
                     break;
                 default:
                     break;
@@ -504,6 +509,14 @@ public class ChatService {
         com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
         for (Long id : memberIds) arr.add(id);
         req.add("memberIds", arr);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse leaveGroup(long conversationId, long userId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "LEAVE_GROUP");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("userId", userId);
         return sendRequestSync(req);
     }
 

@@ -13,6 +13,7 @@ public class Message {
     private String content;             // text - noi dung tin nhan
     private Timestamp createdAt;        // timestamp DEFAULT CURRENT_TIMESTAMP
     private String status;              // Trạng thái tin nhắn (SENT, DELIVERED, SEEN) - join từ bảng message_status
+    private String senderUsername;
 
     public Message() {}
 
@@ -46,5 +47,25 @@ public class Message {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public String getSenderUsername() { return senderUsername; }
+    public void setSenderUsername(String senderUsername) { this.senderUsername = senderUsername; }
+
+    public static class SeenUserInfo {
+        private long userId;
+        private String username;
+
+        public SeenUserInfo(long userId, String username) {
+            this.userId = userId;
+            this.username = username;
+        }
+
+        public long getUserId() { return userId; }
+        public String getUsername() { return username; }
+    }
+
+    private java.util.List<SeenUserInfo> seenByUsers;
+    public java.util.List<SeenUserInfo> getSeenByUsers() { return seenByUsers; }
+    public void setSeenByUsers(java.util.List<SeenUserInfo> seenByUsers) { this.seenByUsers = seenByUsers; }
 }
 

@@ -48,15 +48,17 @@ public class TcpServer {
         );
         idleConnectionSweeper.start();
 
-        // Start LAN auto-discovery so clients can find this server
-        lanDiscoveryBroadcaster = new LanDiscoveryBroadcaster(port);
-        lanDiscoveryBroadcaster.start();
-
         new Thread(() -> {
             try {
                 ServerSocketFactory factory = TcpServerSocketFactory.create(tlsEnabled);
                 serverSocket = factory.createServerSocket(port);
-                logger.info("TCP Server started on port {} (tlsEnabled={})", getPort(), tlsEnabled);
+                int actualPort = serverSocket.getLocalPort();
+
+                // Start LAN auto-discovery using the ACTUAL bound port!
+                lanDiscoveryBroadcaster = new LanDiscoveryBroadcaster(actualPort);
+                lanDiscoveryBroadcaster.start();
+
+                logger.info("TCP Server started on port {} (tlsEnabled={})", actualPort, tlsEnabled);
                 while (running) {
                     Socket socket = null;
                     try {

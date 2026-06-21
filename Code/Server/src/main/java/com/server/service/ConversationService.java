@@ -27,4 +27,12 @@ public class ConversationService {
     public long createGroupConversation(long creatorId, String groupName, List<Long> memberIds) throws SQLException {
         return conversationRepo.createGroupConversation(creatorId, groupName, memberIds);
     }
+
+    public void leaveGroupConversation(long conversationId, long userId) throws SQLException {
+        conversationRepo.removeMember(conversationId, userId);
+    }
+
+    public String getConversationType(long conversationId) {
+        return conversationRepo.getConversationType(conversationId);
+    }
 }

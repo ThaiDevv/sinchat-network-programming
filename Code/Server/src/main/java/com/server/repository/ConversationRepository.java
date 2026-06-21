@@ -286,6 +286,32 @@ public class ConversationRepository {
         }
     }
 
+    public String getConversationType(long conversationId) {
+        String query = "SELECT type FROM conversations WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, conversationId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("type");
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching conversation type for id: {}", conversationId, e);
+        }
+        return null;
+    }
+
+    public void removeMember(long conversationId, long userId) throws SQLException {
+        String query = "DELETE FROM conversation_members WHERE conversation_id = ? AND user_id = ?";
+        try (Connection conn = Database.getConnection();
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, conversationId);
+            pstmt.setLong(2, userId);
+            pstmt.executeUpdate();
+        }
+    }
+
     public List<Long> findConversationPeers(long userId) {
         List<Long> peerIds = new ArrayList<>();
         String query = "SELECT DISTINCT cm2.user_id " +

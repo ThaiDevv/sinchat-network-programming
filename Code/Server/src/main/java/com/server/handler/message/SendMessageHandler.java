@@ -15,6 +15,7 @@ public class SendMessageHandler {
     private final MessageService messageService = new MessageService();
     private final com.server.repository.ConversationRepository conversationRepository = new com.server.repository.ConversationRepository();
     private final com.server.repository.MessageStatusRepository messageStatusRepository = new com.server.repository.MessageStatusRepository();
+    private final com.server.repository.UserRepository userRepository = new com.server.repository.UserRepository();
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
@@ -88,10 +89,17 @@ public class SendMessageHandler {
             logger.info("[SEND_MESSAGE BROADCAST] Remote={} | UserId={} | ConversationId={} | MessageId={} | Broadcasting to {} members",
                     conn.getRemoteAddress(), senderId, conversationId, msgId, memberIds.size());
 
+            String senderUsername = "Unknown";
+            com.server.model.User sender = userRepository.findById(senderId);
+            if (sender != null) {
+                senderUsername = sender.getUsername();
+            }
+
             JsonObject broadcastMsg = new JsonObject();
             broadcastMsg.addProperty("action", "NEW_MESSAGE");
             broadcastMsg.addProperty("conversationId", conversationId);
             broadcastMsg.addProperty("senderId", senderId);
+            broadcastMsg.addProperty("senderUsername", senderUsername);
             broadcastMsg.addProperty("content", content);
             broadcastMsg.addProperty("messageId", msgId);
             broadcastMsg.addProperty("messageStatus", collectiveStatus.name());

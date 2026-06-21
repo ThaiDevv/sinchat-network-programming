@@ -111,6 +111,21 @@ public class ChatController {
         );
     }
 
+    public void leaveGroup(long conversationId, Runnable onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.leaveGroup(conversationId, currentUserId),
+                response -> {
+                    if (response != null && response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response != null && response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể rời nhóm.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
     // ---- messages ----
 
     public void loadMessages(long conversationId, int limit, int offset,
