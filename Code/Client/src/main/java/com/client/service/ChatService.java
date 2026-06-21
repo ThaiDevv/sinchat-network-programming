@@ -496,6 +496,17 @@ public class ChatService {
         return sendRequestSync(req);
     }
 
+    public ApiResponse createGroup(long creatorId, String groupName, java.util.List<Long> memberIds) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "CREATE_GROUP");
+        req.addProperty("creatorId", creatorId);
+        req.addProperty("groupName", groupName);
+        com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+        for (Long id : memberIds) arr.add(id);
+        req.add("memberIds", arr);
+        return sendRequestSync(req);
+    }
+
     // ---- message status helpers ----
     public void updateMessageStatus(long conversationId, String status) {
         JsonObject req = new JsonObject();

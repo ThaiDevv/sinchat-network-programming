@@ -425,6 +425,18 @@ public class ChatView {
                     loadPeerAvatar(peerId, headerAvatar);
                 }
             }
+        } else {
+            // Group conversation — show "Members" in status and a group icon colour
+            if (chatStatus != null) {
+                chatStatus.setText("Nhóm chat");
+                chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.ACCENT + ";");
+            }
+            if (headerChatName != null && headerChatName.getParent() != null
+                    && headerChatName.getParent().getParent() instanceof HBox header) {
+                if (!header.getChildren().isEmpty() && header.getChildren().get(0) instanceof Circle headerAvatar) {
+                    headerAvatar.setFill(Color.web("#2d2250"));
+                }
+            }
         }
 
         loadConversations();
@@ -483,7 +495,9 @@ public class ChatView {
         avatar.setStroke(Color.web(StyleConstants.BORDER_COLOR));
         avatarContainer.getChildren().add(avatar);
 
-        if (conv.has("peerId")) {
+        boolean isGroup = conv.has("type") && "GROUP".equals(conv.get("type").getAsString());
+
+        if (!isGroup && conv.has("peerId")) {
             long peerId = conv.get("peerId").getAsLong();
             conversationIdByPeerId.put(peerId, conversationId);
             peerIdByConversationId.put(conversationId, peerId);
@@ -495,7 +509,13 @@ public class ChatView {
             loadPeerAvatar(peerId, avatar);
         }
 
-        if (conv.has("isOnline")) {
+        if (isGroup) {
+            // Group icon — show a group emoji label centered
+            Label groupIcon = new Label("👥");
+            groupIcon.setStyle("-fx-font-size: 16px;");
+            avatarContainer.getChildren().add(groupIcon);
+            avatar.setFill(Color.web("#2d2250"));
+        } else if (conv.has("isOnline")) {
             boolean online = conv.get("isOnline").getAsBoolean();
             Circle statusDot = new Circle(6);
             statusDot.setFill(Color.web(online ? "#4ade80" : "#888888"));
@@ -1022,8 +1042,54 @@ public class ChatView {
         panel.setPadding(new Insets(20));
         panel.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 1 0 0;");
 
+        // Header row with title + create group button
+        HBox headerRow = new HBox(8);
+        headerRow.setAlignment(Pos.CENTER_LEFT);
+
         Label header = new Label("SinChat");
         header.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
+
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+
+        Button newGroupBtn = new Button("+ Nhóm");
+        newGroupBtn.setStyle(
+                "-fx-background-color: " + StyleConstants.ACCENT + ";" +
+                "-fx-text-fill: white;" +
+                "-fx-font-size: 12px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10px;" +
+                "-fx-padding: 6px 12px;" +
+                "-fx-cursor: hand;"
+        );
+        newGroupBtn.setOnMouseEntered(e -> newGroupBtn.setStyle(
+                "-fx-background-color: #6a4ee8;" +
+                "-fx-text-fill: white;" +
+                "-fx-font-size: 12px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10px;" +
+                "-fx-padding: 6px 12px;" +
+                "-fx-cursor: hand;"
+        ));
+        newGroupBtn.setOnMouseExited(e -> newGroupBtn.setStyle(
+                "-fx-background-color: " + StyleConstants.ACCENT + ";" +
+                "-fx-text-fill: white;" +
+                "-fx-font-size: 12px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10px;" +
+                "-fx-padding: 6px 12px;" +
+                "-fx-cursor: hand;"
+        ));
+        newGroupBtn.setOnAction(e -> {
+            CreateGroupDialog dlg = new CreateGroupDialog(stage, controller,
+                    (convId, groupName) -> {
+                        loadConversations();
+                        setCurrentConversation(convId, groupName);
+                    });
+            dlg.show();
+        });
+
+        headerRow.getChildren().addAll(header, headerSpacer, newGroupBtn);
 
         TextField searchField = new TextField();
         searchField.setPromptText("Tìm kiếm...");
@@ -1058,7 +1124,7 @@ public class ChatView {
         scrollContacts.setStyle("-fx-background: " + StyleConstants.PANEL_DARK + "; -fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: transparent;");
         VBox.setVgrow(scrollContacts, Priority.ALWAYS);
 
-        panel.getChildren().addAll(header, searchField, scrollContacts);
+        panel.getChildren().addAll(headerRow, searchField, scrollContacts);
         return panel;
     }
 

@@ -35,6 +35,7 @@ public class Router {
     private static final TypingHandler typingHandler = new TypingHandler();
     private static final UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
     private static final NameHandler nameHandler = new NameHandler();
+    private static final CreateGroupHandler createGroupHandler = new CreateGroupHandler();
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -142,6 +143,9 @@ public class Router {
                     break;
                 case "CHANGE_NAME":
                     response = nameHandler.handle(conn, request);
+                    break;
+                case "CREATE_GROUP":
+                    response = createGroupHandler.handleTcp(request, conn);
                     break;
 
                 default:
