@@ -18,11 +18,16 @@ public class MessageService {
     private final MessageStatusRepository messageStatusRepository = new MessageStatusRepository();
 
     public long sendMessage(long conversationId, long senderId, String content) throws SQLException {
+        return sendMessage(conversationId, senderId, content, null);
+    }
+
+    public long sendMessage(long conversationId, long senderId, String content, Long replyToId) throws SQLException {
         Message message = new Message();
         message.setConversationId(conversationId);
         message.setSenderId(senderId);
         message.setType(Message.MessageType.TEXT);
         message.setContent(content);
+        message.setReplyToId(replyToId);
         long msgId = messageRepository.save(message);
 
         // Initialize message status for all recipients
@@ -49,6 +54,10 @@ public class MessageService {
 
     public List<MessageSearchResult> searchMessages(long conversationId, String keyword, int limit, int offset) {
         return messageRepository.searchByConversation(conversationId, keyword, limit, offset);
+    }
+
+    public Message getMessageById(long messageId) {
+        return messageRepository.findById(messageId);
     }
 }
 

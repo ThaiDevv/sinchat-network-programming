@@ -75,12 +75,20 @@ public class GetMessagesHandler {
 
             // Populate status in messages
             java.util.Map<Long, com.server.model.MessageStatus.Status> statuses = messageStatusRepository.getStatusesForConversation(conversationId);
+            java.util.Map<Long, java.util.List<com.server.model.Message.SeenUserInfo>> seenUsersMap = messageStatusRepository.getSeenUsersForConversation(conversationId);
             for (Message msg : messages) {
                 com.server.model.MessageStatus.Status status = statuses.get(msg.getId());
                 if (status != null) {
                     msg.setStatus(status.name());
                 } else {
                     msg.setStatus("SENT");
+                }
+
+                java.util.List<com.server.model.Message.SeenUserInfo> seenList = seenUsersMap.get(msg.getId());
+                if (seenList != null) {
+                    msg.setSeenByUsers(seenList);
+                } else {
+                    msg.setSeenByUsers(java.util.List.of());
                 }
             }
 

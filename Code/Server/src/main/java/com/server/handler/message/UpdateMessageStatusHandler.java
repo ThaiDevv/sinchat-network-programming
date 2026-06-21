@@ -46,6 +46,12 @@ public class UpdateMessageStatusHandler {
 
                 MessageStatus.Status collectiveStatus = msRepo.getCollectiveStatus(messageId);
 
+                String username = "Unknown";
+                com.server.model.User uObj = new com.server.repository.UserRepository().findById(userId);
+                if (uObj != null) {
+                    username = uObj.getUsername();
+                }
+
                 JsonObject event = new JsonObject();
                 event.addProperty("action", "MESSAGE_STATUS_EVENT");
                 event.addProperty("messageId", messageId);
@@ -54,6 +60,7 @@ public class UpdateMessageStatusHandler {
                 }
                 event.addProperty("status", collectiveStatus.name());
                 event.addProperty("userId", userId);
+                event.addProperty("username", username);
 
                 if (conversationId > 0) {
                     List<Long> memberIds = convRepo.getMemberIds(conversationId);
@@ -69,12 +76,19 @@ public class UpdateMessageStatusHandler {
                     msRepo.markAllAsSeen(conversationId, userId);
                     logger.info("[UPDATE_STATUS] ConversationId={} | UserId={} | All marked as SEEN", conversationId, userId);
 
+                    String username = "Unknown";
+                    com.server.model.User uObj = new com.server.repository.UserRepository().findById(userId);
+                    if (uObj != null) {
+                        username = uObj.getUsername();
+                    }
+
                     List<Long> memberIds = convRepo.getMemberIds(conversationId);
                     JsonObject event = new JsonObject();
                     event.addProperty("action", "MESSAGE_STATUS_EVENT");
                     event.addProperty("conversationId", conversationId);
                     event.addProperty("status", "SEEN");
                     event.addProperty("userId", userId);
+                    event.addProperty("username", username);
 
                     for (Long memberId : memberIds) {
                         if (!memberId.equals(userId)) {

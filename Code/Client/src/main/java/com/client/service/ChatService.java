@@ -90,6 +90,7 @@ public class ChatService {
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
     private Consumer<JsonObject> onMessageStatusChanged;
+    private Consumer<JsonObject> onLeftGroup;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -105,6 +106,7 @@ public class ChatService {
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
     public void setOnMessageStatusChanged(Consumer<JsonObject> callback) { this.onMessageStatusChanged = callback; }
+    public void setOnLeftGroup(Consumer<JsonObject> callback) { this.onLeftGroup = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 
@@ -290,6 +292,9 @@ public class ChatService {
                 case "PING_RESPONSE":
                     pongReceived = true;
                     break;
+                case "LEFT_GROUP":
+                    if (onLeftGroup != null) Platform.runLater(() -> onLeftGroup.accept(json));
+                    break;
                 default:
                     break;
             }
@@ -455,11 +460,18 @@ public class ChatService {
     }
 
     public ApiResponse sendMessage(long conversationId, long senderId, String content) {
+        return sendMessage(conversationId, senderId, content, null);
+    }
+
+    public ApiResponse sendMessage(long conversationId, long senderId, String content, Long replyToId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "SEND_MESSAGE");
         req.addProperty("conversationId", conversationId);
         req.addProperty("senderId", senderId);
         req.addProperty("content", content);
+        if (replyToId != null) {
+            req.addProperty("replyToId", replyToId);
+        }
         return sendRequestSync(req);
     }
 
@@ -492,6 +504,25 @@ public class ChatService {
     public ApiResponse getAvatar(long userId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "GET_AVATAR");
+        req.addProperty("userId", userId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse createGroup(long creatorId, String groupName, java.util.List<Long> memberIds) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "CREATE_GROUP");
+        req.addProperty("creatorId", creatorId);
+        req.addProperty("groupName", groupName);
+        com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+        for (Long id : memberIds) arr.add(id);
+        req.add("memberIds", arr);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse leaveGroup(long conversationId, long userId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "LEAVE_GROUP");
+        req.addProperty("conversationId", conversationId);
         req.addProperty("userId", userId);
         return sendRequestSync(req);
     }

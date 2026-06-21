@@ -153,5 +153,33 @@ public class MessageStatusRepository {
         }
         return MessageStatus.Status.SENT;
     }
+
+    /**
+     * Get the list of users who have marked a message as SEEN.
+     * Maps messageId -> List of SeenUserInfo.
+     */
+    public Map<Long, java.util.List<com.server.model.Message.SeenUserInfo>> getSeenUsersForConversation(long conversationId) {
+        Map<Long, java.util.List<com.server.model.Message.SeenUserInfo>> results = new HashMap<>();
+        String query = "SELECT ms.message_id, ms.user_id, u.username FROM message_status ms " +
+                       "JOIN messages m ON ms.message_id = m.id " +
+                       "JOIN users u ON ms.user_id = u.id " +
+                       "WHERE m.conversation_id = ? AND ms.status = 'SEEN'";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, conversationId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    long msgId = rs.getLong("message_id");
+                    long userId = rs.getLong("user_id");
+                    String username = rs.getString("username");
+                    results.computeIfAbsent(msgId, k -> new java.util.ArrayList<>())
+                           .add(new com.server.model.Message.SeenUserInfo(userId, username));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error retrieving seen users for conversationId={}", conversationId, e);
+        }
+        return results;
+    }
 }
 
