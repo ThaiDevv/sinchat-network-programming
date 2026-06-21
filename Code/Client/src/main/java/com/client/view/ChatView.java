@@ -93,6 +93,7 @@ public class ChatView {
 
     // Pagination
     private long currentConversationId = -1;
+    private long currentPeerId = -1;
     private int currentMessageOffset = 0;
     private boolean hasMoreMessages = true;
     private boolean isLoadingMore = false;
@@ -194,7 +195,7 @@ public class ChatView {
             unreadCounts.merge(conversationId, 1, Integer::sum);
             updateUnreadBadge(conversationId);
             String senderName = conversationDisplayNames.getOrDefault(conversationId, "Ai đó");
-            showNewMessageNotification(senderName, content, conversationId);
+            showNewMessageNotification(senderName, content, conversationId, senderId);
         }
         Platform.runLater(this::loadConversations);
     }
@@ -396,6 +397,9 @@ public class ChatView {
 
     public void setCurrentConversation(long conversationId, String name) {
         this.currentConversationId = conversationId;
+        // Save peerId BEFORE loadConversations() clears the map
+        Long peer = peerIdByConversationId.get(conversationId);
+        if (peer != null) this.currentPeerId = peer;
         unreadCounts.remove(conversationId);
         updateUnreadBadge(conversationId);
         messagesBox.getChildren().clear();
@@ -1021,19 +1025,20 @@ public class ChatView {
             showToast("Hãy chọn một cuộc trò chuyện trước");
             return;
         }
-        Long peerId = peerIdByConversationId.get(currentConversationId);
-        if (peerId == null) {
-            showToast("Không xác định được người dùng");
-            return;
+        // Use saved currentPeerId first, fallback to map
+        long peerId = currentPeerId;
+        if (peerId <= 0) {
+            Long fromMap = peerIdByConversationId.get(currentConversationId);
+            if (fromMap == null || fromMap <= 0) {
+                showToast("Không xác định được người dùng");
+                return;
+            }
+            peerId = fromMap;
         }
 
-        // Query friendship status first, then build menu
-        controller.getFriendshipStatus(peerId,
-                status -> buildAndShowFriendshipMenu(anchor, peerId, status),
-                err -> {
-                    // Fallback: show menu with basic options
-                    buildAndShowFriendshipMenu(anchor, peerId, "NONE");
-                });
+        // Show menu immediately with loading, then update after TCP response
+        final long finalPeerId = peerId;
+        buildAndShowFriendshipMenu(anchor, finalPeerId, "LOADING");
     }
 
     private void buildAndShowFriendshipMenu(Button anchor, long peerId, String status) {
@@ -1045,6 +1050,32 @@ public class ChatView {
         String itemNormal = "-fx-text-fill: #ffffff; -fx-font-size: 14px; -fx-padding: 8px 18px;";
         String itemDanger = "-fx-text-fill: #ff5555; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 18px;";
         String itemAccent = "-fx-text-fill: #7c5cfc; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 18px;";
+
+        if ("LOADING".equals(status)) {
+            // Show menu instantly with loading + history, then async-load real status
+            MenuItem loading = new MenuItem("⏳ Đang tải...");
+            loading.setStyle(itemNormal);
+            loading.setDisable(true);
+
+            MenuItem history = new MenuItem("📋 Lịch sử kết bạn");
+            history.setStyle(itemNormal);
+            history.setOnAction(e -> new FriendRequestHistoryDialog(stage, controller).show());
+
+            menu.getItems().addAll(loading, new SeparatorMenuItem(), history);
+            menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+
+            // Fetch real status in background, then rebuild menu
+            controller.getFriendshipStatus(peerId,
+                    realStatus -> {
+                        menu.hide();
+                        buildAndShowFriendshipMenu(anchor, peerId, realStatus);
+                    },
+                    err -> {
+                        menu.hide();
+                        buildAndShowFriendshipMenu(anchor, peerId, "NONE");
+                    });
+            return;
+        }
 
         switch (status) {
             case "NONE": {
@@ -1214,6 +1245,8 @@ public class ChatView {
         contact.setOnMouseClicked(e -> {
             controller.getOrCreateConversation(uId, convId -> {
                 searchField.clear();
+                peerIdByConversationId.put(convId, uId);
+                currentPeerId = uId;
                 loadConversations();
                 setCurrentConversation(convId, username);
             });
@@ -1563,7 +1596,7 @@ public class ChatView {
         });
     }
 
-    private void showNewMessageNotification(String senderName, String content, long conversationId) {
+    private void showNewMessageNotification(String senderName, String content, long conversationId, long senderId) {
         if (activeNotificationStages.size() >= 3) {
             Stage oldest = activeNotificationStages.remove(0);
             Platform.runLater(oldest::close);
@@ -1624,6 +1657,8 @@ public class ChatView {
         toastContent.setOnMouseClicked(e -> {
             toastStage.close();
             activeNotificationStages.remove(toastStage);
+            peerIdByConversationId.put(conversationId, senderId);
+            currentPeerId = senderId;
             setCurrentConversation(conversationId, senderName);
         });
         closeBtn.setOnMouseClicked(e -> {
