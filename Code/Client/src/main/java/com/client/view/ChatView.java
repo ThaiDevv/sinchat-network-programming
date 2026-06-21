@@ -1,6 +1,7 @@
 package com.client.view;
 
 import com.client.controller.ChatController;
+import com.client.emoji.EmojiManager;
 import com.client.service.ChatService;
 import com.client.util.ImageUtils;
 import com.client.util.StyleConstants;
@@ -9,6 +10,7 @@ import com.google.gson.*;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -18,7 +20,9 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.ImagePattern;
 import javafx.scene.shape.Circle;
+import javafx.scene.text.TextFlow;
 import javafx.stage.Modality;
+import javafx.stage.Popup;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
@@ -76,7 +80,7 @@ public class ChatView {
     private final Map<Long, String> peerLastSeenByPeerId = new HashMap<>();
     private final Map<Long, Label> messageStatusLabels = new HashMap<>();
     private final Map<Long, Boolean> peerOnlineByPeerId = new HashMap<>();
-    private final Map<Long, Label> messageBubbleById = new HashMap<>();
+    private final Map<Long, Node> messageBubbleById = new HashMap<>();
     private final Map<Long, Integer> unreadCounts = new HashMap<>();
     private final Map<Long, String> conversationDisplayNames = new HashMap<>();
     private final Map<Long, Label> unreadBadgesByConvId = new HashMap<>();
@@ -89,7 +93,7 @@ public class ChatView {
     // Message search state
     private final List<JsonObject> messageSearchMatches = new ArrayList<>();
     private final List<VBox> messageSearchItems = new ArrayList<>();
-    private Label highlightedMessageBubble;
+    private Node highlightedMessageBubble;
     private String highlightedMessageStyle;
     private int activeMessageSearchIndex = -1;
     private String activeMessageSearchKeyword = "";
@@ -773,7 +777,7 @@ public class ChatView {
                 VBox container = new VBox(2);
                 container.setAlignment(Pos.BOTTOM_RIGHT);
 
-                Label bubble = createMessageBubble(content, StyleConstants.ACCENT, "18px 18px 4px 18px");
+                Node bubble = createMessageBubble(content, StyleConstants.ACCENT, "18px 18px 4px 18px");
                 if (messageId > 0) messageBubbleById.put(messageId, bubble);
                 addContextMenuToBubble(bubble, messageId, "Bạn", content);
 
@@ -860,6 +864,11 @@ public class ChatView {
     private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer, Long replyToId, String replyToUsername, String replyToContent) {
         HBox wrapper = new HBox(8);
         wrapper.setAlignment(senderId == currentUserId ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        String bg = senderId == currentUserId ? StyleConstants.ACCENT : "#1e1e1e";
+        String radius = senderId == currentUserId ? "18px 18px 4px 18px" : "18px 18px 18px 4px";
+        Node bubble = createMessageBubble(text, bg, radius);
+        if (messageId > 0) messageBubbleById.put(messageId, bubble);
+        wrapper.getChildren().add(bubble);
 
         if (senderId == currentUserId) {
             String bg = StyleConstants.ACCENT;
@@ -937,7 +946,7 @@ public class ChatView {
         VBox container = new VBox(2);
         container.setAlignment(Pos.BOTTOM_RIGHT);
 
-        Label bubble = createMessageBubble(text, StyleConstants.ACCENT, "18px 18px 4px 18px");
+        Node bubble = createMessageBubble(text, StyleConstants.ACCENT, "18px 18px 4px 18px");
         if (messageId > 0) messageBubbleById.put(messageId, bubble);
         addContextMenuToBubble(bubble, messageId, "Bạn", text);
 
@@ -965,13 +974,35 @@ public class ChatView {
         messagesBox.getChildren().add(wrapper);
     }
 
-    private Label createMessageBubble(String text, String bg, String radius) {
-        Label bubble = new Label(text);
-        bubble.setWrapText(true);
-        bubble.setMaxWidth(360);
-        bubble.setStyle("-fx-background-color: " + bg + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
-                + "; -fx-font-size: 15px; -fx-padding: 12px 18px; -fx-background-radius: " + radius + ";");
-        return bubble;
+    private Node createMessageBubble(String text, String bg, String radius) {
+        Node content = EmojiManager.getInstance().renderMessage(text);
+
+        // If the rendered content is a TextFlow (multi-node), wrap in styling container
+        if (content instanceof TextFlow) {
+            TextFlow flow = (TextFlow) content;
+            StackPane wrapper = new StackPane(flow);
+            wrapper.setStyle("-fx-background-color: " + bg + "; -fx-background-radius: " + radius + "; -fx-padding: 12px 18px;");
+            wrapper.setMaxWidth(360);
+            return wrapper;
+        }
+
+        // If it's an ImageView (solo emoji GIF), wrap with transparent background
+        if (content instanceof ImageView) {
+            StackPane wrapper = new StackPane(content);
+            wrapper.setStyle("-fx-background-color: transparent; -fx-padding: 4px;");
+            return wrapper;
+        }
+
+        // If it's a plain Label, style it normally
+        if (content instanceof Label) {
+            Label bubble = (Label) content;
+            bubble.setMaxWidth(360);
+            bubble.setStyle("-fx-background-color: " + bg + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
+                    + "; -fx-font-size: 15px; -fx-padding: 12px 18px; -fx-background-radius: " + radius + ";");
+            return bubble;
+        }
+
+        return content;
     }
 
     private void addContextMenuToBubble(Label bubble, long messageId, String senderUsername, String content) {
@@ -1070,6 +1101,41 @@ public class ChatView {
         }
     }
 
+    // ==================== EMOJI PICKER ====================
+
+    private Popup emojiPopup;
+
+    private void showEmojiPicker(Button owner) {
+        if (emojiPopup != null && emojiPopup.isShowing()) {
+            emojiPopup.hide();
+            return;
+        }
+
+        emojiPopup = new Popup();
+        emojiPopup.setAutoHide(true);
+        emojiPopup.setHideOnEscape(true);
+
+        VBox picker = EmojiManager.getInstance().createEmojiPicker(label -> {
+            // Insert emoji label at cursor position
+            int caretPos = messageInput.getCaretPosition();
+            String current = messageInput.getText();
+            String before = current.substring(0, caretPos);
+            String after = current.substring(caretPos);
+            messageInput.setText(before + label + after);
+            messageInput.positionCaret(caretPos + label.length());
+            messageInput.requestFocus();
+        });
+
+        // Wrap in a styled container
+        StackPane container = new StackPane(picker);
+        container.setStyle("-fx-background-color: #1a1a1a; -fx-background-radius: 12px; -fx-border-color: #444; -fx-border-width: 1px; -fx-border-radius: 12px;");
+        container.setPadding(new Insets(8));
+
+        emojiPopup.getContent().add(container);
+
+        // Show popup above the emoji button
+        javafx.geometry.Bounds bounds = owner.localToScreen(owner.getBoundsInLocal());
+        emojiPopup.show(owner, bounds.getMinX() - 200, bounds.getMinY() - 320);
     private VBox createQuoteBox(long replyToId, String username, String content, boolean isMine) {
         VBox quote = new VBox(2);
         quote.setPadding(new Insets(6, 10, 6, 10));
@@ -1283,7 +1349,7 @@ public class ChatView {
     }
 
     private boolean scrollToAndHighlightMessage(long messageId) {
-        Label bubble = messageBubbleById.get(messageId);
+        Node bubble = messageBubbleById.get(messageId);
         if (bubble == null || scrollMessages == null || messagesBox == null) return false;
 
         Platform.runLater(() -> {
@@ -1298,7 +1364,7 @@ public class ChatView {
         return true;
     }
 
-    private void highlightMessageBubble(Label bubble) {
+    private void highlightMessageBubble(Node bubble) {
         if (highlightedMessageBubble != null && highlightedMessageStyle != null)
             highlightedMessageBubble.setStyle(highlightedMessageStyle);
         highlightedMessageBubble = bubble;
@@ -1627,6 +1693,16 @@ public class ChatView {
         attachBtn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 20px; -fx-font-weight: bold; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;");
 
+        // Emoji picker button
+        Button emojiBtn = new Button("😊");
+        emojiBtn.setStyle("-fx-background-color: #222; -fx-text-fill: " + StyleConstants.TEXT_WHITE
+                + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;");
+        emojiBtn.setOnMouseEntered(e -> emojiBtn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: "
+                + StyleConstants.TEXT_WHITE + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;"));
+        emojiBtn.setOnMouseExited(e -> emojiBtn.setStyle("-fx-background-color: #222; -fx-text-fill: " + StyleConstants.TEXT_WHITE
+                + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;"));
+        emojiBtn.setOnAction(e -> showEmojiPicker(emojiBtn));
+
         messageInput = new TextField();
         messageInput.setPromptText("Nhập tin nhắn...");
         messageInput.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: " + StyleConstants.INPUT_BORDER
@@ -1656,6 +1732,8 @@ public class ChatView {
         sendBtn.setOnAction(e -> sendMessage());
         messageInput.setOnAction(e -> sendMessage());
 
+        inputBar.getChildren().addAll(attachBtn, emojiBtn, messageInput, sendBtn);
+        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, inputBar);
         inputBar.getChildren().addAll(attachBtn, messageInput, sendBtn);
 
         // Construct replyPreviewBar (hidden by default)
