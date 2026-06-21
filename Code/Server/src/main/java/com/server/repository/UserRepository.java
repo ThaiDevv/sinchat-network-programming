@@ -175,7 +175,7 @@ public class UserRepository {
         // Escape SQL LIKE wildcards to prevent unexpected query behavior
         String escapedKeyword = keyword.replace("%", "\\%").replace("_", "\\_");
         String query = "SELECT u.id, u.username, (CASE WHEN ua.id IS NOT NULL THEN 'db' ELSE NULL END) AS avatar_url " +
-                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.username LIKE ? ESCAPE '\\\\' AND u.id != ? LIMIT 15";
+                       "FROM users u LEFT JOIN user_avatars ua ON u.id = ua.id WHERE u.username LIKE ? AND u.id != ? LIMIT 15";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setString(1, "%" + escapedKeyword + "%");
