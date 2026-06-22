@@ -912,6 +912,13 @@ public class ChatView {
             container.getChildren().addAll(nameLbl, bubbleGroup, seenContainer);
             wrapper.getChildren().addAll(avatar, container);
         }
+        // Enable click on entire message (including quote) to reply
+        wrapper.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                setReplyTarget(messageId, senderUsername, text);
+                e.consume();
+            }
+        });
         return wrapper;
     }
 
@@ -1011,8 +1018,30 @@ public class ChatView {
 
         menu.getItems().add(replyItem);
 
+        // Attach context menu for right‑click
         if (bubble instanceof javafx.scene.control.Control) {
             ((javafx.scene.control.Control) bubble).setContextMenu(menu);
+        } else {
+            bubble.setOnContextMenuRequested(e -> menu.show(bubble, e.getScreenX(), e.getScreenY()));
+        }
+        // Left‑click (primary button) should also trigger reply
+        bubble.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                setReplyTarget(messageId, senderUsername, content);
+                e.consume();
+            }
+        });
+        // Ensure child nodes also respond to clicks/context‑menu
+        if (bubble instanceof javafx.scene.Parent) {
+            for (javafx.scene.Node child : ((javafx.scene.Parent) bubble).getChildrenUnmodifiable()) {
+                child.setOnContextMenuRequested(e -> menu.show(child, e.getScreenX(), e.getScreenY()));
+                child.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
+                    if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                        setReplyTarget(messageId, senderUsername, content);
+                        e.consume();
+                    }
+                });
+            }
         }
     }
 
@@ -1082,7 +1111,11 @@ public class ChatView {
         String safeUsername = senderUsername != null && !senderUsername.isBlank() ? senderUsername : "tin nhan";
         String safeContent = content != null ? content : "";
         replyPreviewUserLabel.setText("Dang tra loi " + safeUsername);
-        replyPreviewContentLabel.setText(truncateText(safeContent, 80));
+        // Render emoji preview
+        String truncated = truncateText(safeContent, 80);
+        javafx.scene.Node rendered = EmojiManager.getInstance().renderMessage(truncated);
+        replyPreviewContentLabel.setText("");
+        replyPreviewContentLabel.setGraphic(rendered);
         if (replyPreviewBar != null) {
             replyPreviewBar.setVisible(true);
             replyPreviewBar.setManaged(true);
