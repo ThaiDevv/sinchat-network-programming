@@ -1402,6 +1402,9 @@ public class ChatView {
         if (forwardPreviewBar != null) {
             forwardPreviewBar.setVisible(false);
             forwardPreviewBar.setManaged(false);
+        }
+    }
+
     /**
      * Sync the visible TextFlow overlay with the raw text from the hidden
      * TextField — renders emoji labels {@code [cười]} as inline images (20×20).
