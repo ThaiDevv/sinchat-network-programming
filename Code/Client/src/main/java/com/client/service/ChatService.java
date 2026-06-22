@@ -90,6 +90,8 @@ public class ChatService {
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
     private Consumer<JsonObject> onMessageStatusChanged;
+    private Consumer<JsonObject> onFriendRequestReceived;
+    private Consumer<JsonObject> onFriendAccepted;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -287,6 +289,12 @@ public class ChatService {
                 case "USER_AVATAR_CHANGED_EVENT":
                     if (onUserAvatarChanged != null) Platform.runLater(() -> onUserAvatarChanged.accept(json));
                     break;
+                case "FRIEND_REQUEST_EVENT":
+                    if (onFriendRequestReceived != null) Platform.runLater(() -> onFriendRequestReceived.accept(json));
+                    break;
+                case "FRIEND_ACCEPTED_EVENT":
+                    if (onFriendAccepted != null) Platform.runLater(() -> onFriendAccepted.accept(json));
+                    break;
                 case "PING_RESPONSE":
                     pongReceived = true;
                     break;
@@ -316,6 +324,7 @@ public class ChatService {
         pendingRequests.clear();
     }
 
+
     // ---- request/response ----
     private ApiResponse sendRequestSync(JsonObject request) {
         String action = request.has("action") ? request.get("action").getAsString() : "?";
@@ -339,7 +348,7 @@ public class ChatService {
         writeLine(gson.toJson(request));
 
         try {
-            return future.get(10, TimeUnit.SECONDS);
+            return future.get(30, TimeUnit.SECONDS);
         } catch (Exception e) {
             pendingRequests.remove(requestId);
             return new ApiResponse(500, "error", "Server TCP phản hồi quá lâu hoặc request bị ngắt", null, null, "");
@@ -493,6 +502,71 @@ public class ChatService {
         JsonObject req = new JsonObject();
         req.addProperty("action", "GET_AVATAR");
         req.addProperty("userId", userId);
+        return sendRequestSync(req);
+    }
+
+    // Friendship API
+
+    public ApiResponse sendFriendRequest(long targetUserId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SEND_FRIEND_REQUEST");
+        req.addProperty("targetUserId", targetUserId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse respondFriendRequest(long requesterId, String decision) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "RESPOND_FRIEND_REQUEST");
+        req.addProperty("requesterId", requesterId);
+        req.addProperty("decision", decision);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse getFriends() {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_FRIENDS");
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse getFriendRequests() {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_FRIEND_REQUESTS");
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse unfriend(long friendId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "UNFRIEND");
+        req.addProperty("friendId", friendId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse cancelFriendRequest(long targetUserId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "UNFRIEND");
+        req.addProperty("friendId", targetUserId);
+        req.addProperty("subAction", "CANCEL_REQUEST");
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse getFriendshipStatus(long targetUserId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "GET_FRIENDSHIP_STATUS");
+        req.addProperty("targetUserId", targetUserId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse blockUser(long targetUserId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "BLOCK_USER");
+        req.addProperty("targetUserId", targetUserId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse unblockUser(long targetUserId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "UNBLOCK_USER");
+        req.addProperty("targetUserId", targetUserId);
         return sendRequestSync(req);
     }
 

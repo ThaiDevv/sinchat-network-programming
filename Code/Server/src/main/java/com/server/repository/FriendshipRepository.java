@@ -153,6 +153,69 @@ public class FriendshipRepository {
         }
     }
 
+    /**
+     * Chan (block) mot user.
+     * Tao hoac cap nhat friendship thanh BLOCKED.
+     */
+    public boolean blockUser(long userId, long targetId) {
+        long u1 = minId(userId, targetId);
+        long u2 = maxId(userId, targetId);
+        try (Connection conn = Database.getConnection()) {
+            // Kiem tra xem da co row chua
+            String checkSql = "SELECT status FROM friendships WHERE user1_id=? AND user2_id=?";
+            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                ps.setLong(1, u1);
+                ps.setLong(2, u2);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        // Da co row → UPDATE thanh BLOCKED
+                        String updateSql = "UPDATE friendships SET status='BLOCKED', action_user_id=? WHERE user1_id=? AND user2_id=?";
+                        try (PreparedStatement updatePs = conn.prepareStatement(updateSql)) {
+                            updatePs.setLong(1, userId);
+                            updatePs.setLong(2, u1);
+                            updatePs.setLong(3, u2);
+                            return updatePs.executeUpdate() > 0;
+                        }
+                    } else {
+                        // Chua co row → INSERT moi
+                        String insertSql = "INSERT INTO friendships (user1_id, user2_id, status, action_user_id) VALUES (?,?,?,?)";
+                        try (PreparedStatement insertPs = conn.prepareStatement(insertSql)) {
+                            insertPs.setLong(1, u1);
+                            insertPs.setLong(2, u2);
+                            insertPs.setString(3, "BLOCKED");
+                            insertPs.setLong(4, userId);
+                            return insertPs.executeUpdate() > 0;
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("blockUser error userId={} targetId={}: {}", userId, targetId, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Gỡ chặn (unblock) mot user.
+     * Xoa row BLOCKED neu nguoi request la nguoi da block.
+     */
+    public boolean unblockUser(long userId, long targetId) {
+        long u1 = minId(userId, targetId);
+        long u2 = maxId(userId, targetId);
+        try (Connection conn = Database.getConnection()) {
+            String sql = "DELETE FROM friendships WHERE user1_id=? AND user2_id=? AND status='BLOCKED' AND action_user_id=?";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setLong(1, u1);
+                ps.setLong(2, u2);
+                ps.setLong(3, userId);
+                return ps.executeUpdate() > 0;
+            }
+        } catch (SQLException e) {
+            logger.error("unblockUser error userId={} targetId={}: {}", userId, targetId, e.getMessage(), e);
+            return false;
+        }
+    }
+
     // Read Operations
     /**
      * Lay trang thai quan he giua hai user.

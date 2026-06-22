@@ -38,7 +38,8 @@ public class ConversationRepository {
 
     /**
      * Atomically find or create a private conversation within a single transaction.
-     * Prevents race condition where two concurrent calls could create duplicate conversations.
+     * Prevents race condition where two concurrent calls could create duplicate
+     * conversations.
      */
     public long findOrCreatePrivateConversation(long user1Id, long user2Id) throws SQLException {
         String findQuery = "SELECT c.id FROM conversations c " +
@@ -66,7 +67,8 @@ public class ConversationRepository {
 
                 // Not found — create new conversation and add both members
                 long newId;
-                try (PreparedStatement createStmt = conn.prepareStatement(createQuery, Statement.RETURN_GENERATED_KEYS)) {
+                try (PreparedStatement createStmt = conn.prepareStatement(createQuery,
+                        Statement.RETURN_GENERATED_KEYS)) {
                     createStmt.setString(1, "PRIVATE");
                     createStmt.setLong(2, user1Id);
                     createStmt.executeUpdate();
@@ -161,12 +163,15 @@ public class ConversationRepository {
                 "u.id AS peer_id, " +
                 "CASE WHEN c.type = 'PRIVATE' THEN COALESCE(u.is_online, 0) ELSE 0 END AS is_online, " +
                 "u.last_seen AS last_seen, " +
-                "(SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message, " +
-                "(SELECT sender_id FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_sender_id, " +
+                "(SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message, "
+                +
+                "(SELECT sender_id FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_sender_id, "
+                +
                 "c.last_message_at " +
                 "FROM conversations c " +
                 "JOIN conversation_members cm ON c.id = cm.conversation_id " +
-                "LEFT JOIN conversation_members cm2 ON c.type = 'PRIVATE' AND c.id = cm2.conversation_id AND cm2.user_id != cm.user_id " +
+                "LEFT JOIN conversation_members cm2 ON c.type = 'PRIVATE' AND c.id = cm2.conversation_id AND cm2.user_id != cm.user_id "
+                +
                 "LEFT JOIN users u ON cm2.user_id = u.id " +
                 "WHERE cm.user_id = ? " +
                 "ORDER BY c.last_message_at DESC";
@@ -233,7 +238,8 @@ public class ConversationRepository {
     }
 
     /**
-     * Find all distinct user IDs that share at least one conversation with the given user.
+     * Find all distinct user IDs that share at least one conversation with the
+     * given user.
      * Used to broadcast presence changes to conversation peers (not just friends).
      */
     public List<Long> findConversationPeers(long userId) {

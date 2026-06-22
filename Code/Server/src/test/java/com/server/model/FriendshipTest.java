@@ -16,7 +16,7 @@ class FriendshipTest {
 
     @Test
     void testParameterizedConstructor() {
-        Friendship f = new Friendship(1L, 2L, Friendship.FriendshipStatus.ACCEPTED);
+        Friendship f = new Friendship(1L, 2L, Friendship.FriendshipStatus.ACCEPTED, 1L);
         assertEquals(1L, f.getUser1Id());
         assertEquals(2L, f.getUser2Id());
         assertEquals(Friendship.FriendshipStatus.ACCEPTED, f.getStatus());
@@ -44,7 +44,7 @@ class FriendshipTest {
 
     @Test
     void testStatusTransitions() {
-        Friendship f = new Friendship(1L, 2L, Friendship.FriendshipStatus.PENDING);
+        Friendship f = new Friendship(1L, 2L, Friendship.FriendshipStatus.PENDING, 1L);
         assertEquals(Friendship.FriendshipStatus.PENDING, f.getStatus());
 
         f.setStatus(Friendship.FriendshipStatus.ACCEPTED);

@@ -6,7 +6,16 @@ import com.server.handler.message.*;
 import com.server.handler.changeavatar.*;
 import com.server.handler.avatar.GetAvatarHandler;
 import com.server.handler.changeName.NameHandler;
-import com.server.handler.friendship.*;
+
+import com.server.handler.friendship.BlockUserHandler;
+import com.server.handler.friendship.GetFriendRequestsHandler;
+import com.server.handler.friendship.GetFriendsHandler;
+import com.server.handler.friendship.GetFriendshipStatusHandler;
+import com.server.handler.friendship.RespondFriendRequestHandler;
+import com.server.handler.friendship.SendFriendRequestHandler;
+import com.server.handler.friendship.UnblockUserHandler;
+import com.server.handler.friendship.UnfriendHandler;
+
 import com.server.handler.JoinHandler;
 import com.server.handler.PingHandler;
 import com.server.handler.TypingHandler;
@@ -39,13 +48,18 @@ public class Router {
     private static final NameHandler nameHandler = new NameHandler();
     // Friendship handlers
     private static final FriendshipService friendshipService = new FriendshipService();
-    private static final SendFriendRequestHandler sendFriendRequestHandler = new SendFriendRequestHandler(friendshipService);
-    private static final RespondFriendRequestHandler respondFriendRequestHandler = new RespondFriendRequestHandler(friendshipService);
+    private static final SendFriendRequestHandler sendFriendRequestHandler = new SendFriendRequestHandler(
+            friendshipService);
+    private static final RespondFriendRequestHandler respondFriendRequestHandler = new RespondFriendRequestHandler(
+            friendshipService);
     private static final GetFriendsHandler getFriendsHandler = new GetFriendsHandler(friendshipService);
-    private static final GetFriendRequestsHandler getFriendRequestsHandler = new GetFriendRequestsHandler(friendshipService);
+    private static final GetFriendRequestsHandler getFriendRequestsHandler = new GetFriendRequestsHandler(
+            friendshipService);
     private static final UnfriendHandler unfriendHandler = new UnfriendHandler(friendshipService);
     private static final BlockUserHandler blockUserHandler = new BlockUserHandler(friendshipService);
     private static final UnblockUserHandler unblockUserHandler = new UnblockUserHandler(friendshipService);
+    private static final GetFriendshipStatusHandler getFriendshipStatusHandler = new GetFriendshipStatusHandler(
+            friendshipService);
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -175,11 +189,18 @@ public class Router {
                 case "UNBLOCK_USER":
                     response = unblockUserHandler.handleTcp(request, conn);
                     break;
+                case "GET_FRIENDSHIP_STATUS":
+                    response = getFriendshipStatusHandler.handleTcp(request, conn);
+                    break;
 
                 default:
                     logger.warn("[ROUTER] Unknown action='{}' from Remote={} | UserId={}",
                             action, conn.getRemoteAddress(), conn.getUserId());
-                    conn.sendError("Unknown action: " + action);
+                    JsonObject err = new JsonObject();
+                    err.addProperty("status", "error");
+                    err.addProperty("message", "Unknown action: " + action);
+                    if (requestId != null) err.addProperty("requestId", requestId);
+                    conn.send(err);
                     return;
             }
 
@@ -203,7 +224,8 @@ public class Router {
                     action, conn.getRemoteAddress(), conn.getUserId(), e.getMessage(), e);
             JsonObject err = new JsonObject();
             err.addProperty("action", action + "_RESPONSE");
-            if (requestId != null) err.addProperty("requestId", requestId);
+            if (requestId != null)
+                err.addProperty("requestId", requestId);
             err.addProperty("status", "error");
             err.addProperty("message", "Internal server error: " + e.getMessage());
             conn.send(err);

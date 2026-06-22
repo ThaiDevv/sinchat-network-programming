@@ -30,6 +30,16 @@ public class FriendshipService {
         return repo.unfriend(userId, otherId);
     }
 
+    public boolean blockUser(long userId, long targetId) {
+        if (userId == targetId) return false;
+        return repo.blockUser(userId, targetId);
+    }
+
+    public boolean unblockUser(long userId, long targetId) {
+        if (userId == targetId) return false;
+        return repo.unblockUser(userId, targetId);
+    }
+
     public String getFriendshipStatus(long viewerId, long otherId) {
         return repo.getFriendshipStatus(viewerId, otherId);
     }
