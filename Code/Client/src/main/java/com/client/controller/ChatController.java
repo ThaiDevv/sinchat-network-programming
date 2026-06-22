@@ -148,8 +148,12 @@ public class ChatController {
     }
 
     public void sendMessage(long conversationId, String text, Long replyToId, Consumer<String> onError) {
+        sendMessage(conversationId, text, replyToId, null, onError);
+    }
+
+    public void sendMessage(long conversationId, String text, Long replyToId, Long forwardFromId, Consumer<String> onError) {
         asyncCall(
-                () -> chatService.sendMessage(conversationId, currentUserId, text, replyToId),
+                () -> chatService.sendMessage(conversationId, currentUserId, text, replyToId, forwardFromId),
                 response -> {
                     if (!response.isSuccess()) {
                         Platform.runLater(() -> onError.accept(response.message()));
@@ -158,6 +162,15 @@ public class ChatController {
         );
         // Stop typing after sending
         chatService.sendTyping(conversationId, -1, false);
+    }
+
+    /**
+     * Forward a message to a target conversation.
+     * The forwarded message's original sender and content are carried as forwardFromId.
+     * The user may optionally add their own text.
+     */
+    public void forwardMessage(long targetConversationId, String text, long forwardFromId, Consumer<String> onError) {
+        sendMessage(targetConversationId, text, null, forwardFromId, onError);
     }
 
     public void sendTyping(long conversationId, boolean isTyping) {

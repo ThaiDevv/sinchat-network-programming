@@ -17,6 +17,9 @@ public class Message {
     private Long replyToId;
     private String replyToUsername;
     private String replyToContent;
+    private Long forwardFromId;
+    private String forwardFromUsername;
+    private String forwardFromContent;
 
     public Message() {}
 
@@ -62,6 +65,15 @@ public class Message {
 
     public String getReplyToContent() { return replyToContent; }
     public void setReplyToContent(String replyToContent) { this.replyToContent = replyToContent; }
+
+    public Long getForwardFromId() { return forwardFromId; }
+    public void setForwardFromId(Long forwardFromId) { this.forwardFromId = forwardFromId; }
+
+    public String getForwardFromUsername() { return forwardFromUsername; }
+    public void setForwardFromUsername(String forwardFromUsername) { this.forwardFromUsername = forwardFromUsername; }
+
+    public String getForwardFromContent() { return forwardFromContent; }
+    public void setForwardFromContent(String forwardFromContent) { this.forwardFromContent = forwardFromContent; }
 
     public static class SeenUserInfo {
         private long userId;

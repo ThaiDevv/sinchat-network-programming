@@ -104,6 +104,14 @@ public class ChatView {
     private Label replyPreviewContentLabel;
     private Long activeReplyToId = null;
 
+    // Message forward state
+    private HBox forwardPreviewBar;
+    private Label forwardPreviewUserLabel;
+    private Label forwardPreviewContentLabel;
+    private Long activeForwardFromId = null;
+    private String activeForwardFromUsername = null;
+    private String activeForwardFromContent = null;
+
     // Pagination
     private long currentConversationId = -1;
     private int currentMessageOffset = 0;
@@ -202,14 +210,23 @@ public class ChatView {
         String replyToContent = json.has("replyToContent") && !json.get("replyToContent").isJsonNull()
                 ? json.get("replyToContent").getAsString() : null;
 
+        Long forwardFromId = json.has("forwardFromId") && !json.get("forwardFromId").isJsonNull()
+                ? json.get("forwardFromId").getAsLong() : null;
+        String forwardFromUsername = json.has("forwardFromUsername") && !json.get("forwardFromUsername").isJsonNull()
+                ? json.get("forwardFromUsername").getAsString() : null;
+        String forwardFromContent = json.has("forwardFromContent") && !json.get("forwardFromContent").isJsonNull()
+                ? json.get("forwardFromContent").getAsString() : null;
+
         if (conversationId == currentConversationId) {
             if (typingLabel != null) typingLabel.setVisible(false);
 
             if (senderId == currentUserId) {
                 String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
-                addSentMessage(content, messageId, status, replyToId, replyToUsername, replyToContent);
+                addSentMessage(content, messageId, status, replyToId, replyToUsername, replyToContent,
+                        forwardFromId, forwardFromUsername, forwardFromContent);
             } else {
-                addReceivedMessage(senderId, senderUsername, content, messageId, replyToId, replyToUsername, replyToContent);
+                addReceivedMessage(senderId, senderUsername, content, messageId, replyToId, replyToUsername, replyToContent,
+                        forwardFromId, forwardFromUsername, forwardFromContent);
                 if (messageId > 0) controller.markMessageSeen(currentConversationId, messageId);
             }
             scrollToBottom();
@@ -764,6 +781,13 @@ public class ChatView {
             String replyToContent = msg.has("replyToContent") && !msg.get("replyToContent").isJsonNull()
                     ? msg.get("replyToContent").getAsString() : null;
 
+            Long forwardFromId = msg.has("forwardFromId") && !msg.get("forwardFromId").isJsonNull()
+                    ? msg.get("forwardFromId").getAsLong() : null;
+            String forwardFromUsername = msg.has("forwardFromUsername") && !msg.get("forwardFromUsername").isJsonNull()
+                    ? msg.get("forwardFromUsername").getAsString() : null;
+            String forwardFromContent = msg.has("forwardFromContent") && !msg.get("forwardFromContent").isJsonNull()
+                    ? msg.get("forwardFromContent").getAsString() : null;
+
             boolean isMine = (senderId == currentUserId);
             HBox seenContainer = createSeenContainer(isMine);
             if (messageId > 0) {
@@ -777,12 +801,23 @@ public class ChatView {
                 VBox container = new VBox(2);
                 container.setAlignment(Pos.BOTTOM_RIGHT);
 
-                Node bubble = createMessageBubble(content, StyleConstants.ACCENT, "18px 18px 4px 18px");
+                boolean isFwd = (forwardFromId != null);
+                String displayContent = content;
+                if (isFwd) {
+                    String fwdContent = forwardFromContent != null ? forwardFromContent : "";
+                    displayContent = (content != null && !content.isEmpty()) ? content + "\n" + fwdContent : fwdContent;
+                }
+                Node bubble = createMessageBubble(displayContent, StyleConstants.ACCENT, "18px 18px 4px 18px");
                 if (messageId > 0) messageBubbleById.put(messageId, bubble);
-                addContextMenuToBubble(bubble, messageId, "Bạn", content);
+                addContextMenuToBubble(bubble, messageId, "Bạn", displayContent);
 
                 VBox bubbleGroup = new VBox(4);
                 bubbleGroup.setAlignment(Pos.TOP_RIGHT);
+                if (isFwd) {
+                    Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+                    forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
+                    bubbleGroup.getChildren().add(forwardLabel);
+                }
                 if (replyToId != null) {
                     VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
                     quoteBox.setMaxWidth(360);
@@ -799,7 +834,8 @@ public class ChatView {
             } else {
                 String senderUsername = msg.has("senderUsername") && !msg.get("senderUsername").isJsonNull()
                         ? msg.get("senderUsername").getAsString() : "Unknown";
-                wrapper = createMessageWrapper(senderId, senderUsername, content, messageId, seenContainer, replyToId, replyToUsername, replyToContent);
+                wrapper = createMessageWrapper(senderId, senderUsername, content, messageId, seenContainer,
+                        replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent);
             }
             messagesBox.getChildren().add(insertIndex++, wrapper);
 
@@ -858,22 +894,41 @@ public class ChatView {
     // ==================== MESSAGE BUBBLES ====================
 
     private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer) {
-        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, null, null, null);
+        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, null, null, null, null, null, null);
     }
 
-    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer, Long replyToId, String replyToUsername, String replyToContent) {
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer,
+            Long replyToId, String replyToUsername, String replyToContent) {
+        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, replyToId, replyToUsername, replyToContent, null, null, null);
+    }
+
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer,
+            Long replyToId, String replyToUsername, String replyToContent,
+            Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         HBox wrapper = new HBox(8);
         wrapper.setAlignment(senderId == currentUserId ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
         if (senderId == currentUserId) {
             String bg = StyleConstants.ACCENT;
             String radius = "18px 18px 4px 18px";
-            Node bubble = createMessageBubble(text, bg, radius);
+            // For forwarded messages: bubble content = forwarded content (+ user text if any)
+            String displayText = text;
+            boolean isForward = (forwardFromId != null);
+            if (isForward) {
+                String fwdContent = forwardFromContent != null ? forwardFromContent : "";
+                displayText = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
+            }
+            Node bubble = createMessageBubble(displayText, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
-            addContextMenuToBubble(bubble, messageId, "Bạn", text);
+            addContextMenuToBubble(bubble, messageId, "Bạn", displayText);
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_RIGHT);
+            if (isForward) {
+                Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+                forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
+                bubbleGroup.getChildren().add(forwardLabel);
+            }
             if (replyToId != null) {
                 VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
                 quoteBox.setMaxWidth(360);
@@ -896,12 +951,25 @@ public class ChatView {
 
             String bg = "#1e1e1e";
             String radius = "18px 18px 18px 4px";
-            Node bubble = createMessageBubble(text, bg, radius);
+            // For forwarded messages: bubble content = forwarded content (+ user text if any)
+            String displayText2 = text;
+            boolean isForward2 = (forwardFromId != null);
+            if (isForward2) {
+                String fwdContent = forwardFromContent != null ? forwardFromContent : "";
+                displayText2 = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
+            }
+            Node bubble = createMessageBubble(displayText2, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
-            addContextMenuToBubble(bubble, messageId, senderUsername, text);
+            addContextMenuToBubble(bubble, messageId, senderUsername, displayText2);
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_LEFT);
+            if (isForward2) {
+                String fwdLabelText = (senderUsername != null ? senderUsername : "Ai đó") + " đã chuyển tiếp một tin nhắn";
+                Label forwardLabel = new Label(fwdLabelText);
+                forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
+                bubbleGroup.getChildren().add(forwardLabel);
+            }
             if (replyToId != null) {
                 VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, false);
                 quoteBox.setMaxWidth(360);
@@ -916,24 +984,39 @@ public class ChatView {
     }
 
     private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId) {
-        addReceivedMessage(senderId, senderUsername, text, messageId, null, null, null);
+        addReceivedMessage(senderId, senderUsername, text, messageId, null, null, null, null, null, null);
     }
 
-    private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId, Long replyToId, String replyToUsername, String replyToContent) {
+    private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId,
+            Long replyToId, String replyToUsername, String replyToContent) {
+        addReceivedMessage(senderId, senderUsername, text, messageId, replyToId, replyToUsername, replyToContent, null, null, null);
+    }
+
+    private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId,
+            Long replyToId, String replyToUsername, String replyToContent,
+            Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         HBox seenContainer = createSeenContainer(false);
         if (messageId > 0) {
             messageSeenContainers.put(messageId, seenContainer);
             messageSeenUsers.put(messageId, new ArrayList<>());
         }
-        messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, replyToId, replyToUsername, replyToContent));
+        messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer,
+                replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent));
         for (Label label : messageStatusLabels.values()) label.setVisible(false);
     }
 
     private void addSentMessage(String text, long messageId, String status) {
-        addSentMessage(text, messageId, status, null, null, null);
+        addSentMessage(text, messageId, status, null, null, null, null, null, null);
     }
 
-    private void addSentMessage(String text, long messageId, String status, Long replyToId, String replyToUsername, String replyToContent) {
+    private void addSentMessage(String text, long messageId, String status,
+            Long replyToId, String replyToUsername, String replyToContent) {
+        addSentMessage(text, messageId, status, replyToId, replyToUsername, replyToContent, null, null, null);
+    }
+
+    private void addSentMessage(String text, long messageId, String status,
+            Long replyToId, String replyToUsername, String replyToContent,
+            Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         for (Label oldLabel : messageStatusLabels.values()) oldLabel.setVisible(false);
 
         HBox wrapper = new HBox();
@@ -941,12 +1024,23 @@ public class ChatView {
         VBox container = new VBox(2);
         container.setAlignment(Pos.BOTTOM_RIGHT);
 
-        Node bubble = createMessageBubble(text, StyleConstants.ACCENT, "18px 18px 4px 18px");
+        boolean isForward = (forwardFromId != null);
+        String displayText = text;
+        if (isForward) {
+            String fwdContent = forwardFromContent != null ? forwardFromContent : "";
+            displayText = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
+        }
+        Node bubble = createMessageBubble(displayText, StyleConstants.ACCENT, "18px 18px 4px 18px");
         if (messageId > 0) messageBubbleById.put(messageId, bubble);
-        addContextMenuToBubble(bubble, messageId, "Bạn", text);
+        addContextMenuToBubble(bubble, messageId, "Bạn", displayText);
 
         VBox bubbleGroup = new VBox(4);
         bubbleGroup.setAlignment(Pos.TOP_RIGHT);
+        if (isForward) {
+            Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+            forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
+            bubbleGroup.getChildren().add(forwardLabel);
+        }
         if (replyToId != null) {
             VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
             quoteBox.setMaxWidth(360);
@@ -1005,11 +1099,15 @@ public class ChatView {
         ContextMenu menu = new ContextMenu();
         menu.setStyle("-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
 
+        MenuItem forwardItem = new MenuItem("Chuyển tiếp");
+        forwardItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+        forwardItem.setOnAction(e -> showForwardDialog(messageId, senderUsername, content));
+
         MenuItem replyItem = new MenuItem("Phản hồi");
         replyItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
         replyItem.setOnAction(e -> setReplyTarget(messageId, senderUsername, content));
 
-        menu.getItems().add(replyItem);
+        menu.getItems().addAll(forwardItem, replyItem);
 
         if (bubble instanceof javafx.scene.control.Control) {
             ((javafx.scene.control.Control) bubble).setContextMenu(menu);
@@ -1070,14 +1168,17 @@ public class ChatView {
         String text = messageInput.getText().trim();
         if (!text.isEmpty() && controller.getChatService().isConnected() && currentConversationId > 0) {
             Long replyId = activeReplyToId;
-            controller.sendMessage(currentConversationId, text, replyId,
+            Long forwardId = activeForwardFromId;
+            controller.sendMessage(currentConversationId, text, replyId, forwardId,
                     err -> showToast("Gửi tin nhắn thất bại: " + err));
             messageInput.clear();
             cancelReply();
+            cancelForward();
         }
     }
 
     private void setReplyTarget(long messageId, String senderUsername, String content) {
+        cancelForward(); // forward and reply are mutually exclusive
         activeReplyToId = messageId;
         String safeUsername = senderUsername != null && !senderUsername.isBlank() ? senderUsername : "tin nhan";
         String safeContent = content != null ? content : "";
@@ -1095,6 +1196,173 @@ public class ChatView {
         if (replyPreviewBar != null) {
             replyPreviewBar.setVisible(false);
             replyPreviewBar.setManaged(false);
+        }
+    }
+
+    // ==================== FORWARD ====================
+
+    /**
+     * Shows a dialog to select a target conversation for forwarding.
+     */
+    private void showForwardDialog(long messageId, String senderUsername, String content) {
+        // Create dialog
+        Stage dialog = new Stage();
+        dialog.initModality(Modality.APPLICATION_MODAL);
+        dialog.initOwner(stage);
+        dialog.setTitle("Chuyển tiếp tin nhắn");
+        dialog.initStyle(StageStyle.UTILITY);
+
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(16));
+        root.setStyle("-fx-background-color: #1a1a2e;");
+
+        Label titleLabel = new Label("Chuyển tiếp tin nhắn đến...");
+        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold;");
+
+        // Search field
+        TextField searchField = new TextField();
+        searchField.setPromptText("Tìm kiếm cuộc trò chuyện...");
+        searchField.setStyle("-fx-background-color: #16213e; -fx-text-fill: white; -fx-prompt-text-fill: #888; "
+                + "-fx-border-color: #333; -fx-border-radius: 8px; -fx-background-radius: 8px; -fx-padding: 10px; -fx-font-size: 13px;");
+
+        // Conversation list
+        VBox conversationListBox = new VBox(4);
+        conversationListBox.setStyle("-fx-background-color: transparent;");
+        ScrollPane scrollPane = new ScrollPane(conversationListBox);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(300);
+        scrollPane.setStyle("-fx-background: #16213e; -fx-background-color: #16213e; -fx-border-color: #333; -fx-border-radius: 8px;");
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        // Store all conversations for filtering
+        List<JsonObject> allConversations = new ArrayList<>();
+        Map<Long, String> convDisplayNames = new HashMap<>(conversationDisplayNames);
+
+        // Build conversation list items
+        Runnable rebuildList = () -> {
+            conversationListBox.getChildren().clear();
+            String filter = searchField.getText().toLowerCase().trim();
+            boolean found = false;
+
+            for (JsonObject conv : allConversations) {
+                long convId = conv.get("conversationId").getAsLong();
+                String displayName = convDisplayNames.getOrDefault(convId, "Conversation " + convId);
+                if (!filter.isEmpty() && !displayName.toLowerCase().contains(filter)) continue;
+                found = true;
+
+                HBox item = new HBox(12);
+                item.setAlignment(Pos.CENTER_LEFT);
+                item.setPadding(new Insets(10, 14, 10, 14));
+                item.setStyle("-fx-background-color: #1a1a3e; -fx-background-radius: 8px; -fx-cursor: hand;");
+                item.setOnMouseEntered(e -> item.setStyle("-fx-background-color: #2a2a5e; -fx-background-radius: 8px; -fx-cursor: hand;"));
+                item.setOnMouseExited(e -> item.setStyle("-fx-background-color: #1a1a3e; -fx-background-radius: 8px; -fx-cursor: hand;"));
+
+                // Online dot
+                Circle dot = new Circle(5);
+                Long peerId = peerIdByConversationId.get(convId);
+                boolean online = peerId != null && peerOnlineByPeerId.getOrDefault(peerId, false);
+                dot.setFill(online ? Color.web("#4caf50") : Color.web("#888"));
+
+                Label nameLbl = new Label(displayName);
+                nameLbl.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold;");
+                HBox.setHgrow(nameLbl, Priority.ALWAYS);
+
+                item.getChildren().addAll(dot, nameLbl);
+
+                item.setOnMouseClicked(e -> {
+                    dialog.close();
+                    // Forward immediately — no text input, no switch conversation
+                    controller.forwardMessage(convId, "", messageId,
+                            err -> Platform.runLater(() -> showToast("Chuyển tiếp thất bại: " + err)));
+                    Platform.runLater(() -> showToast("Đã chuyển tiếp"));
+                });
+
+                conversationListBox.getChildren().add(item);
+            }
+
+            if (!found) {
+                Label noResult = new Label("Không tìm thấy cuộc trò chuyện nào.");
+                noResult.setStyle("-fx-text-fill: #888; -fx-font-size: 13px; -fx-padding: 20px;");
+                conversationListBox.getChildren().add(noResult);
+            }
+        };
+
+        searchField.textProperty().addListener((obs, old, val) -> rebuildList.run());
+
+        // Load conversations
+        controller.loadConversations(
+                conversations -> {
+                    allConversations.clear();
+                    for (int i = 0; i < conversations.size(); i++) {
+                        JsonObject conv = conversations.get(i).getAsJsonObject();
+                        long convId = conv.get("conversationId").getAsLong();
+                        // Skip current conversation
+                        if (convId == currentConversationId) continue;
+                        allConversations.add(conv);
+                        // Store display names
+                        if (conv.has("displayName")) {
+                            convDisplayNames.put(convId, conv.get("displayName").getAsString());
+                        }
+                        if (conv.has("peerId") && !conv.get("peerId").isJsonNull()) {
+                            peerIdByConversationId.put(convId, conv.get("peerId").getAsLong());
+                        }
+                    }
+                    Platform.runLater(rebuildList);
+                },
+                () -> {
+                    Platform.runLater(() -> {
+                        Label err = new Label("Không thể tải danh sách cuộc trò chuyện.");
+                        err.setStyle("-fx-text-fill: #ff6b6b; -fx-font-size: 13px; -fx-padding: 20px;");
+                        conversationListBox.getChildren().add(err);
+                    });
+                }
+        );
+
+        // Cancel button
+        Button cancelBtn = new Button("Hủy");
+        cancelBtn.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-font-size: 14px; "
+                + "-fx-padding: 10px 24px; -fx-background-radius: 8px; -fx-cursor: hand;");
+        cancelBtn.setOnAction(e -> dialog.close());
+
+        HBox buttonRow = new HBox(12);
+        buttonRow.setAlignment(Pos.CENTER_RIGHT);
+        buttonRow.getChildren().add(cancelBtn);
+
+        root.getChildren().addAll(titleLabel, searchField, scrollPane, buttonRow);
+
+        Scene scene = new Scene(root, 400, 480);
+        dialog.setScene(scene);
+        dialog.showAndWait();
+    }
+
+    private void setForwardTarget(long messageId, String senderUsername, String content, long targetConversationId) {
+        cancelReply(); // forward and reply are mutually exclusive
+        activeForwardFromId = messageId;
+        activeForwardFromUsername = senderUsername != null && !senderUsername.isBlank() ? senderUsername : "tin nhan";
+        activeForwardFromContent = content != null ? content : "";
+
+        // Switch to target conversation if not already there
+        if (currentConversationId != targetConversationId) {
+            String targetName = conversationDisplayNames.getOrDefault(targetConversationId, "Conversation " + targetConversationId);
+            setCurrentConversation(targetConversationId, targetName);
+        }
+
+        forwardPreviewUserLabel.setText("Chuyển tiếp từ " + activeForwardFromUsername);
+        forwardPreviewContentLabel.setText(truncateText(activeForwardFromContent, 80));
+        if (forwardPreviewBar != null) {
+            forwardPreviewBar.setVisible(true);
+            forwardPreviewBar.setManaged(true);
+        }
+        messageInput.requestFocus();
+    }
+
+    private void cancelForward() {
+        activeForwardFromId = null;
+        activeForwardFromUsername = null;
+        activeForwardFromContent = null;
+        if (forwardPreviewBar != null) {
+            forwardPreviewBar.setVisible(false);
+            forwardPreviewBar.setManaged(false);
         }
     }
 
@@ -1754,7 +2022,28 @@ public class ChatView {
         cancelReplyBtn.setOnAction(e -> cancelReply());
         replyPreviewBar.getChildren().addAll(replyInfo, cancelReplyBtn);
 
-        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar, inputBar);
+        // Construct forwardPreviewBar (hidden by default)
+        forwardPreviewBar = new HBox(12);
+        forwardPreviewBar.setAlignment(Pos.CENTER_LEFT);
+        forwardPreviewBar.setPadding(new Insets(8, 24, 8, 24));
+        forwardPreviewBar.setStyle("-fx-background-color: #141026; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 1 0 0 0;");
+        forwardPreviewBar.setVisible(false);
+        forwardPreviewBar.setManaged(false);
+
+        VBox forwardInfo = new VBox(2);
+        forwardPreviewUserLabel = new Label("Đang chuyển tiếp");
+        forwardPreviewUserLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #ffd166; -fx-font-size: 12px;");
+        forwardPreviewContentLabel = new Label("Nội dung chuyển tiếp");
+        forwardPreviewContentLabel.setStyle("-fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 13px;");
+        forwardInfo.getChildren().addAll(forwardPreviewUserLabel, forwardPreviewContentLabel);
+        HBox.setHgrow(forwardInfo, Priority.ALWAYS);
+
+        Button cancelForwardBtn = new Button("✕");
+        cancelForwardBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 4px;");
+        cancelForwardBtn.setOnAction(e -> cancelForward());
+        forwardPreviewBar.getChildren().addAll(forwardInfo, cancelForwardBtn);
+
+        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar, forwardPreviewBar, inputBar);
         return panel;
     }
 

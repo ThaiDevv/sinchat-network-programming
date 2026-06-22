@@ -162,8 +162,11 @@ public class ConversationRepository {
                 "u.id AS peer_id, " +
                 "CASE WHEN c.type = 'PRIVATE' THEN COALESCE(u.is_online, 0) ELSE 0 END AS is_online, " +
                 "u.last_seen AS last_seen, " +
-                "(SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message, " +
-                "(SELECT sender_id FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_sender_id, " +
+                "(SELECT COALESCE(NULLIF(m.content, ''), fm.content, m.content) FROM messages m " +
+                "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
+                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message, " +
+                "(SELECT m.sender_id FROM messages m " +
+                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_sender_id, " +
                 "c.last_message_at " +
                 "FROM conversations c " +
                 "JOIN conversation_members cm ON c.id = cm.conversation_id " +
