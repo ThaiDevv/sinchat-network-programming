@@ -94,23 +94,44 @@ public class Database {
     }
 
     public static void runMigrations() {
-        String checkColumnQuery = "SHOW COLUMNS FROM messages LIKE 'reply_to_message_id'";
-        String addColumnQuery = "ALTER TABLE messages ADD COLUMN reply_to_message_id BIGINT DEFAULT NULL, " +
+        // Migration 1: reply_to_message_id
+        String checkReplyColumn = "SHOW COLUMNS FROM messages LIKE 'reply_to_message_id'";
+        String addReplyColumn = "ALTER TABLE messages ADD COLUMN reply_to_message_id BIGINT DEFAULT NULL, " +
                 "ADD CONSTRAINT fk_reply_to_message FOREIGN KEY (reply_to_message_id) REFERENCES messages(id) ON DELETE SET NULL";
         
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(checkColumnQuery)) {
+             ResultSet rs = stmt.executeQuery(checkReplyColumn)) {
             
             if (!rs.next()) {
                 logger.info("Column 'reply_to_message_id' not found in table 'messages'. Running migration...");
-                stmt.executeUpdate(addColumnQuery);
+                stmt.executeUpdate(addReplyColumn);
                 logger.info("Database migration completed: added 'reply_to_message_id' to 'messages'.");
             } else {
                 logger.info("Database schema is up to date. Column 'reply_to_message_id' already exists.");
             }
         } catch (SQLException e) {
-            logger.error("Database migration failed: {}", e.getMessage(), e);
+            logger.error("Database migration (reply_to_message_id) failed: {}", e.getMessage(), e);
+        }
+
+        // Migration 2: forward_from_id
+        String checkForwardColumn = "SHOW COLUMNS FROM messages LIKE 'forward_from_id'";
+        String addForwardColumn = "ALTER TABLE messages ADD COLUMN forward_from_id BIGINT DEFAULT NULL, " +
+                "ADD CONSTRAINT fk_forward_from_message FOREIGN KEY (forward_from_id) REFERENCES messages(id) ON DELETE SET NULL";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkForwardColumn)) {
+
+            if (!rs.next()) {
+                logger.info("Column 'forward_from_id' not found in table 'messages'. Running migration...");
+                stmt.executeUpdate(addForwardColumn);
+                logger.info("Database migration completed: added 'forward_from_id' to 'messages'.");
+            } else {
+                logger.info("Database schema is up to date. Column 'forward_from_id' already exists.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (forward_from_id) failed: {}", e.getMessage(), e);
         }
     }
 }

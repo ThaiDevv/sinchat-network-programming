@@ -18,16 +18,21 @@ public class MessageService {
     private final MessageStatusRepository messageStatusRepository = new MessageStatusRepository();
 
     public long sendMessage(long conversationId, long senderId, String content) throws SQLException {
-        return sendMessage(conversationId, senderId, content, null);
+        return sendMessage(conversationId, senderId, content, null, null);
     }
 
     public long sendMessage(long conversationId, long senderId, String content, Long replyToId) throws SQLException {
+        return sendMessage(conversationId, senderId, content, replyToId, null);
+    }
+
+    public long sendMessage(long conversationId, long senderId, String content, Long replyToId, Long forwardFromId) throws SQLException {
         Message message = new Message();
         message.setConversationId(conversationId);
         message.setSenderId(senderId);
         message.setType(Message.MessageType.TEXT);
         message.setContent(content);
         message.setReplyToId(replyToId);
+        message.setForwardFromId(forwardFromId);
         long msgId = messageRepository.save(message);
 
         // Initialize message status for all recipients

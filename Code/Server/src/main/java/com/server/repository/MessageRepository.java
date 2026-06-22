@@ -18,7 +18,7 @@ public class MessageRepository {
      * Tra ve ID do database tu sinh.
      */
     public long save(Message message) throws SQLException {
-        String query = "INSERT INTO messages (conversation_id, sender_id, type, content, reply_to_message_id) VALUES (?, ?, ?, ?, ?)";
+        String query = "INSERT INTO messages (conversation_id, sender_id, type, content, reply_to_message_id, forward_from_id) VALUES (?, ?, ?, ?, ?, ?)";
         String updateConvQuery = "UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?";
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -32,6 +32,11 @@ public class MessageRepository {
                     pstmt.setLong(5, message.getReplyToId());
                 } else {
                     pstmt.setNull(5, java.sql.Types.BIGINT);
+                }
+                if (message.getForwardFromId() != null) {
+                    pstmt.setLong(6, message.getForwardFromId());
+                } else {
+                    pstmt.setNull(6, java.sql.Types.BIGINT);
                 }
                 pstmt.executeUpdate();
 
@@ -64,11 +69,14 @@ public class MessageRepository {
         List<Message> messages = new ArrayList<>();
         StringBuilder query = new StringBuilder(
                 "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
-                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content " +
+                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
+                "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content " +
                 "FROM messages m " +
                 "JOIN users u ON m.sender_id = u.id " +
                 "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
                 "LEFT JOIN users pu ON pm.sender_id = pu.id " +
+                "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
+                "LEFT JOIN users fu ON fm.sender_id = fu.id " +
                 "WHERE m.conversation_id = ? ORDER BY m.created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
         if (offset > 0) query.append(" OFFSET ?");
@@ -89,11 +97,14 @@ public class MessageRepository {
 
     public Message findById(long messageId) {
         String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
-                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content " +
+                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
+                "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content " +
                 "FROM messages m " +
                 "JOIN users u ON m.sender_id = u.id " +
                 "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
                 "LEFT JOIN users pu ON pm.sender_id = pu.id " +
+                "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
+                "LEFT JOIN users fu ON fm.sender_id = fu.id " +
                 "WHERE m.id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -153,6 +164,14 @@ public class MessageRepository {
                 msg.setReplyToId(replyToIdVal);
                 msg.setReplyToUsername(rs.getString("reply_to_username"));
                 msg.setReplyToContent(rs.getString("reply_to_content"));
+            }
+        } catch (SQLException ignored) {}
+        try {
+            long forwardFromIdVal = rs.getLong("forward_from_id");
+            if (!rs.wasNull()) {
+                msg.setForwardFromId(forwardFromIdVal);
+                msg.setForwardFromUsername(rs.getString("forward_from_username"));
+                msg.setForwardFromContent(rs.getString("forward_from_content"));
             }
         } catch (SQLException ignored) {}
         return msg;

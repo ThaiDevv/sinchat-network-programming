@@ -460,10 +460,14 @@ public class ChatService {
     }
 
     public ApiResponse sendMessage(long conversationId, long senderId, String content) {
-        return sendMessage(conversationId, senderId, content, null);
+        return sendMessage(conversationId, senderId, content, null, null);
     }
 
     public ApiResponse sendMessage(long conversationId, long senderId, String content, Long replyToId) {
+        return sendMessage(conversationId, senderId, content, replyToId, null);
+    }
+
+    public ApiResponse sendMessage(long conversationId, long senderId, String content, Long replyToId, Long forwardFromId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "SEND_MESSAGE");
         req.addProperty("conversationId", conversationId);
@@ -471,6 +475,9 @@ public class ChatService {
         req.addProperty("content", content);
         if (replyToId != null) {
             req.addProperty("replyToId", replyToId);
+        }
+        if (forwardFromId != null) {
+            req.addProperty("forwardFromId", forwardFromId);
         }
         return sendRequestSync(req);
     }

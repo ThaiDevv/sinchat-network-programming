@@ -61,7 +61,24 @@ public class SendMessageHandler {
                 return response;
             }
 
-            if (content.trim().isEmpty()) {
+            // Check forwardFromId first, so we can allow empty content for forward-only messages
+            Long forwardFromId = null;
+            com.server.model.Message forwardedMessage = null;
+            if (request.has("forwardFromId") && !request.get("forwardFromId").isJsonNull()) {
+                forwardFromId = request.get("forwardFromId").getAsLong();
+                forwardedMessage = messageService.getMessageById(forwardFromId);
+                if (forwardedMessage == null) {
+                    logger.warn("[SEND_MESSAGE] Remote={} | UserId={} | ConversationId={} | Invalid forwardFromId={}",
+                            conn.getRemoteAddress(), senderId, conversationId, forwardFromId);
+                    response.addProperty("status", "error");
+                    response.addProperty("message", "Forward target message not found");
+                    return response;
+                }
+            }
+
+            // Allow empty content only when forwarding (the real content is in forwarded message)
+            boolean isForward = (forwardFromId != null);
+            if (!isForward && content.trim().isEmpty()) {
                 logger.warn("[SEND_MESSAGE] Remote={} | UserId={} | ConversationId={} | Empty message content rejected",
                         conn.getRemoteAddress(), senderId, conversationId);
                 response.addProperty("status", "error");
@@ -83,10 +100,10 @@ public class SendMessageHandler {
                 }
             }
 
-            logger.info("[SEND_MESSAGE ATTEMPT] Remote={} | UserId={} | ConversationId={} | ContentLength={} | ReplyToId={}",
-                    conn.getRemoteAddress(), senderId, conversationId, content.length(), replyToId);
+            logger.info("[SEND_MESSAGE ATTEMPT] Remote={} | UserId={} | ConversationId={} | ContentLength={} | ReplyToId={} | ForwardFromId={}",
+                    conn.getRemoteAddress(), senderId, conversationId, content.length(), replyToId, forwardFromId);
 
-            long msgId = messageService.sendMessage(conversationId, senderId, content, replyToId);
+            long msgId = messageService.sendMessage(conversationId, senderId, content, replyToId, forwardFromId);
             logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored",
                     conn.getRemoteAddress(), senderId, conversationId, msgId);
             com.server.model.MessageStatus.Status collectiveStatus = messageStatusRepository.getCollectiveStatus(msgId);
@@ -100,6 +117,15 @@ public class SendMessageHandler {
                 replyToContent = repliedMessage.getContent();
             }
 
+            Long resolvedForwardFromId = null;
+            String forwardFromUsername = null;
+            String forwardFromContent = null;
+            if (forwardedMessage != null) {
+                resolvedForwardFromId = forwardedMessage.getId();
+                forwardFromUsername = forwardedMessage.getSenderUsername();
+                forwardFromContent = forwardedMessage.getContent();
+            }
+
             response.addProperty("status", "success");
             response.addProperty("messageId", msgId);
             response.addProperty("conversationId", conversationId);
@@ -110,6 +136,11 @@ public class SendMessageHandler {
                 response.addProperty("replyToId", resolvedReplyToId);
                 response.addProperty("replyToUsername", replyToUsername);
                 response.addProperty("replyToContent", replyToContent);
+            }
+            if (resolvedForwardFromId != null) {
+                response.addProperty("forwardFromId", resolvedForwardFromId);
+                response.addProperty("forwardFromUsername", forwardFromUsername);
+                response.addProperty("forwardFromContent", forwardFromContent);
             }
 
             // Broadcast new message to all members in the conversation (reuse memberIds from above)
@@ -135,6 +166,11 @@ public class SendMessageHandler {
                 broadcastMsg.addProperty("replyToId", resolvedReplyToId);
                 broadcastMsg.addProperty("replyToUsername", replyToUsername);
                 broadcastMsg.addProperty("replyToContent", replyToContent);
+            }
+            if (resolvedForwardFromId != null) {
+                broadcastMsg.addProperty("forwardFromId", resolvedForwardFromId);
+                broadcastMsg.addProperty("forwardFromUsername", forwardFromUsername);
+                broadcastMsg.addProperty("forwardFromContent", forwardFromContent);
             }
 
 
