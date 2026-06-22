@@ -1,6 +1,7 @@
 package com.client.view;
 
 import com.client.controller.ChatController;
+import com.client.emoji.EmojiDef;
 import com.client.emoji.EmojiManager;
 import com.client.service.ChatService;
 import com.client.util.ImageUtils;
@@ -46,7 +47,9 @@ public class ChatView {
     // --- UI fields ---
     private VBox messagesBox;
     private VBox contactList;
-    private TextField messageInput;
+    private TextField messageInput;       // hidden — captures keystrokes; see messageInputStack below
+    private TextFlow messageDisplayFlow;   // visible overlay — renders text + emoji images
+    private StackPane messageInputStack;   // wraps messageInput + messageDisplayFlow
     private ScrollPane scrollMessages;
     private Label headerChatName;
     private Label chatStatus;
@@ -1111,11 +1114,14 @@ public class ChatView {
         String safeUsername = senderUsername != null && !senderUsername.isBlank() ? senderUsername : "tin nhan";
         String safeContent = content != null ? content : "";
         replyPreviewUserLabel.setText("Dang tra loi " + safeUsername);
-        // Render emoji preview
-        String truncated = truncateText(safeContent, 80);
-        javafx.scene.Node rendered = EmojiManager.getInstance().renderMessage(truncated);
+        // Render emoji preview using a container instead of Label graphic
+        Node rendered = EmojiManager.getInstance().renderMessagePreview(safeContent);
+        // Wrap in a simple container to replace the label's graphic cleanly
+        StackPane previewWrapper = new StackPane(rendered);
+        previewWrapper.setAlignment(Pos.CENTER_LEFT);
+        previewWrapper.setMaxWidth(360);
         replyPreviewContentLabel.setText("");
-        replyPreviewContentLabel.setGraphic(rendered);
+        replyPreviewContentLabel.setGraphic(previewWrapper);
         if (replyPreviewBar != null) {
             replyPreviewBar.setVisible(true);
             replyPreviewBar.setManaged(true);
@@ -1128,6 +1134,64 @@ public class ChatView {
         if (replyPreviewBar != null) {
             replyPreviewBar.setVisible(false);
             replyPreviewBar.setManaged(false);
+        }
+    }
+
+    /**
+     * Sync the visible TextFlow overlay with the raw text from the hidden
+     * TextField — renders emoji labels {@code [cười]} as inline images (20×20).
+     */
+    private void syncInputDisplay(String rawText) {
+        if (messageDisplayFlow == null) return;
+        messageDisplayFlow.getChildren().clear();
+
+        if (rawText == null || rawText.isEmpty()) return;
+
+        EmojiManager em = EmojiManager.getInstance();
+        java.util.regex.Matcher m = em.getEmojiPattern().matcher(rawText);
+        int lastEnd = 0;
+
+        while (m.find()) {
+            // Text before this emoji
+            if (m.start() > lastEnd) {
+                String before = rawText.substring(lastEnd, m.start());
+                javafx.scene.text.Text t = new javafx.scene.text.Text(before);
+                t.setStyle("-fx-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 15px;");
+                messageDisplayFlow.getChildren().add(t);
+            }
+
+            // Emoji image (small 20×20 for input)
+            String label = m.group();
+            EmojiDef def = em.getEmojiDefByLabel(label);
+            if (def != null) {
+                Image png = em.getStaticEmojiImage(def.getFileName());
+                if (png != null) {
+                    ImageView iv = new ImageView(png);
+                    iv.setFitWidth(20);
+                    iv.setFitHeight(20);
+                    iv.setPreserveRatio(true);
+                    messageDisplayFlow.getChildren().add(iv);
+                } else {
+                    // Fallback — show label text in accent colour
+                    javafx.scene.text.Text fallback = new javafx.scene.text.Text(label);
+                    fallback.setStyle("-fx-fill: #ffd166; -fx-font-size: 15px;");
+                    messageDisplayFlow.getChildren().add(fallback);
+                }
+            } else {
+                javafx.scene.text.Text unknown = new javafx.scene.text.Text(label);
+                unknown.setStyle("-fx-fill: #aaaaaa; -fx-font-size: 15px;");
+                messageDisplayFlow.getChildren().add(unknown);
+            }
+
+            lastEnd = m.end();
+        }
+
+        // Remaining text after last emoji
+        if (lastEnd < rawText.length()) {
+            String after = rawText.substring(lastEnd);
+            javafx.scene.text.Text t = new javafx.scene.text.Text(after);
+            t.setStyle("-fx-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 15px;");
+            messageDisplayFlow.getChildren().add(t);
         }
     }
 
@@ -1179,10 +1243,10 @@ public class ChatView {
         Label userLabel = new Label(username != null && !username.isBlank() ? username : "Tin nhan");
         userLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: " + (isMine ? "#ffd166" : StyleConstants.ACCENT) + ";");
 
-        Label contentLabel = new Label(truncateText(content != null ? content : "", 60));
-        contentLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #dddddd;");
-
-        quote.getChildren().addAll(userLabel, contentLabel);
+        // Render emoji content for the quote box preview
+        String quoteContent = content != null ? content : "";
+        Node renderedContent = EmojiManager.getInstance().renderMessagePreview(quoteContent);
+        quote.getChildren().addAll(userLabel, renderedContent);
 
         quote.setOnMouseClicked(e -> {
             e.consume();
@@ -1735,16 +1799,35 @@ public class ChatView {
                 + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;"));
         emojiBtn.setOnAction(e -> showEmojiPicker(emojiBtn));
 
+        // Hidden TextField – captures real keyboard input
         messageInput = new TextField();
         messageInput.setPromptText("Nhập tin nhắn...");
-        messageInput.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: " + StyleConstants.INPUT_BORDER
-                + "; -fx-border-width: 1.5px; -fx-border-radius: 24px; -fx-background-radius: 24px; -fx-text-fill: "
-                + StyleConstants.TEXT_WHITE + "; -fx-prompt-text-fill: " + StyleConstants.TEXT_DIM
+        // Make background fully transparent so the overlay shows through
+        messageInput.setStyle("-fx-background-color: transparent; -fx-border-color: " + StyleConstants.INPUT_BORDER
+                + "; -fx-border-width: 1.5px; -fx-border-radius: 24px; -fx-background-radius: 24px; -fx-text-fill: transparent;"
+                + " -fx-prompt-text-fill: " + StyleConstants.TEXT_DIM
                 + "; -fx-font-size: 15px; -fx-padding: 12px 18px;");
         messageInput.setPrefHeight(48);
         HBox.setHgrow(messageInput, Priority.ALWAYS);
 
+        // Visible overlay – renders text + emoji images inline
+        messageDisplayFlow = new TextFlow();
+        messageDisplayFlow.setLineSpacing(4);
+        messageDisplayFlow.setMouseTransparent(true);  // let clicks fall through to the TextField
+        messageDisplayFlow.setPadding(new Insets(0, 0, 0, 4));
+        messageDisplayFlow.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + ";"
+                + " -fx-border-color: transparent; -fx-border-radius: 24px; -fx-background-radius: 24px;"
+                + " -fx-padding: 12px 18px;");
+
+        // Stack: overlay on top of the real TextField
+        messageInputStack = new StackPane();
+        messageInputStack.getChildren().addAll(messageInput, messageDisplayFlow);
+        StackPane.setAlignment(messageDisplayFlow, Pos.CENTER_LEFT);
+        HBox.setHgrow(messageInputStack, Priority.ALWAYS);
+
+        // Sync the visible overlay whenever the hidden text changes
         messageInput.textProperty().addListener((obs, oldVal, newVal) -> {
+            syncInputDisplay(newVal);
             if (controller.getChatService().isConnected() && currentConversationId > 0) {
                 if (newVal.trim().isEmpty()) {
                     controller.sendTyping(currentConversationId, false);
@@ -1764,7 +1847,7 @@ public class ChatView {
         sendBtn.setOnAction(e -> sendMessage());
         messageInput.setOnAction(e -> sendMessage());
 
-        inputBar.getChildren().addAll(attachBtn, emojiBtn, messageInput, sendBtn);
+        inputBar.getChildren().addAll(attachBtn, emojiBtn, messageInputStack, sendBtn);
 
         // Construct replyPreviewBar (hidden by default)
         replyPreviewBar = new HBox(12);
