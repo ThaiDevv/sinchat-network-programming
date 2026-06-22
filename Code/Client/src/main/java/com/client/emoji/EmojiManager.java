@@ -151,6 +151,15 @@ public class EmojiManager {
 
     public List<EmojiDef> getEmojiList() { return emojiList; }
 
+    /** Expose the compiled emoji pattern for external rendering (e.g. input overlay). */
+    public Pattern getEmojiPattern() { return emojiPattern; }
+
+    /** Look up an EmojiDef by its label, e.g. "[rên rỉ]". */
+    public EmojiDef getEmojiDefByLabel(String label) { return defByLabel.get(label); }
+
+    /** Load (or retrieve from cache) a static PNG emoji image by fileName. */
+    public Image getStaticEmojiImage(String fileName) { return loadStatic(fileName); }
+
     /** Check if a message consists entirely of emoji labels */
     public boolean isPureEmoji(String text) {
         if (text == null || text.isEmpty()) return false;
@@ -303,6 +312,87 @@ public class EmojiManager {
         }
 
         flow.setMaxWidth(360);
+        return flow;
+    }
+
+    /**
+     * Render a message for preview contexts (reply bar, quote box).
+     * Always uses small inline images (20x20) and dimmed text styling,
+     * unlike {@link #renderMessage} which uses large animated GIFs for solo emojis.
+     */
+    public Node renderMessagePreview(String text) {
+        if (text == null || text.isEmpty()) {
+            return new Label("");
+        }
+
+        int emojiCount = countEmojis(text);
+        if (emojiCount == 0) {
+            // Pure text — small label for preview
+            Label label = new Label(text);
+            label.setWrapText(true);
+            label.setMaxWidth(300);
+            label.setStyle("-fx-font-size: 12px; -fx-text-fill: #cccccc;");
+            return label;
+        }
+
+        // Always use TextFlow style with small inline images for preview
+        return buildTextFlowPreview(text);
+    }
+
+    /**
+     * Build a TextFlow for preview contexts with small images and dimmed text.
+     */
+    private TextFlow buildTextFlowPreview(String text) {
+        TextFlow flow = new TextFlow();
+        flow.setLineSpacing(2);
+        flow.setMaxWidth(300);
+
+        Matcher m = emojiPattern.matcher(text);
+        int lastEnd = 0;
+
+        while (m.find()) {
+            // Add text before this emoji
+            if (m.start() > lastEnd) {
+                String before = text.substring(lastEnd, m.start());
+                Text t = new Text(before);
+                t.setStyle("-fx-fill: #cccccc; -fx-font-size: 12px;");
+                flow.getChildren().add(t);
+            }
+
+            // Add emoji image (small, 20x20)
+            String label = m.group();
+            EmojiDef def = defByLabel.get(label);
+            if (def != null) {
+                Image png = loadStatic(def.getFileName());
+                if (png != null) {
+                    ImageView iv = new ImageView(png);
+                    iv.setFitWidth(20);
+                    iv.setFitHeight(20);
+                    iv.setPreserveRatio(true);
+                    flow.getChildren().add(iv);
+                } else {
+                    // Fallback: show label as dimmed text
+                    Text fallback = new Text(label);
+                    fallback.setStyle("-fx-fill: #ffd166; -fx-font-size: 12px;");
+                    flow.getChildren().add(fallback);
+                }
+            } else {
+                Text unknown = new Text(label);
+                unknown.setStyle("-fx-fill: #888888; -fx-font-size: 12px;");
+                flow.getChildren().add(unknown);
+            }
+
+            lastEnd = m.end();
+        }
+
+        // Add remaining text after last emoji
+        if (lastEnd < text.length()) {
+            String after = text.substring(lastEnd);
+            Text t = new Text(after);
+            t.setStyle("-fx-fill: #cccccc; -fx-font-size: 12px;");
+            flow.getChildren().add(t);
+        }
+
         return flow;
     }
 
