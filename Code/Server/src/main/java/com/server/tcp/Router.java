@@ -49,6 +49,17 @@ public class Router {
     private static CreateGroupHandler createGroupHandler = new CreateGroupHandler();
     private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
 
+    // ---- friendship handlers (require FriendshipService) ----
+    private static FriendshipService friendshipService = new FriendshipService();
+    private static SendFriendRequestHandler sendFriendRequestHandler = new SendFriendRequestHandler(friendshipService);
+    private static RespondFriendRequestHandler respondFriendRequestHandler = new RespondFriendRequestHandler(friendshipService);
+    private static GetFriendRequestsHandler getFriendRequestsHandler = new GetFriendRequestsHandler(friendshipService);
+    private static GetFriendsHandler getFriendsHandler = new GetFriendsHandler(friendshipService);
+    private static GetFriendshipStatusHandler getFriendshipStatusHandler = new GetFriendshipStatusHandler(friendshipService);
+    private static UnfriendHandler unfriendHandler = new UnfriendHandler(friendshipService);
+    private static BlockUserHandler blockUserHandler = new BlockUserHandler(friendshipService);
+    private static UnblockUserHandler unblockUserHandler = new UnblockUserHandler(friendshipService);
+
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
             logger.warn("[ROUTER] Remote={} | Missing action field in request: {}",
@@ -161,6 +172,32 @@ public class Router {
                     break;
                 case "LEAVE_GROUP":
                     response = leaveGroupHandler.handleTcp(request, conn);
+                    break;
+
+                // ---- friendship actions ----
+                case "SEND_FRIEND_REQUEST":
+                    response = sendFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "RESPOND_FRIEND_REQUEST":
+                    response = respondFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIEND_REQUESTS":
+                    response = getFriendRequestsHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIENDS":
+                    response = getFriendsHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIENDSHIP_STATUS":
+                    response = getFriendshipStatusHandler.handleTcp(request, conn);
+                    break;
+                case "UNFRIEND":
+                    response = unfriendHandler.handleTcp(request, conn);
+                    break;
+                case "BLOCK_USER":
+                    response = blockUserHandler.handleTcp(request, conn);
+                    break;
+                case "UNBLOCK_USER":
+                    response = unblockUserHandler.handleTcp(request, conn);
                     break;
 
                 default:

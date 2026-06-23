@@ -188,6 +188,8 @@ public class ChatView {
         tcp.setOnUserAvatarChanged(this::onUserAvatarChanged);
         tcp.setOnMessageStatusChanged(this::onMessageStatusChanged);
         tcp.setOnLeftGroup(this::onLeftGroupReceived);
+        tcp.setOnFriendRequestReceived(this::onFriendRequestReceived);
+        tcp.setOnFriendAccepted(this::onFriendAccepted);
         tcp.setOnConnected(() -> System.out.println("TCP socket connected for user " + currentUserId));
         tcp.setOnDisconnected(reason -> System.out.println("TCP socket disconnected: " + reason));
 
@@ -239,7 +241,7 @@ public class ChatView {
             updateUnreadBadge(conversationId);
             String senderName = json.has("senderUsername") ? json.get("senderUsername").getAsString()
                     : conversationDisplayNames.getOrDefault(conversationId, "Ai đó");
-            showNewMessageNotification(senderName, content, conversationId);
+            showNewMessageNotification(senderName, content, conversationId, senderId);
         }
         Platform.runLater(this::loadConversations);
     }
@@ -262,6 +264,20 @@ public class ChatView {
                 });
             }
         }
+        Platform.runLater(this::loadConversations);
+    }
+
+    private void onFriendRequestReceived(JsonObject json) {
+        long senderId = json.get("senderId").getAsLong();
+        String senderName = json.has("senderName") ? json.get("senderName").getAsString() : "Ai đó";
+        System.out.println("[CHAT_VIEW] Friend request received from " + senderName + " (id=" + senderId + ")");
+        Platform.runLater(this::loadConversations);
+    }
+
+    private void onFriendAccepted(JsonObject json) {
+        long acceptorId = json.get("acceptorId").getAsLong();
+        String acceptorName = json.has("acceptorName") ? json.get("acceptorName").getAsString() : "Ai đó";
+        System.out.println("[CHAT_VIEW] Friend request accepted by " + acceptorName + " (id=" + acceptorId + ")");
         Platform.runLater(this::loadConversations);
     }
 
@@ -2023,7 +2039,8 @@ public class ChatView {
                         JsonObject user = element.getAsJsonObject();
                         long uId = user.get("userId").getAsLong();
                         String username = user.get("username").getAsString();
-                        addSearchResultContact(uId, username, searchField);
+                        String friendshipStatus = user.has("friendshipStatus") ? user.get("friendshipStatus").getAsString() : "NONE";
+                        addSearchResultContact(uId, username, friendshipStatus, searchField);
                     }
                 }, errMsg -> {
                     System.err.println("[ChatView] Search users failed: " + errMsg);
@@ -2041,7 +2058,7 @@ public class ChatView {
         return panel;
     }
 
-    private void addSearchResultContact(long uId, String username, TextField searchField) {
+    private void addSearchResultContact(long uId, String username, String friendshipStatus, TextField searchField) {
         HBox contact = new HBox(12);
         contact.setAlignment(Pos.CENTER_LEFT);
         contact.setPadding(new Insets(12, 14, 12, 14));
@@ -2059,6 +2076,49 @@ public class ChatView {
         msgLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + ";");
         info.getChildren().addAll(nameLabel, msgLabel);
         contact.getChildren().addAll(avatar, info);
+
+        // Add friend action button based on friendship status
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        contact.getChildren().add(spacer);
+
+        String btnBase = "-fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 14px; -fx-border-radius: 14px; -fx-min-height: 28px; -fx-padding: 0 12px; -fx-cursor: hand;";
+        if ("NONE".equals(friendshipStatus)) {
+            Button addFriendBtn = new Button("➕ Kết bạn");
+            addFriendBtn.setStyle(btnBase + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;");
+            addFriendBtn.setOnMouseEntered(e -> addFriendBtn.setStyle(btnBase + "-fx-background-color: #7c5cfc; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
+            addFriendBtn.setOnMouseExited(e -> addFriendBtn.setStyle(btnBase + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;"));
+            addFriendBtn.setOnAction(e -> {
+                e.consume();
+                controller.sendFriendRequest(uId,
+                    msg -> showToast(msg),
+                    err -> showToast(err));
+            });
+            contact.getChildren().add(addFriendBtn);
+        } else if ("PENDING_SENT".equals(friendshipStatus)) {
+            Button cancelBtn = new Button("↩ Đã gửi");
+            cancelBtn.setStyle(btnBase + "-fx-background-color: rgba(255, 255, 255, 0.1); -fx-text-fill: #aaaaaa; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-width: 1px;");
+            cancelBtn.setOnAction(e -> {
+                e.consume();
+                controller.cancelFriendRequest(uId,
+                    msg -> showToast(msg),
+                    err -> showToast(err));
+            });
+            contact.getChildren().add(cancelBtn);
+        } else if ("PENDING_RECEIVED".equals(friendshipStatus)) {
+            Button acceptBtn = new Button("✅ Chấp nhận");
+            acceptBtn.setStyle(btnBase + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;");
+            acceptBtn.setOnMouseEntered(e -> acceptBtn.setStyle(btnBase + "-fx-background-color: #34c759; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
+            acceptBtn.setOnMouseExited(e -> acceptBtn.setStyle(btnBase + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;"));
+            acceptBtn.setOnAction(e -> {
+                e.consume();
+                controller.respondFriendRequest(uId, "ACCEPTED",
+                    msg -> showToast(msg),
+                    err -> showToast(err));
+            });
+            contact.getChildren().add(acceptBtn);
+        }
+        // For ACCEPTED and BLOCKED, no extra action button needed (left-click to chat)
 
         contact.setOnMouseEntered(e -> contact.setStyle(StyleConstants.contactItemHoverStyle(radius)));
         contact.setOnMouseExited(e -> contact.setStyle(StyleConstants.contactItemNormalStyle(radius)));
@@ -2145,8 +2205,14 @@ public class ChatView {
             }
         });
 
+        Button friendActionBtn = new Button("⋮");
+        friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;");
+        friendActionBtn.setOnMouseEntered(e -> friendActionBtn.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
+        friendActionBtn.setOnMouseExited(e -> friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
+        friendActionBtn.setOnAction(e -> showFriendshipContextMenu(friendActionBtn));
+
         actions.getChildren().addAll(messageSearchField, messageSearchButton,
-                createIconButton("Call"), createIconButton("Video"), leaveGroupBtn);
+                createIconButton("Call"), createIconButton("Video"), friendActionBtn, leaveGroupBtn);
         chatHeader.getChildren().addAll(headerAvatar, headerInfo, spacer, actions);
 
         // Search results panel
