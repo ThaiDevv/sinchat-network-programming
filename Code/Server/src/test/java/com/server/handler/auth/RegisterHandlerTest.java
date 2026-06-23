@@ -39,11 +39,11 @@ class RegisterHandlerTest {
 
     @Test
     void testSuccessfulRegistration() throws Exception {
-        when(mockAuthService.register("u", "p", "e@e.com")).thenReturn(true);
+        when(mockAuthService.register("user_one", "pass123", "e@e.com")).thenReturn(true);
 
         JsonObject req = new JsonObject();
-        req.addProperty("username", "u");
-        req.addProperty("password", "p");
+        req.addProperty("username", "user_one");
+        req.addProperty("password", "pass123");
         req.addProperty("email", "e@e.com");
 
         JsonObject resp = handler.handleTcp(req, null);
@@ -53,12 +53,26 @@ class RegisterHandlerTest {
     }
 
     @Test
-    void testFailedRegistration() throws Exception {
-        when(mockAuthService.register("u", "p", "e@e.com")).thenReturn(false);
+    void testPasswordAllowsSpecialCharacters() throws Exception {
+        when(mockAuthService.register("user_two", "pass@123", "two@e.com")).thenReturn(true);
 
         JsonObject req = new JsonObject();
-        req.addProperty("username", "u");
-        req.addProperty("password", "p");
+        req.addProperty("username", "user_two");
+        req.addProperty("password", "pass@123");
+        req.addProperty("email", "two@e.com");
+
+        JsonObject resp = handler.handleTcp(req, null);
+        assertNotNull(resp);
+        assertEquals("success", resp.get("status").getAsString());
+    }
+
+    @Test
+    void testFailedRegistration() throws Exception {
+        when(mockAuthService.register("user_one", "pass123", "e@e.com")).thenReturn(false);
+
+        JsonObject req = new JsonObject();
+        req.addProperty("username", "user_one");
+        req.addProperty("password", "pass123");
         req.addProperty("email", "e@e.com");
 
         JsonObject resp = handler.handleTcp(req, null);
@@ -72,8 +86,8 @@ class RegisterHandlerTest {
                 .thenThrow(new java.sql.SQLException("Duplicate entry"));
 
         JsonObject req = new JsonObject();
-        req.addProperty("username", "a");
-        req.addProperty("password", "p");
+        req.addProperty("username", "user_one");
+        req.addProperty("password", "pass123");
         req.addProperty("email", "e@e.com");
 
         JsonObject resp = handler.handleTcp(req, null);

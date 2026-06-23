@@ -89,6 +89,43 @@ public class ChatController {
         );
     }
 
+    public void createGroup(String groupName, java.util.List<Long> memberIds,
+                            Consumer<Long> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.createGroup(currentUserId, groupName, memberIds),
+                response -> {
+                    if (response.isSuccess() && response.rawBody() != null) {
+                        try {
+                            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+                            long convId = json.get("conversationId").getAsLong();
+                            Platform.runLater(() -> onSuccess.accept(convId));
+                        } catch (Exception e) {
+                            if (onError != null) Platform.runLater(() -> onError.accept("Không đọc được phản hồi từ server."));
+                        }
+                    } else {
+                        String err = response != null && response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể tạo nhóm chat.";
+                        if (onError != null) Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    public void leaveGroup(long conversationId, Runnable onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.leaveGroup(conversationId, currentUserId),
+                response -> {
+                    if (response != null && response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response != null && response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể rời nhóm.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
     // ---- messages ----
 
     public void loadMessages(long conversationId, int limit, int offset,
@@ -107,8 +144,16 @@ public class ChatController {
     }
 
     public void sendMessage(long conversationId, String text, Consumer<String> onError) {
+        sendMessage(conversationId, text, null, onError);
+    }
+
+    public void sendMessage(long conversationId, String text, Long replyToId, Consumer<String> onError) {
+        sendMessage(conversationId, text, replyToId, null, onError);
+    }
+
+    public void sendMessage(long conversationId, String text, Long replyToId, Long forwardFromId, Consumer<String> onError) {
         asyncCall(
-                () -> chatService.sendMessage(conversationId, currentUserId, text),
+                () -> chatService.sendMessage(conversationId, currentUserId, text, replyToId, forwardFromId),
                 response -> {
                     if (!response.isSuccess()) {
                         Platform.runLater(() -> onError.accept(response.message()));
@@ -117,6 +162,15 @@ public class ChatController {
         );
         // Stop typing after sending
         chatService.sendTyping(conversationId, -1, false);
+    }
+
+    /**
+     * Forward a message to a target conversation.
+     * The forwarded message's original sender and content are carried as forwardFromId.
+     * The user may optionally add their own text.
+     */
+    public void forwardMessage(long targetConversationId, String text, long forwardFromId, Consumer<String> onError) {
+        sendMessage(targetConversationId, text, null, forwardFromId, onError);
     }
 
     public void sendTyping(long conversationId, boolean isTyping) {
@@ -249,6 +303,130 @@ public class ChatController {
                     } else {
                         String err = response != null ? response.message() : "Lỗi kết nối server";
                         Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    // ---- friendship ----
+
+    public void getFriendshipStatus(long peerId, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.getFriendshipStatus(peerId),
+                response -> {
+                    if (response.isSuccess() && response.rawBody() != null) {
+                        try {
+                            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+                            String fs = json.get("friendshipStatus").getAsString();
+                            Platform.runLater(() -> onSuccess.accept(fs));
+                        } catch (Exception e) {
+                            if (onError != null) Platform.runLater(() -> onError.accept("Parse error"));
+                        }
+                    } else {
+                        if (onError != null) Platform.runLater(() -> onError.accept(response.message()));
+                    }
+                }
+        );
+    }
+
+    public void sendFriendRequest(long targetUserId, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.sendFriendRequest(targetUserId),
+                response -> {
+                    String msg = response.message() != null ? response.message() : "";
+                    if (response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(msg));
+                    } else {
+                        Platform.runLater(() -> onError.accept(msg));
+                    }
+                }
+        );
+    }
+
+    public void respondFriendRequest(long requesterId, String decision, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.respondFriendRequest(requesterId, decision),
+                response -> {
+                    String msg = response.message() != null ? response.message() : "";
+                    if (response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(msg));
+                    } else {
+                        Platform.runLater(() -> onError.accept(msg));
+                    }
+                }
+        );
+    }
+
+    public void cancelFriendRequest(long targetUserId, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.cancelFriendRequest(targetUserId),
+                response -> {
+                    String msg = response.message() != null ? response.message() : "";
+                    if (response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(msg));
+                    } else {
+                        Platform.runLater(() -> onError.accept(msg));
+                    }
+                }
+        );
+    }
+
+    public void unfriend(long friendId, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.unfriend(friendId),
+                response -> {
+                    String msg = response.message() != null ? response.message() : "";
+                    if (response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(msg));
+                    } else {
+                        Platform.runLater(() -> onError.accept(msg));
+                    }
+                }
+        );
+    }
+
+    public void blockUser(long targetUserId, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.blockUser(targetUserId),
+                response -> {
+                    String msg = response.message() != null ? response.message() : "";
+                    if (response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(msg));
+                    } else {
+                        Platform.runLater(() -> onError.accept(msg));
+                    }
+                }
+        );
+    }
+
+    public void unblockUser(long targetUserId, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.unblockUser(targetUserId),
+                response -> {
+                    String msg = response.message() != null ? response.message() : "";
+                    if (response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(msg));
+                    } else {
+                        Platform.runLater(() -> onError.accept(msg));
+                    }
+                }
+        );
+    }
+
+    public void getFriendRequests(Consumer<JsonObject> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.getFriendRequests(),
+                response -> {
+                    if (response.isSuccess() && response.rawBody() != null) {
+                        try {
+                            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+                            Platform.runLater(() -> onSuccess.accept(json));
+                        } catch (Exception e) {
+                            if (onError != null) Platform.runLater(() -> onError.accept("Parse error"));
+                        }
+                    } else {
+                        if (onError != null) Platform.runLater(() -> onError.accept(
+                                response.message() != null ? response.message() : "Lỗi"));
                     }
                 }
         );
