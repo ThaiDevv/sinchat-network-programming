@@ -34,7 +34,8 @@ import java.util.concurrent.*;
 /**
  * Main chat view — composes left panel (contacts), center panel (messages),
  * and right panel (profile). All TCP business logic is delegated to
- * {@link ChatController}. Dialogs and modals are extracted into separate classes.
+ * {@link ChatController}. Dialogs and modals are extracted into separate
+ * classes.
  */
 public class ChatView {
 
@@ -47,9 +48,9 @@ public class ChatView {
     // --- UI fields ---
     private VBox messagesBox;
     private VBox contactList;
-    private TextField messageInput;       // hidden — captures keystrokes; see messageInputStack below
-    private TextFlow messageDisplayFlow;   // visible overlay — renders text + emoji images
-    private StackPane messageInputStack;   // wraps messageInput + messageDisplayFlow
+    private TextField messageInput; // hidden — captures keystrokes; see messageInputStack below
+    private TextFlow messageDisplayFlow; // visible overlay — renders text + emoji images
+    private StackPane messageInputStack; // wraps messageInput + messageDisplayFlow
     private ScrollPane scrollMessages;
     private Label headerChatName;
     private Label chatStatus;
@@ -139,7 +140,8 @@ public class ChatView {
 
     // Scroll listener for infinite scroll
     private final javafx.beans.value.ChangeListener<Number> scrollListener = (obs, oldVal, newVal) -> {
-        if (pendingScrollToBottom) return;
+        if (pendingScrollToBottom)
+            return;
         if (newVal.doubleValue() < 0.05 && hasMoreMessages && !isLoadingMore && currentConversationId > 0) {
             loadMessagesForCurrentConversation(false);
         }
@@ -207,33 +209,43 @@ public class ChatView {
         String content = json.get("content").getAsString();
         long messageId = json.has("messageId") ? json.get("messageId").getAsLong() : -1;
         String senderUsername = json.has("senderUsername") && !json.get("senderUsername").isJsonNull()
-                ? json.get("senderUsername").getAsString() : "Unknown";
+                ? json.get("senderUsername").getAsString()
+                : "Unknown";
 
         Long replyToId = json.has("replyToId") && !json.get("replyToId").isJsonNull()
-                ? json.get("replyToId").getAsLong() : null;
+                ? json.get("replyToId").getAsLong()
+                : null;
         String replyToUsername = json.has("replyToUsername") && !json.get("replyToUsername").isJsonNull()
-                ? json.get("replyToUsername").getAsString() : null;
+                ? json.get("replyToUsername").getAsString()
+                : null;
         String replyToContent = json.has("replyToContent") && !json.get("replyToContent").isJsonNull()
-                ? json.get("replyToContent").getAsString() : null;
+                ? json.get("replyToContent").getAsString()
+                : null;
 
         Long forwardFromId = json.has("forwardFromId") && !json.get("forwardFromId").isJsonNull()
-                ? json.get("forwardFromId").getAsLong() : null;
+                ? json.get("forwardFromId").getAsLong()
+                : null;
         String forwardFromUsername = json.has("forwardFromUsername") && !json.get("forwardFromUsername").isJsonNull()
-                ? json.get("forwardFromUsername").getAsString() : null;
+                ? json.get("forwardFromUsername").getAsString()
+                : null;
         String forwardFromContent = json.has("forwardFromContent") && !json.get("forwardFromContent").isJsonNull()
-                ? json.get("forwardFromContent").getAsString() : null;
+                ? json.get("forwardFromContent").getAsString()
+                : null;
 
         if (conversationId == currentConversationId) {
-            if (typingLabel != null) typingLabel.setVisible(false);
+            if (typingLabel != null)
+                typingLabel.setVisible(false);
 
             if (senderId == currentUserId) {
                 String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
                 addSentMessage(content, messageId, status, replyToId, replyToUsername, replyToContent,
                         forwardFromId, forwardFromUsername, forwardFromContent);
             } else {
-                addReceivedMessage(senderId, senderUsername, content, messageId, replyToId, replyToUsername, replyToContent,
+                addReceivedMessage(senderId, senderUsername, content, messageId, replyToId, replyToUsername,
+                        replyToContent,
                         forwardFromId, forwardFromUsername, forwardFromContent);
-                if (messageId > 0) controller.markMessageSeen(currentConversationId, messageId);
+                if (messageId > 0)
+                    controller.markMessageSeen(currentConversationId, messageId);
             }
             scrollToBottom();
         } else {
@@ -255,8 +267,10 @@ public class ChatView {
                 Platform.runLater(() -> {
                     currentConversationId = -1;
                     messagesBox.getChildren().clear();
-                    if (headerChatName != null) headerChatName.setText("Chọn người để chat");
-                    if (chatStatus != null) chatStatus.setText("Offline");
+                    if (headerChatName != null)
+                        headerChatName.setText("Chọn người để chat");
+                    if (chatStatus != null)
+                        chatStatus.setText("Offline");
                     if (leaveGroupBtn != null) {
                         leaveGroupBtn.setVisible(false);
                         leaveGroupBtn.setManaged(false);
@@ -283,7 +297,8 @@ public class ChatView {
 
     private void onMessageStatusChanged(JsonObject json) {
         long conversationId = json.has("conversationId") ? json.get("conversationId").getAsLong() : -1;
-        if (conversationId != currentConversationId) return;
+        if (conversationId != currentConversationId)
+            return;
 
         if (json.has("messageId")) {
             long messageId = json.get("messageId").getAsLong();
@@ -352,19 +367,25 @@ public class ChatView {
         }
     }
 
-    /** Returns true if the given messageId belongs to the last sent (right-aligned) message bubble. */
+    /**
+     * Returns true if the given messageId belongs to the last sent (right-aligned)
+     * message bubble.
+     */
     private boolean isLastSentMessage(long messageId) {
-        if (messageStatusLabels.isEmpty()) return false;
+        if (messageStatusLabels.isEmpty())
+            return false;
         long maxId = messageStatusLabels.keySet().stream().max(Long::compare).orElse(-1L);
         return messageId == maxId;
     }
 
     private void onUserTyping(JsonObject json) {
         long conversationId = json.get("conversationId").getAsLong();
-        if (conversationId != currentConversationId || typingLabel == null) return;
+        if (conversationId != currentConversationId || typingLabel == null)
+            return;
 
         long userId = json.has("userId") ? json.get("userId").getAsLong() : -1;
-        if (userId == currentUserId) return;
+        if (userId == currentUserId)
+            return;
 
         boolean isTyping = json.has("isTyping") && json.get("isTyping").getAsBoolean();
         if (!isTyping) {
@@ -377,22 +398,26 @@ public class ChatView {
             typingLabel.setVisible(true);
         });
 
-        if (typingHideTask != null && !typingHideTask.isDone()) typingHideTask.cancel(false);
-        typingHideTask = scheduler.schedule(() ->
-                Platform.runLater(() -> typingLabel.setVisible(false)), 3, TimeUnit.SECONDS);
+        if (typingHideTask != null && !typingHideTask.isDone())
+            typingHideTask.cancel(false);
+        typingHideTask = scheduler.schedule(() -> Platform.runLater(() -> typingLabel.setVisible(false)), 3,
+                TimeUnit.SECONDS);
     }
 
     private void onUserStatusChange(JsonObject json) {
-        if (!json.has("userId") || !json.has("status")) return;
+        if (!json.has("userId") || !json.has("status"))
+            return;
         long peerId = json.get("userId").getAsLong();
         boolean isOnline = "online".equals(json.get("status").getAsString());
         String lastSeenStr = json.has("lastSeen") ? json.get("lastSeen").getAsString() : null;
         peerOnlineByPeerId.put(peerId, isOnline);
-        if (lastSeenStr != null) peerLastSeenByPeerId.put(peerId, lastSeenStr);
+        if (lastSeenStr != null)
+            peerLastSeenByPeerId.put(peerId, lastSeenStr);
 
         Platform.runLater(() -> {
             Circle dot = statusDotsByPeerId.get(peerId);
-            if (dot != null) dot.setFill(Color.web(isOnline ? "#4ade80" : "#888888"));
+            if (dot != null)
+                dot.setFill(Color.web(isOnline ? "#4ade80" : "#888888"));
 
             Long convId = conversationIdByPeerId.get(peerId);
             if (convId != null && convId == currentConversationId) {
@@ -402,7 +427,8 @@ public class ChatView {
     }
 
     private void onUserAvatarChanged(JsonObject json) {
-        if (!json.has("userId") || !json.has("avatarUrl")) return;
+        if (!json.has("userId") || !json.has("avatarUrl"))
+            return;
         long uId = json.get("userId").getAsLong();
         String dataUrl = json.get("avatarUrl").getAsString();
 
@@ -469,7 +495,8 @@ public class ChatView {
                 if (newVal.doubleValue() >= 1.0 && !newAvatar.isError()) {
                     Platform.runLater(() -> {
                         currentAvatarImage = newAvatar;
-                        if (profileAvatarCircle != null) profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                        if (profileAvatarCircle != null)
+                            profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
                     });
                 }
             });
@@ -480,7 +507,8 @@ public class ChatView {
                         if (img != null) {
                             Platform.runLater(() -> {
                                 currentAvatarImage = img;
-                                if (profileAvatarCircle != null) profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
+                                if (profileAvatarCircle != null)
+                                    profileAvatarCircle.setFill(new ImagePattern(currentAvatarImage));
                             });
                         }
                     },
@@ -512,7 +540,8 @@ public class ChatView {
         this.currentConversationId = conversationId;
         // Save peerId BEFORE loadConversations() clears the map
         Long peer = peerIdByConversationId.get(conversationId);
-        if (peer != null) this.currentPeerId = peer;
+        if (peer != null)
+            this.currentPeerId = peer;
         unreadCounts.remove(conversationId);
         updateUnreadBadge(conversationId);
         messagesBox.getChildren().clear();
@@ -527,7 +556,8 @@ public class ChatView {
         isLoadingMore = false;
         hideLoadingIndicator();
 
-        if (headerChatName != null) headerChatName.setText(name);
+        if (headerChatName != null)
+            headerChatName.setText(name);
 
         Long peerId = peerIdByConversationId.get(conversationId);
         if (peerId != null) {
@@ -589,13 +619,15 @@ public class ChatView {
                         long id = conv.get("conversationId").getAsLong();
                         String name = conv.get("displayName").getAsString();
                         String lastMsg = conv.has("lastMessage") && !conv.get("lastMessage").isJsonNull()
-                                ? conv.get("lastMessage").getAsString() : "";
+                                ? conv.get("lastMessage").getAsString()
+                                : "";
                         boolean isSelected = (id == currentConversationId);
                         if (isSelected) {
                             activeConvStillExists = true;
                             boolean online = conv.has("isOnline") && conv.get("isOnline").getAsBoolean();
                             String lastSeen = conv.has("lastSeen") && !conv.get("lastSeen").isJsonNull()
-                                    ? conv.get("lastSeen").getAsString() : null;
+                                    ? conv.get("lastSeen").getAsString()
+                                    : null;
                             updateHeaderPresence(online, lastSeen);
                         }
                         addContactWithPresence(id, name, lastMsg, isSelected, conv);
@@ -607,7 +639,7 @@ public class ChatView {
     }
 
     private void addContactWithPresence(long conversationId, String name, String lastMsg,
-                                         boolean selected, JsonObject conv) {
+            boolean selected, JsonObject conv) {
         conversationDisplayNames.put(conversationId, name);
         HBox contact = new HBox(12);
         contact.setAlignment(Pos.CENTER_LEFT);
@@ -628,7 +660,8 @@ public class ChatView {
             long peerId = conv.get("peerId").getAsLong();
             conversationIdByPeerId.put(peerId, conversationId);
             peerIdByConversationId.put(conversationId, peerId);
-            if (conv.has("isOnline")) peerOnlineByPeerId.put(peerId, conv.get("isOnline").getAsBoolean());
+            if (conv.has("isOnline"))
+                peerOnlineByPeerId.put(peerId, conv.get("isOnline").getAsBoolean());
             if (conv.has("lastSeen") && !conv.get("lastSeen").isJsonNull())
                 peerLastSeenByPeerId.put(peerId, conv.get("lastSeen").getAsString());
 
@@ -650,23 +683,27 @@ public class ChatView {
             statusDot.setStrokeWidth(1.5);
             StackPane.setAlignment(statusDot, Pos.BOTTOM_RIGHT);
             avatarContainer.getChildren().add(statusDot);
-            if (conv.has("peerId")) statusDotsByPeerId.put(conv.get("peerId").getAsLong(), statusDot);
+            if (conv.has("peerId"))
+                statusDotsByPeerId.put(conv.get("peerId").getAsLong(), statusDot);
         }
 
         VBox info = new VBox(3);
         Label nameLabel = new Label(name);
-        nameLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
+        nameLabel.setStyle(
+                "-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
 
         String formattedLastMsg = lastMsg;
         if (lastMsg != null && !lastMsg.isEmpty() && conv.has("lastMessageSenderId")) {
             long senderId = conv.get("lastMessageSenderId").getAsLong();
-            if (senderId != currentUserId) formattedLastMsg = name + ": " + lastMsg;
+            if (senderId != currentUserId)
+                formattedLastMsg = name + ": " + lastMsg;
         }
 
         Label msgLabel = new Label(formattedLastMsg);
         msgLabel.setMaxWidth(160);
         msgLabel.setWrapText(true);
-        msgLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + (selected ? "#dddddd" : StyleConstants.TEXT_MUTED) + ";");
+        msgLabel.setStyle(
+                "-fx-font-size: 12px; -fx-text-fill: " + (selected ? "#dddddd" : StyleConstants.TEXT_MUTED) + ";");
         contactLastMsgLabels.put(conversationId, msgLabel);
 
         // Unread badge
@@ -674,14 +711,16 @@ public class ChatView {
         Label badge = new Label(unread > 99 ? "99+" : unread > 0 ? String.valueOf(unread) : "");
         badge.setVisible(unread > 0);
         badge.setManaged(unread > 0);
-        badge.setStyle("-fx-background-color: #ff4444; -fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: bold; -fx-background-radius: 8px; -fx-padding: 1px 5px;");
+        badge.setStyle(
+                "-fx-background-color: #ff4444; -fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: bold; -fx-background-radius: 8px; -fx-padding: 1px 5px;");
         StackPane.setAlignment(badge, Pos.TOP_RIGHT);
         StackPane.setMargin(badge, new Insets(-5, -5, 0, 0));
         avatarContainer.getChildren().add(badge);
         unreadBadgesByConvId.put(conversationId, badge);
 
         if (unread > 0 && !selected) {
-            msgLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-weight: bold;");
+            msgLabel.setStyle(
+                    "-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-weight: bold;");
         }
 
         info.getChildren().addAll(nameLabel, msgLabel);
@@ -704,21 +743,23 @@ public class ChatView {
             presenceRefreshTask = null;
         }
         if (!isOnline && lastSeen != null && !lastSeen.isEmpty()) {
-            presenceRefreshTask = scheduler.scheduleAtFixedRate(() ->
-                    Platform.runLater(() -> renderHeaderPresence(false, currentHeaderLastSeen)),
+            presenceRefreshTask = scheduler.scheduleAtFixedRate(
+                    () -> Platform.runLater(() -> renderHeaderPresence(false, currentHeaderLastSeen)),
                     60, 60, TimeUnit.SECONDS);
         }
         renderHeaderPresence(isOnline, lastSeen);
     }
 
     private void renderHeaderPresence(boolean isOnline, String lastSeen) {
-        if (chatStatus == null) return;
+        if (chatStatus == null)
+            return;
         if (isOnline) {
             chatStatus.setText("Online");
             chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #4ade80;");
         } else {
             String text = (lastSeen != null && !lastSeen.isEmpty())
-                    ? TimeUtils.formatRelativePresence(lastSeen) : "Offline";
+                    ? TimeUtils.formatRelativePresence(lastSeen)
+                    : "Offline";
             chatStatus.setText(text);
             chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #888888;");
         }
@@ -727,8 +768,10 @@ public class ChatView {
     // ==================== MESSAGE LOADING ====================
 
     private void loadMessagesForCurrentConversation(boolean reset) {
-        if (currentConversationId <= 0 || isLoadingMore) return;
-        if (!reset && !hasMoreMessages) return;
+        if (currentConversationId <= 0 || isLoadingMore)
+            return;
+        if (!reset && !hasMoreMessages)
+            return;
 
         isLoadingMore = true;
         if (reset) {
@@ -748,17 +791,24 @@ public class ChatView {
         int offset = currentMessageOffset;
 
         controller.loadMessages(capturedConvId, PAGE_SIZE, offset, json -> {
-            if (currentConversationId != capturedConvId) { isLoadingMore = false; hideLoadingIndicator(); return; }
-            if (reset) messageStatusLabels.clear();
+            if (currentConversationId != capturedConvId) {
+                isLoadingMore = false;
+                hideLoadingIndicator();
+                return;
+            }
+            if (reset)
+                messageStatusLabels.clear();
             renderMessagesPage(json, reset, capturedConvId, offset);
-            if (reset) scrollToBottom();
+            if (reset)
+                scrollToBottom();
             isLoadingMore = false;
             hideLoadingIndicator();
         });
     }
 
     private void renderMessagesPage(JsonObject json, boolean reset, long capturedConvId, int offset) {
-        if (currentConversationId != capturedConvId) return;
+        if (currentConversationId != capturedConvId)
+            return;
 
         JsonArray messages = json.getAsJsonArray("messages");
         if (reset) {
@@ -770,7 +820,8 @@ public class ChatView {
         }
 
         List<JsonElement> msgList = new ArrayList<>();
-        for (JsonElement e : messages) msgList.add(e);
+        for (JsonElement e : messages)
+            msgList.add(e);
         Collections.reverse(msgList);
 
         int insertIndex = 0;
@@ -798,18 +849,24 @@ public class ChatView {
             }
 
             Long replyToId = msg.has("replyToId") && !msg.get("replyToId").isJsonNull()
-                    ? msg.get("replyToId").getAsLong() : null;
+                    ? msg.get("replyToId").getAsLong()
+                    : null;
             String replyToUsername = msg.has("replyToUsername") && !msg.get("replyToUsername").isJsonNull()
-                    ? msg.get("replyToUsername").getAsString() : null;
+                    ? msg.get("replyToUsername").getAsString()
+                    : null;
             String replyToContent = msg.has("replyToContent") && !msg.get("replyToContent").isJsonNull()
-                    ? msg.get("replyToContent").getAsString() : null;
+                    ? msg.get("replyToContent").getAsString()
+                    : null;
 
             Long forwardFromId = msg.has("forwardFromId") && !msg.get("forwardFromId").isJsonNull()
-                    ? msg.get("forwardFromId").getAsLong() : null;
+                    ? msg.get("forwardFromId").getAsLong()
+                    : null;
             String forwardFromUsername = msg.has("forwardFromUsername") && !msg.get("forwardFromUsername").isJsonNull()
-                    ? msg.get("forwardFromUsername").getAsString() : null;
+                    ? msg.get("forwardFromUsername").getAsString()
+                    : null;
             String forwardFromContent = msg.has("forwardFromContent") && !msg.get("forwardFromContent").isJsonNull()
-                    ? msg.get("forwardFromContent").getAsString() : null;
+                    ? msg.get("forwardFromContent").getAsString()
+                    : null;
 
             boolean isMine = (senderId == currentUserId);
             HBox seenContainer = createSeenContainer(isMine);
@@ -831,14 +888,16 @@ public class ChatView {
                     displayContent = (content != null && !content.isEmpty()) ? content + "\n" + fwdContent : fwdContent;
                 }
                 Node bubble = createMessageBubble(displayContent, StyleConstants.ACCENT, "18px 18px 4px 18px");
-                if (messageId > 0) messageBubbleById.put(messageId, bubble);
+                if (messageId > 0)
+                    messageBubbleById.put(messageId, bubble);
                 addContextMenuToBubble(bubble, messageId, "Bạn", displayContent);
 
                 VBox bubbleGroup = new VBox(4);
                 bubbleGroup.setAlignment(Pos.TOP_RIGHT);
                 if (isFwd) {
                     Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
-                    forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
+                    forwardLabel.setStyle(
+                            "-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                     bubbleGroup.getChildren().add(forwardLabel);
                 }
                 if (replyToId != null) {
@@ -850,15 +909,18 @@ public class ChatView {
 
                 Label statusLabel = new Label(ChatController.getStatusLabelText(status));
                 statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
-                if (messageId > 0) messageStatusLabels.put(messageId, statusLabel);
+                if (messageId > 0)
+                    messageStatusLabels.put(messageId, statusLabel);
 
                 container.getChildren().addAll(bubbleGroup, statusLabel, seenContainer);
                 wrapper.getChildren().add(container);
             } else {
                 String senderUsername = msg.has("senderUsername") && !msg.get("senderUsername").isJsonNull()
-                        ? msg.get("senderUsername").getAsString() : "Unknown";
+                        ? msg.get("senderUsername").getAsString()
+                        : "Unknown";
                 wrapper = createMessageWrapper(senderId, senderUsername, content, messageId, seenContainer,
-                        replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent);
+                        replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername,
+                        forwardFromContent);
             }
             messagesBox.getChildren().add(insertIndex++, wrapper);
 
@@ -874,14 +936,16 @@ public class ChatView {
     }
 
     private void hideAllStatusLabelsExceptLast() {
-        if (messageStatusLabels.isEmpty()) return;
+        if (messageStatusLabels.isEmpty())
+            return;
 
         // Check if the VERY LAST message in the conversation is mine
         boolean lastMessageIsMine = isLastMessageMine();
 
         if (!lastMessageIsMine) {
             // Last message is from the other party — hide all status labels
-            for (Label label : messageStatusLabels.values()) label.setVisible(false);
+            for (Label label : messageStatusLabels.values())
+                label.setVisible(false);
             return;
         }
 
@@ -894,17 +958,24 @@ public class ChatView {
                     if (container.getChildren().get(container.getChildren().size() - 1) instanceof Label sl
                             && messageStatusLabels.containsValue(sl)) {
                         for (var e : messageStatusLabels.entrySet()) {
-                            if (e.getValue() == sl) { lastSentId = e.getKey(); break; }
+                            if (e.getValue() == sl) {
+                                lastSentId = e.getKey();
+                                break;
+                            }
                         }
                         break;
                     }
                 }
             }
         }
-        for (var e : messageStatusLabels.entrySet()) e.getValue().setVisible(e.getKey() == lastSentId);
+        for (var e : messageStatusLabels.entrySet())
+            e.getValue().setVisible(e.getKey() == lastSentId);
     }
 
-    /** Returns true if the last message bubble in the chat is right-aligned (sent by me). */
+    /**
+     * Returns true if the last message bubble in the chat is right-aligned (sent by
+     * me).
+     */
     private boolean isLastMessageMine() {
         for (int i = messagesBox.getChildren().size() - 1; i >= 0; i--) {
             if (messagesBox.getChildren().get(i) instanceof HBox wrapper) {
@@ -916,16 +987,21 @@ public class ChatView {
 
     // ==================== MESSAGE BUBBLES ====================
 
-    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer) {
-        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, null, null, null, null, null, null);
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId,
+            HBox seenContainer) {
+        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, null, null, null, null,
+                null, null);
     }
 
-    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer,
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId,
+            HBox seenContainer,
             Long replyToId, String replyToUsername, String replyToContent) {
-        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, replyToId, replyToUsername, replyToContent, null, null, null);
+        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, replyToId,
+                replyToUsername, replyToContent, null, null, null);
     }
 
-    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer,
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId,
+            HBox seenContainer,
             Long replyToId, String replyToUsername, String replyToContent,
             Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         HBox wrapper = new HBox(8);
@@ -934,7 +1010,8 @@ public class ChatView {
         if (senderId == currentUserId) {
             String bg = StyleConstants.ACCENT;
             String radius = "18px 18px 4px 18px";
-            // For forwarded messages: bubble content = forwarded content (+ user text if any)
+            // For forwarded messages: bubble content = forwarded content (+ user text if
+            // any)
             String displayText = text;
             boolean isForward = (forwardFromId != null);
             if (isForward) {
@@ -942,14 +1019,16 @@ public class ChatView {
                 displayText = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
             }
             Node bubble = createMessageBubble(displayText, bg, radius);
-            if (messageId > 0) messageBubbleById.put(messageId, bubble);
+            if (messageId > 0)
+                messageBubbleById.put(messageId, bubble);
             addContextMenuToBubble(bubble, messageId, "Bạn", displayText);
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_RIGHT);
             if (isForward) {
                 Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
-                forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
+                forwardLabel.setStyle(
+                        "-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
             if (replyToId != null) {
@@ -970,11 +1049,13 @@ public class ChatView {
             container.setAlignment(Pos.TOP_LEFT);
 
             Label nameLbl = new Label(senderUsername);
-            nameLbl.setStyle("-fx-font-size: 11px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-weight: bold; -fx-padding: 0 0 2px 4px;");
+            nameLbl.setStyle("-fx-font-size: 11px; -fx-text-fill: " + StyleConstants.TEXT_MUTED
+                    + "; -fx-font-weight: bold; -fx-padding: 0 0 2px 4px;");
 
             String bg = "#1e1e1e";
             String radius = "18px 18px 18px 4px";
-            // For forwarded messages: bubble content = forwarded content (+ user text if any)
+            // For forwarded messages: bubble content = forwarded content (+ user text if
+            // any)
             String displayText2 = text;
             boolean isForward2 = (forwardFromId != null);
             if (isForward2) {
@@ -982,15 +1063,18 @@ public class ChatView {
                 displayText2 = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
             }
             Node bubble = createMessageBubble(displayText2, bg, radius);
-            if (messageId > 0) messageBubbleById.put(messageId, bubble);
+            if (messageId > 0)
+                messageBubbleById.put(messageId, bubble);
             addContextMenuToBubble(bubble, messageId, senderUsername, displayText2);
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_LEFT);
             if (isForward2) {
-                String fwdLabelText = (senderUsername != null ? senderUsername : "Ai đó") + " đã chuyển tiếp một tin nhắn";
+                String fwdLabelText = (senderUsername != null ? senderUsername : "Ai đó")
+                        + " đã chuyển tiếp một tin nhắn";
                 Label forwardLabel = new Label(fwdLabelText);
-                forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
+                forwardLabel.setStyle(
+                        "-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
             if (replyToId != null) {
@@ -1019,7 +1103,8 @@ public class ChatView {
 
     private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId,
             Long replyToId, String replyToUsername, String replyToContent) {
-        addReceivedMessage(senderId, senderUsername, text, messageId, replyToId, replyToUsername, replyToContent, null, null, null);
+        addReceivedMessage(senderId, senderUsername, text, messageId, replyToId, replyToUsername, replyToContent, null,
+                null, null);
     }
 
     private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId,
@@ -1032,7 +1117,8 @@ public class ChatView {
         }
         messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer,
                 replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent));
-        for (Label label : messageStatusLabels.values()) label.setVisible(false);
+        for (Label label : messageStatusLabels.values())
+            label.setVisible(false);
     }
 
     private void addSentMessage(String text, long messageId, String status) {
@@ -1047,7 +1133,8 @@ public class ChatView {
     private void addSentMessage(String text, long messageId, String status,
             Long replyToId, String replyToUsername, String replyToContent,
             Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
-        for (Label oldLabel : messageStatusLabels.values()) oldLabel.setVisible(false);
+        for (Label oldLabel : messageStatusLabels.values())
+            oldLabel.setVisible(false);
 
         HBox wrapper = new HBox();
         wrapper.setAlignment(Pos.CENTER_RIGHT);
@@ -1061,14 +1148,16 @@ public class ChatView {
             displayText = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
         }
         Node bubble = createMessageBubble(displayText, StyleConstants.ACCENT, "18px 18px 4px 18px");
-        if (messageId > 0) messageBubbleById.put(messageId, bubble);
+        if (messageId > 0)
+            messageBubbleById.put(messageId, bubble);
         addContextMenuToBubble(bubble, messageId, "Bạn", displayText);
 
         VBox bubbleGroup = new VBox(4);
         bubbleGroup.setAlignment(Pos.TOP_RIGHT);
         if (isForward) {
             Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
-            forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
+            forwardLabel.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
             bubbleGroup.getChildren().add(forwardLabel);
         }
         if (replyToId != null) {
@@ -1080,7 +1169,8 @@ public class ChatView {
 
         Label statusLabel = new Label(ChatController.getStatusLabelText(status));
         statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
-        if (messageId > 0) messageStatusLabels.put(messageId, statusLabel);
+        if (messageId > 0)
+            messageStatusLabels.put(messageId, statusLabel);
 
         HBox seenContainer = createSeenContainer(true);
         if (messageId > 0) {
@@ -1100,7 +1190,8 @@ public class ChatView {
         if (content instanceof TextFlow) {
             TextFlow flow = (TextFlow) content;
             StackPane wrapper = new StackPane(flow);
-            wrapper.setStyle("-fx-background-color: " + bg + "; -fx-background-radius: " + radius + "; -fx-padding: 12px 18px;");
+            wrapper.setStyle(
+                    "-fx-background-color: " + bg + "; -fx-background-radius: " + radius + "; -fx-padding: 12px 18px;");
             wrapper.setMaxWidth(360);
             return wrapper;
         }
@@ -1125,12 +1216,15 @@ public class ChatView {
     }
 
     private void addContextMenuToBubble(Node bubble, long messageId, String senderUsername, String content) {
-        if (messageId <= 0) return;
+        if (messageId <= 0)
+            return;
         ContextMenu menu = new ContextMenu();
-        menu.setStyle("-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
+        menu.setStyle(
+                "-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
 
         MenuItem forwardItem = new MenuItem("Chuyển tiếp");
-        forwardItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+        forwardItem
+                .setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
         forwardItem.setOnAction(e -> showForwardDialog(messageId, senderUsername, content));
 
         MenuItem replyItem = new MenuItem("Phản hồi");
@@ -1177,7 +1271,8 @@ public class ChatView {
 
     private void updateSeenAvatars(long messageId, List<ReaderInfo> readers) {
         HBox container = messageSeenContainers.get(messageId);
-        if (container == null) return;
+        if (container == null)
+            return;
 
         container.getChildren().clear();
 
@@ -1290,7 +1385,8 @@ public class ChatView {
         ScrollPane scrollPane = new ScrollPane(conversationListBox);
         scrollPane.setFitToWidth(true);
         scrollPane.setPrefHeight(300);
-        scrollPane.setStyle("-fx-background: #16213e; -fx-background-color: #16213e; -fx-border-color: #333; -fx-border-radius: 8px;");
+        scrollPane.setStyle(
+                "-fx-background: #16213e; -fx-background-color: #16213e; -fx-border-color: #333; -fx-border-radius: 8px;");
         scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
 
         // Store all conversations for filtering
@@ -1306,15 +1402,18 @@ public class ChatView {
             for (JsonObject conv : allConversations) {
                 long convId = conv.get("conversationId").getAsLong();
                 String displayName = convDisplayNames.getOrDefault(convId, "Conversation " + convId);
-                if (!filter.isEmpty() && !displayName.toLowerCase().contains(filter)) continue;
+                if (!filter.isEmpty() && !displayName.toLowerCase().contains(filter))
+                    continue;
                 found = true;
 
                 HBox item = new HBox(12);
                 item.setAlignment(Pos.CENTER_LEFT);
                 item.setPadding(new Insets(10, 14, 10, 14));
                 item.setStyle("-fx-background-color: #1a1a3e; -fx-background-radius: 8px; -fx-cursor: hand;");
-                item.setOnMouseEntered(e -> item.setStyle("-fx-background-color: #2a2a5e; -fx-background-radius: 8px; -fx-cursor: hand;"));
-                item.setOnMouseExited(e -> item.setStyle("-fx-background-color: #1a1a3e; -fx-background-radius: 8px; -fx-cursor: hand;"));
+                item.setOnMouseEntered(e -> item
+                        .setStyle("-fx-background-color: #2a2a5e; -fx-background-radius: 8px; -fx-cursor: hand;"));
+                item.setOnMouseExited(e -> item
+                        .setStyle("-fx-background-color: #1a1a3e; -fx-background-radius: 8px; -fx-cursor: hand;"));
 
                 // Online dot
                 Circle dot = new Circle(5);
@@ -1356,7 +1455,8 @@ public class ChatView {
                         JsonObject conv = conversations.get(i).getAsJsonObject();
                         long convId = conv.get("conversationId").getAsLong();
                         // Skip current conversation
-                        if (convId == currentConversationId) continue;
+                        if (convId == currentConversationId)
+                            continue;
                         allConversations.add(conv);
                         // Store display names
                         if (conv.has("displayName")) {
@@ -1374,8 +1474,7 @@ public class ChatView {
                         err.setStyle("-fx-text-fill: #ff6b6b; -fx-font-size: 13px; -fx-padding: 20px;");
                         conversationListBox.getChildren().add(err);
                     });
-                }
-        );
+                });
 
         // Cancel button
         Button cancelBtn = new Button("Hủy");
@@ -1402,7 +1501,8 @@ public class ChatView {
 
         // Switch to target conversation if not already there
         if (currentConversationId != targetConversationId) {
-            String targetName = conversationDisplayNames.getOrDefault(targetConversationId, "Conversation " + targetConversationId);
+            String targetName = conversationDisplayNames.getOrDefault(targetConversationId,
+                    "Conversation " + targetConversationId);
             setCurrentConversation(targetConversationId, targetName);
         }
 
@@ -1430,10 +1530,12 @@ public class ChatView {
      * TextField — renders emoji labels {@code [cười]} as inline images (20×20).
      */
     private void syncInputDisplay(String rawText) {
-        if (messageDisplayFlow == null) return;
+        if (messageDisplayFlow == null)
+            return;
         messageDisplayFlow.getChildren().clear();
 
-        if (rawText == null || rawText.isEmpty()) return;
+        if (rawText == null || rawText.isEmpty())
+            return;
 
         EmojiManager em = EmojiManager.getInstance();
         java.util.regex.Matcher m = em.getEmojiPattern().matcher(rawText);
@@ -1510,7 +1612,8 @@ public class ChatView {
 
         // Wrap in a styled container
         StackPane container = new StackPane(picker);
-        container.setStyle("-fx-background-color: #1a1a1a; -fx-background-radius: 12px; -fx-border-color: #444; -fx-border-width: 1px; -fx-border-radius: 12px;");
+        container.setStyle(
+                "-fx-background-color: #1a1a1a; -fx-background-radius: 12px; -fx-border-color: #444; -fx-border-width: 1px; -fx-border-radius: 12px;");
         container.setPadding(new Insets(8));
 
         emojiPopup.getContent().add(container);
@@ -1525,11 +1628,13 @@ public class ChatView {
         quote.setPadding(new Insets(6, 10, 6, 10));
         String borderCol = isMine ? "#ffffff" : StyleConstants.ACCENT;
         String bgCol = isMine ? "rgba(255, 255, 255, 0.15)" : "#2a2a2a";
-        quote.setStyle("-fx-background-color: " + bgCol + "; -fx-border-color: " + borderCol + "; -fx-border-width: 0 0 0 3px; -fx-background-radius: 4px; -fx-border-radius: 0;");
+        quote.setStyle("-fx-background-color: " + bgCol + "; -fx-border-color: " + borderCol
+                + "; -fx-border-width: 0 0 0 3px; -fx-background-radius: 4px; -fx-border-radius: 0;");
         quote.setCursor(javafx.scene.Cursor.HAND);
 
         Label userLabel = new Label(username != null && !username.isBlank() ? username : "Tin nhan");
-        userLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: " + (isMine ? "#ffd166" : StyleConstants.ACCENT) + ";");
+        userLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-text-fill: "
+                + (isMine ? "#ffd166" : StyleConstants.ACCENT) + ";");
 
         // Render emoji content for the quote box preview
         String quoteContent = content != null ? content : "";
@@ -1549,19 +1654,31 @@ public class ChatView {
     }
 
     private String truncateText(String text, int maxLength) {
-        if (text == null) return "";
-        if (text.length() <= maxLength) return text;
+        if (text == null)
+            return "";
+        if (text.length() <= maxLength)
+            return text;
         return text.substring(0, Math.max(0, maxLength - 3)) + "...";
     }
 
     // ==================== MESSAGE SEARCH ====================
 
     private void searchMessagesInCurrentConversation() {
-        if (messageSearchField == null) return;
+        if (messageSearchField == null)
+            return;
         String keyword = messageSearchField.getText().trim();
-        if (keyword.isEmpty()) { clearMessageSearchResults(); return; }
-        if (currentConversationId <= 0) { showMessageSearchStatus("Hãy chọn một cuộc trò chuyện trước.", true); return; }
-        if (!controller.getChatService().isConnected()) { showMessageSearchStatus("Chưa kết nối được server TCP.", true); return; }
+        if (keyword.isEmpty()) {
+            clearMessageSearchResults();
+            return;
+        }
+        if (currentConversationId <= 0) {
+            showMessageSearchStatus("Hãy chọn một cuộc trò chuyện trước.", true);
+            return;
+        }
+        if (!controller.getChatService().isConnected()) {
+            showMessageSearchStatus("Chưa kết nối được server TCP.", true);
+            return;
+        }
 
         long capturedConvId = currentConversationId;
         showMessageSearchStatus("Đang tìm tin nhắn...", false);
@@ -1578,7 +1695,8 @@ public class ChatView {
 
     private void renderMessageSearchResults(long capturedConvId, String keyword, JsonObject json) {
         setMessageSearchBusy(false);
-        if (currentConversationId != capturedConvId) return;
+        if (currentConversationId != capturedConvId)
+            return;
         JsonArray messages = json.getAsJsonArray("messages");
         messageSearchResults.getChildren().clear();
         messageSearchMatches.clear();
@@ -1611,17 +1729,24 @@ public class ChatView {
         long senderId = msg.has("senderId") ? msg.get("senderId").getAsLong() : -1;
         String sender = senderId == currentUserId ? "Bạn" : "";
         String content = msg.has("content") && !msg.get("content").isJsonNull() ? msg.get("content").getAsString() : "";
-        String createdAt = msg.has("createdAt") && !msg.get("createdAt").isJsonNull() ? msg.get("createdAt").getAsString() : "";
+        String createdAt = msg.has("createdAt") && !msg.get("createdAt").isJsonNull()
+                ? msg.get("createdAt").getAsString()
+                : "";
         String senderUsername = msg.has("senderUsername") && !msg.get("senderUsername").isJsonNull()
-                ? msg.get("senderUsername").getAsString() : "";
-        if (senderId != currentUserId && !senderUsername.isBlank()) sender = senderUsername;
-        else if (sender.isBlank()) sender = "Người dùng";
+                ? msg.get("senderUsername").getAsString()
+                : "";
+        if (senderId != currentUserId && !senderUsername.isBlank())
+            sender = senderUsername;
+        else if (sender.isBlank())
+            sender = "Người dùng";
 
         Label senderLabel = new Label(sender);
-        senderLabel.setStyle("-fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 14px; -fx-font-weight: bold;");
+        senderLabel.setStyle(
+                "-fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 14px; -fx-font-weight: bold;");
 
         String preview = content.isBlank() ? "(không có nội dung)" : content.trim();
-        if (!createdAt.isBlank()) preview += " - " + createdAt;
+        if (!createdAt.isBlank())
+            preview += " - " + createdAt;
 
         Label previewLabel = new Label(preview);
         previewLabel.setMaxWidth(Double.MAX_VALUE);
@@ -1640,21 +1765,26 @@ public class ChatView {
     }
 
     private void openRelativeMessageSearchResult(int direction) {
-        if (messageSearchMatches.isEmpty()) return;
+        if (messageSearchMatches.isEmpty())
+            return;
         int next = activeMessageSearchIndex + direction;
-        if (next < 0) next = messageSearchMatches.size() - 1;
-        else if (next >= messageSearchMatches.size()) next = 0;
+        if (next < 0)
+            next = messageSearchMatches.size() - 1;
+        else if (next >= messageSearchMatches.size())
+            next = 0;
         selectMessageSearchResultAt(next);
     }
 
     private void selectMessageSearchResultAt(int index) {
-        if (index < 0 || index >= messageSearchMatches.size()) return;
+        if (index < 0 || index >= messageSearchMatches.size())
+            return;
         activeMessageSearchIndex = index;
         updateMessageSearchNavigator();
     }
 
     private void jumpToMessageSearchResultAt(int index) {
-        if (index < 0 || index >= messageSearchMatches.size()) return;
+        if (index < 0 || index >= messageSearchMatches.size())
+            return;
         selectMessageSearchResultAt(index);
         JsonObject msg = messageSearchMatches.get(index);
         long messageId = msg.has("id") ? msg.get("id").getAsLong() : -1;
@@ -1664,27 +1794,54 @@ public class ChatView {
     }
 
     private void showSearchResultsView(boolean show) {
-        if (messageSearchPanel != null) { messageSearchPanel.setVisible(show); messageSearchPanel.setManaged(show); }
-        if (!show) {
-            if (messageSearchNavigator != null) { messageSearchNavigator.setVisible(false); messageSearchNavigator.setManaged(false); }
-            if (messageSearchResultsScroll != null) { messageSearchResultsScroll.setVisible(false); messageSearchResultsScroll.setManaged(false); }
+        if (messageSearchPanel != null) {
+            messageSearchPanel.setVisible(show);
+            messageSearchPanel.setManaged(show);
         }
-        if (scrollMessages != null) { scrollMessages.setVisible(!show); scrollMessages.setManaged(!show); }
-        if (typingLabel != null) { typingLabel.setManaged(!show); if (show) typingLabel.setVisible(false); }
+        if (!show) {
+            if (messageSearchNavigator != null) {
+                messageSearchNavigator.setVisible(false);
+                messageSearchNavigator.setManaged(false);
+            }
+            if (messageSearchResultsScroll != null) {
+                messageSearchResultsScroll.setVisible(false);
+                messageSearchResultsScroll.setManaged(false);
+            }
+        }
+        if (scrollMessages != null) {
+            scrollMessages.setVisible(!show);
+            scrollMessages.setManaged(!show);
+        }
+        if (typingLabel != null) {
+            typingLabel.setManaged(!show);
+            if (show)
+                typingLabel.setVisible(false);
+        }
     }
 
     private void setMessageSearchBusy(boolean busy) {
-        if (messageSearchButton != null) messageSearchButton.setDisable(busy);
-        if (messageSearchField != null) messageSearchField.setDisable(busy);
+        if (messageSearchButton != null)
+            messageSearchButton.setDisable(busy);
+        if (messageSearchField != null)
+            messageSearchField.setDisable(busy);
     }
 
     private void updateMessageSearchNavigator() {
         boolean has = !messageSearchMatches.isEmpty();
-        if (messageSearchNavigator != null) { messageSearchNavigator.setVisible(has); messageSearchNavigator.setManaged(has); }
-        if (messageSearchResultsScroll != null) { messageSearchResultsScroll.setVisible(has); messageSearchResultsScroll.setManaged(has); }
-        if (messageSearchCounter != null) messageSearchCounter.setText(has ? (activeMessageSearchIndex + 1) + "/" + messageSearchMatches.size() : "");
-        if (messageSearchPrevBtn != null) messageSearchPrevBtn.setDisable(!has || messageSearchMatches.size() == 1);
-        if (messageSearchNextBtn != null) messageSearchNextBtn.setDisable(!has || messageSearchMatches.size() == 1);
+        if (messageSearchNavigator != null) {
+            messageSearchNavigator.setVisible(has);
+            messageSearchNavigator.setManaged(has);
+        }
+        if (messageSearchResultsScroll != null) {
+            messageSearchResultsScroll.setVisible(has);
+            messageSearchResultsScroll.setManaged(has);
+        }
+        if (messageSearchCounter != null)
+            messageSearchCounter.setText(has ? (activeMessageSearchIndex + 1) + "/" + messageSearchMatches.size() : "");
+        if (messageSearchPrevBtn != null)
+            messageSearchPrevBtn.setDisable(!has || messageSearchMatches.size() == 1);
+        if (messageSearchNextBtn != null)
+            messageSearchNextBtn.setDisable(!has || messageSearchMatches.size() == 1);
 
         for (int i = 0; i < messageSearchItems.size(); i++)
             styleMessageSearchItem(messageSearchItems.get(i), i == activeMessageSearchIndex, false);
@@ -1693,7 +1850,8 @@ public class ChatView {
 
     private void scrollSearchResultsToActiveItem() {
         if (messageSearchResultsScroll == null || activeMessageSearchIndex < 0
-                || activeMessageSearchIndex >= messageSearchItems.size()) return;
+                || activeMessageSearchIndex >= messageSearchItems.size())
+            return;
         Platform.runLater(() -> {
             double itemCount = Math.max(1, messageSearchItems.size() - 1);
             messageSearchResultsScroll.setVvalue(activeMessageSearchIndex / itemCount);
@@ -1703,28 +1861,41 @@ public class ChatView {
     private void styleMessageSearchItem(VBox item, boolean active, boolean hover) {
         String bg = active ? "#1f1835" : (hover ? "#181818" : "transparent");
         String border = active ? StyleConstants.ACCENT : StyleConstants.BORDER_COLOR;
-        item.setStyle("-fx-background-color: " + bg + "; -fx-border-color: " + border + "; -fx-border-width: 0 0 1px 0;");
+        item.setStyle(
+                "-fx-background-color: " + bg + "; -fx-border-color: " + border + "; -fx-border-width: 0 0 1px 0;");
     }
 
     private void openMessageFromSearch(long conversationId, long messageId) {
         if (conversationId != currentConversationId) {
-            showMessageSearchStatus("Kết quả này không thuộc cuộc trò chuyện đang mở.", true); return;
+            showMessageSearchStatus("Kết quả này không thuộc cuộc trò chuyện đang mở.", true);
+            return;
         }
-        if (messageId <= 0) { showMessageSearchStatus("Kết quả này thiếu messageId.", true); return; }
-        if (scrollToAndHighlightMessage(messageId)) return;
-        if (!hasMoreMessages) { showMessageSearchStatus("Tin nhắn chưa có trong phần UI đang hiển thị.", true); return; }
+        if (messageId <= 0) {
+            showMessageSearchStatus("Kết quả này thiếu messageId.", true);
+            return;
+        }
+        if (scrollToAndHighlightMessage(messageId))
+            return;
+        if (!hasMoreMessages) {
+            showMessageSearchStatus("Tin nhắn chưa có trong phần UI đang hiển thị.", true);
+            return;
+        }
 
         showMessageSearchStatus("Đang tải thêm lịch sử...", false);
         loadOlderMessagesUntilVisible(conversationId, messageId, 0);
     }
 
     private void loadOlderMessagesUntilVisible(long conversationId, long messageId, int attempt) {
-        if (conversationId != currentConversationId || attempt >= 8 || !hasMoreMessages || isLoadingMore) return;
+        if (conversationId != currentConversationId || attempt >= 8 || !hasMoreMessages || isLoadingMore)
+            return;
 
         isLoadingMore = true;
         int offset = currentMessageOffset;
         controller.loadMessages(conversationId, PAGE_SIZE, offset, json -> {
-            if (currentConversationId != conversationId) { isLoadingMore = false; return; }
+            if (currentConversationId != conversationId) {
+                isLoadingMore = false;
+                return;
+            }
             renderMessagesPage(json, false, conversationId, offset);
             isLoadingMore = false;
             if (!scrollToAndHighlightMessage(messageId))
@@ -1734,7 +1905,8 @@ public class ChatView {
 
     private boolean scrollToAndHighlightMessage(long messageId) {
         Node bubble = messageBubbleById.get(messageId);
-        if (bubble == null || scrollMessages == null || messagesBox == null) return false;
+        if (bubble == null || scrollMessages == null || messagesBox == null)
+            return false;
 
         Platform.runLater(() -> {
             javafx.geometry.Bounds bubbleBounds = bubble.localToScene(bubble.getBoundsInLocal());
@@ -1753,9 +1925,11 @@ public class ChatView {
             highlightedMessageBubble.setStyle(highlightedMessageStyle);
         highlightedMessageBubble = bubble;
         highlightedMessageStyle = bubble.getStyle();
-        bubble.setStyle(highlightedMessageStyle + "-fx-border-color: #ffd166; -fx-border-width: 2px; -fx-border-radius: 18px;");
+        bubble.setStyle(
+                highlightedMessageStyle + "-fx-border-color: #ffd166; -fx-border-width: 2px; -fx-border-radius: 18px;");
 
-        javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(javafx.util.Duration.seconds(2.5));
+        javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(
+                javafx.util.Duration.seconds(2.5));
         delay.setOnFinished(e -> {
             if (highlightedMessageBubble == bubble && highlightedMessageStyle != null) {
                 bubble.setStyle(highlightedMessageStyle);
@@ -1767,19 +1941,28 @@ public class ChatView {
     }
 
     private void showMessageSearchStatus(String text, boolean error) {
-        if (messageSearchPanel == null || messageSearchStatus == null) return;
+        if (messageSearchPanel == null || messageSearchStatus == null)
+            return;
         messageSearchPanel.setVisible(true);
         messageSearchPanel.setManaged(true);
         messageSearchStatus.setText(text);
-        messageSearchStatus.setStyle("-fx-text-fill: " + (error ? "#ff7777" : StyleConstants.TEXT_MUTED) + "; -fx-font-size: 12px;");
-        if (error) messageSearchResults.getChildren().clear();
+        messageSearchStatus.setStyle(
+                "-fx-text-fill: " + (error ? "#ff7777" : StyleConstants.TEXT_MUTED) + "; -fx-font-size: 12px;");
+        if (error)
+            messageSearchResults.getChildren().clear();
     }
 
     private void clearMessageSearchResults() {
-        if (messageSearchField != null) messageSearchField.clear();
-        if (messageSearchResults != null) messageSearchResults.getChildren().clear();
-        if (messageSearchStatus != null) messageSearchStatus.setText("");
-        if (messageSearchPanel != null) { messageSearchPanel.setVisible(false); messageSearchPanel.setManaged(false); }
+        if (messageSearchField != null)
+            messageSearchField.clear();
+        if (messageSearchResults != null)
+            messageSearchResults.getChildren().clear();
+        if (messageSearchStatus != null)
+            messageSearchStatus.setText("");
+        if (messageSearchPanel != null) {
+            messageSearchPanel.setVisible(false);
+            messageSearchPanel.setManaged(false);
+        }
         showSearchResultsView(false);
         messageSearchMatches.clear();
         messageSearchItems.clear();
@@ -1789,9 +1972,12 @@ public class ChatView {
     }
 
     private void resetMessageSearchState(boolean clearField) {
-        if (clearField && messageSearchField != null) messageSearchField.clear();
-        if (messageSearchResults != null) messageSearchResults.getChildren().clear();
-        if (messageSearchStatus != null) messageSearchStatus.setText("");
+        if (clearField && messageSearchField != null)
+            messageSearchField.clear();
+        if (messageSearchResults != null)
+            messageSearchResults.getChildren().clear();
+        if (messageSearchStatus != null)
+            messageSearchStatus.setText("");
         showSearchResultsView(false);
         messageSearchMatches.clear();
         messageSearchItems.clear();
@@ -1969,14 +2155,16 @@ public class ChatView {
         VBox panel = new VBox(10);
         panel.setPrefWidth(270);
         panel.setPadding(new Insets(20));
-        panel.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 1 0 0;");
+        panel.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: "
+                + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 1 0 0;");
 
         // Header row with title + create group button
         HBox headerRow = new HBox(8);
         headerRow.setAlignment(Pos.CENTER_LEFT);
 
         Label header = new Label("SinChat");
-        header.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
+        header.setStyle(
+                "-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
 
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);
@@ -1984,31 +2172,28 @@ public class ChatView {
         Button newGroupBtn = new Button("+ Nhóm");
         newGroupBtn.setStyle(
                 "-fx-background-color: " + StyleConstants.ACCENT + ";" +
-                "-fx-text-fill: white;" +
-                "-fx-font-size: 12px;" +
-                "-fx-font-weight: bold;" +
-                "-fx-background-radius: 10px;" +
-                "-fx-padding: 6px 12px;" +
-                "-fx-cursor: hand;"
-        );
+                        "-fx-text-fill: white;" +
+                        "-fx-font-size: 12px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 10px;" +
+                        "-fx-padding: 6px 12px;" +
+                        "-fx-cursor: hand;");
         newGroupBtn.setOnMouseEntered(e -> newGroupBtn.setStyle(
                 "-fx-background-color: #6a4ee8;" +
-                "-fx-text-fill: white;" +
-                "-fx-font-size: 12px;" +
-                "-fx-font-weight: bold;" +
-                "-fx-background-radius: 10px;" +
-                "-fx-padding: 6px 12px;" +
-                "-fx-cursor: hand;"
-        ));
+                        "-fx-text-fill: white;" +
+                        "-fx-font-size: 12px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 10px;" +
+                        "-fx-padding: 6px 12px;" +
+                        "-fx-cursor: hand;"));
         newGroupBtn.setOnMouseExited(e -> newGroupBtn.setStyle(
                 "-fx-background-color: " + StyleConstants.ACCENT + ";" +
-                "-fx-text-fill: white;" +
-                "-fx-font-size: 12px;" +
-                "-fx-font-weight: bold;" +
-                "-fx-background-radius: 10px;" +
-                "-fx-padding: 6px 12px;" +
-                "-fx-cursor: hand;"
-        ));
+                        "-fx-text-fill: white;" +
+                        "-fx-font-size: 12px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 10px;" +
+                        "-fx-padding: 6px 12px;" +
+                        "-fx-cursor: hand;"));
         newGroupBtn.setOnAction(e -> {
             CreateGroupDialog dlg = new CreateGroupDialog(stage, controller,
                     (convId, groupName) -> {
@@ -2022,7 +2207,8 @@ public class ChatView {
 
         TextField searchField = new TextField();
         searchField.setPromptText("Tìm kiếm...");
-        searchField.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: " + StyleConstants.INPUT_BORDER
+        searchField.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: "
+                + StyleConstants.INPUT_BORDER
                 + "; -fx-border-width: 1.5px; -fx-border-radius: 20px; -fx-background-radius: 20px; -fx-text-fill: "
                 + StyleConstants.TEXT_WHITE + "; -fx-prompt-text-fill: " + StyleConstants.TEXT_DIM
                 + "; -fx-font-size: 14px; -fx-padding: 10px 16px;");
@@ -2039,7 +2225,9 @@ public class ChatView {
                         JsonObject user = element.getAsJsonObject();
                         long uId = user.get("userId").getAsLong();
                         String username = user.get("username").getAsString();
-                        String friendshipStatus = user.has("friendshipStatus") ? user.get("friendshipStatus").getAsString() : "NONE";
+                        String friendshipStatus = user.has("friendshipStatus")
+                                ? user.get("friendshipStatus").getAsString()
+                                : "NONE";
                         addSearchResultContact(uId, username, friendshipStatus, searchField);
                     }
                 }, errMsg -> {
@@ -2051,7 +2239,8 @@ public class ChatView {
         contactList = new VBox(4);
         ScrollPane scrollContacts = new ScrollPane(contactList);
         scrollContacts.setFitToWidth(true);
-        scrollContacts.setStyle("-fx-background: " + StyleConstants.PANEL_DARK + "; -fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: transparent;");
+        scrollContacts.setStyle("-fx-background: " + StyleConstants.PANEL_DARK + "; -fx-background-color: "
+                + StyleConstants.PANEL_DARK + "; -fx-border-color: transparent;");
         VBox.setVgrow(scrollContacts, Priority.ALWAYS);
 
         panel.getChildren().addAll(headerRow, searchField, scrollContacts);
@@ -2071,7 +2260,8 @@ public class ChatView {
 
         VBox info = new VBox(3);
         Label nameLabel = new Label(username);
-        nameLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
+        nameLabel.setStyle(
+                "-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
         Label msgLabel = new Label("Nhập để nhắn tin");
         msgLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + ";");
         info.getChildren().addAll(nameLabel, msgLabel);
@@ -2085,36 +2275,43 @@ public class ChatView {
         String btnBase = "-fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 14px; -fx-border-radius: 14px; -fx-min-height: 28px; -fx-padding: 0 12px; -fx-cursor: hand;";
         if ("NONE".equals(friendshipStatus)) {
             Button addFriendBtn = new Button("➕ Kết bạn");
-            addFriendBtn.setStyle(btnBase + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;");
-            addFriendBtn.setOnMouseEntered(e -> addFriendBtn.setStyle(btnBase + "-fx-background-color: #7c5cfc; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
-            addFriendBtn.setOnMouseExited(e -> addFriendBtn.setStyle(btnBase + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;"));
+            addFriendBtn.setStyle(btnBase
+                    + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;");
+            addFriendBtn.setOnMouseEntered(e -> addFriendBtn.setStyle(btnBase
+                    + "-fx-background-color: #7c5cfc; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
+            addFriendBtn.setOnMouseExited(e -> addFriendBtn.setStyle(btnBase
+                    + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;"));
             addFriendBtn.setOnAction(e -> {
                 e.consume();
                 controller.sendFriendRequest(uId,
-                    msg -> showToast(msg),
-                    err -> showToast(err));
+                        msg -> showToast(msg),
+                        err -> showToast(err));
             });
             contact.getChildren().add(addFriendBtn);
         } else if ("PENDING_SENT".equals(friendshipStatus)) {
             Button cancelBtn = new Button("↩ Đã gửi");
-            cancelBtn.setStyle(btnBase + "-fx-background-color: rgba(255, 255, 255, 0.1); -fx-text-fill: #aaaaaa; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-width: 1px;");
+            cancelBtn.setStyle(btnBase
+                    + "-fx-background-color: rgba(255, 255, 255, 0.1); -fx-text-fill: #aaaaaa; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-width: 1px;");
             cancelBtn.setOnAction(e -> {
                 e.consume();
                 controller.cancelFriendRequest(uId,
-                    msg -> showToast(msg),
-                    err -> showToast(err));
+                        msg -> showToast(msg),
+                        err -> showToast(err));
             });
             contact.getChildren().add(cancelBtn);
         } else if ("PENDING_RECEIVED".equals(friendshipStatus)) {
             Button acceptBtn = new Button("✅ Chấp nhận");
-            acceptBtn.setStyle(btnBase + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;");
-            acceptBtn.setOnMouseEntered(e -> acceptBtn.setStyle(btnBase + "-fx-background-color: #34c759; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
-            acceptBtn.setOnMouseExited(e -> acceptBtn.setStyle(btnBase + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;"));
+            acceptBtn.setStyle(btnBase
+                    + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;");
+            acceptBtn.setOnMouseEntered(e -> acceptBtn.setStyle(btnBase
+                    + "-fx-background-color: #34c759; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
+            acceptBtn.setOnMouseExited(e -> acceptBtn.setStyle(btnBase
+                    + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;"));
             acceptBtn.setOnAction(e -> {
                 e.consume();
                 controller.respondFriendRequest(uId, "ACCEPTED",
-                    msg -> showToast(msg),
-                    err -> showToast(err));
+                        msg -> showToast(msg),
+                        err -> showToast(err));
             });
             contact.getChildren().add(acceptBtn);
         }
@@ -2142,14 +2339,16 @@ public class ChatView {
         HBox chatHeader = new HBox(12);
         chatHeader.setAlignment(Pos.CENTER_LEFT);
         chatHeader.setPadding(new Insets(16, 24, 16, 24));
-        chatHeader.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
+        chatHeader.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: "
+                + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
 
         Circle headerAvatar = new Circle(20);
         headerAvatar.setFill(Color.web("#444"));
 
         VBox headerInfo = new VBox(2);
         headerChatName = new Label("Chọn người để chat");
-        headerChatName.setStyle("-fx-font-size: 17px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
+        headerChatName.setStyle(
+                "-fx-font-size: 17px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
 
         chatStatus = new Label("Offline");
         chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: #888888;");
@@ -2166,7 +2365,8 @@ public class ChatView {
         messageSearchField.setPromptText("Tìm tin nhắn...");
         messageSearchField.setPrefWidth(190);
         limitTextInput(messageSearchField, MAX_MESSAGE_SEARCH_KEYWORD_LENGTH);
-        messageSearchField.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: " + StyleConstants.INPUT_BORDER
+        messageSearchField.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: "
+                + StyleConstants.INPUT_BORDER
                 + "; -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-background-radius: 18px; -fx-text-fill: "
                 + StyleConstants.TEXT_WHITE + "; -fx-prompt-text-fill: " + StyleConstants.TEXT_DIM
                 + "; -fx-font-size: 13px; -fx-padding: 8px 12px;");
@@ -2176,9 +2376,12 @@ public class ChatView {
         messageSearchField.setOnAction(e -> searchMessagesInCurrentConversation());
 
         leaveGroupBtn = new Button("Rời nhóm");
-        leaveGroupBtn.setStyle("-fx-background-color: rgba(255, 59, 48, 0.15); -fx-text-fill: #ff453a; -fx-border-color: rgba(255, 69, 58, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;");
-        leaveGroupBtn.setOnMouseEntered(e -> leaveGroupBtn.setStyle("-fx-background-color: #ff3b30; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
-        leaveGroupBtn.setOnMouseExited(e -> leaveGroupBtn.setStyle("-fx-background-color: rgba(255, 59, 48, 0.15); -fx-text-fill: #ff453a; -fx-border-color: rgba(255, 69, 58, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
+        leaveGroupBtn.setStyle(
+                "-fx-background-color: rgba(255, 59, 48, 0.15); -fx-text-fill: #ff453a; -fx-border-color: rgba(255, 69, 58, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;");
+        leaveGroupBtn.setOnMouseEntered(e -> leaveGroupBtn.setStyle(
+                "-fx-background-color: #ff3b30; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
+        leaveGroupBtn.setOnMouseExited(e -> leaveGroupBtn.setStyle(
+                "-fx-background-color: rgba(255, 59, 48, 0.15); -fx-text-fill: #ff453a; -fx-border-color: rgba(255, 69, 58, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
         leaveGroupBtn.setVisible(false);
         leaveGroupBtn.setManaged(false);
 
@@ -2194,8 +2397,10 @@ public class ChatView {
                     showToast("Đã thoát nhóm thành công!");
                     currentConversationId = -1;
                     messagesBox.getChildren().clear();
-                    if (headerChatName != null) headerChatName.setText("Chọn người để chat");
-                    if (chatStatus != null) chatStatus.setText("Offline");
+                    if (headerChatName != null)
+                        headerChatName.setText("Chọn người để chat");
+                    if (chatStatus != null)
+                        chatStatus.setText("Offline");
                     if (leaveGroupBtn != null) {
                         leaveGroupBtn.setVisible(false);
                         leaveGroupBtn.setManaged(false);
@@ -2206,9 +2411,12 @@ public class ChatView {
         });
 
         Button friendActionBtn = new Button("⋮");
-        friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;");
-        friendActionBtn.setOnMouseEntered(e -> friendActionBtn.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
-        friendActionBtn.setOnMouseExited(e -> friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
+        friendActionBtn.setStyle(
+                "-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;");
+        friendActionBtn.setOnMouseEntered(e -> friendActionBtn.setStyle(
+                "-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
+        friendActionBtn.setOnMouseExited(e -> friendActionBtn.setStyle(
+                "-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
         friendActionBtn.setOnAction(e -> showFriendshipContextMenu(friendActionBtn));
 
         actions.getChildren().addAll(messageSearchField, messageSearchButton,
@@ -2221,7 +2429,8 @@ public class ChatView {
 
         messageSearchCounter = new Label("");
         messageSearchCounter.setMinWidth(48);
-        messageSearchCounter.setStyle("-fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 12px; -fx-font-weight: bold;");
+        messageSearchCounter.setStyle(
+                "-fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 12px; -fx-font-weight: bold;");
 
         messageSearchPrevBtn = createSearchNavButton("^");
         messageSearchNextBtn = createSearchNavButton("v");
@@ -2230,7 +2439,8 @@ public class ChatView {
         messageSearchNextBtn.setOnAction(e -> openRelativeMessageSearchResult(1));
         msgSearchCloseBtn.setOnAction(e -> clearMessageSearchResults());
 
-        messageSearchNavigator = new HBox(8, messageSearchCounter, messageSearchPrevBtn, messageSearchNextBtn, msgSearchCloseBtn);
+        messageSearchNavigator = new HBox(8, messageSearchCounter, messageSearchPrevBtn, messageSearchNextBtn,
+                msgSearchCloseBtn);
         messageSearchNavigator.setAlignment(Pos.CENTER_LEFT);
         messageSearchNavigator.setVisible(false);
         messageSearchNavigator.setManaged(false);
@@ -2242,7 +2452,8 @@ public class ChatView {
         messageSearchResultsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         messageSearchResultsScroll.setVisible(false);
         messageSearchResultsScroll.setManaged(false);
-        messageSearchResultsScroll.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
+        messageSearchResultsScroll.setStyle(
+                "-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent;");
         VBox.setVgrow(messageSearchResultsScroll, Priority.ALWAYS);
 
         messageSearchPanel = new VBox(8, messageSearchStatus, messageSearchNavigator, messageSearchResultsScroll);
@@ -2250,7 +2461,8 @@ public class ChatView {
         messageSearchPanel.setPadding(new Insets(14, 24, 14, 24));
         messageSearchPanel.setVisible(false);
         messageSearchPanel.setManaged(false);
-        messageSearchPanel.setStyle("-fx-background-color: #101010; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 0 1 0;");
+        messageSearchPanel.setStyle("-fx-background-color: #101010; -fx-border-color: " + StyleConstants.BORDER_COLOR
+                + "; -fx-border-width: 0 0 1 0;");
 
         // Messages area
         messagesBox = new VBox(12);
@@ -2260,11 +2472,13 @@ public class ChatView {
         loadingIndicator.setVisible(false);
         loadingIndicator.setMaxWidth(Double.MAX_VALUE);
         loadingIndicator.setAlignment(Pos.CENTER);
-        loadingIndicator.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-padding: 8px 0;");
+        loadingIndicator
+                .setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-padding: 8px 0;");
 
         scrollMessages = new ScrollPane(messagesBox);
         scrollMessages.setFitToWidth(true);
-        scrollMessages.setStyle("-fx-background: " + StyleConstants.BG_BLACK + "; -fx-background-color: " + StyleConstants.BG_BLACK + "; -fx-border-color: transparent;");
+        scrollMessages.setStyle("-fx-background: " + StyleConstants.BG_BLACK + "; -fx-background-color: "
+                + StyleConstants.BG_BLACK + "; -fx-border-color: transparent;");
         VBox.setVgrow(scrollMessages, Priority.ALWAYS);
         scrollMessages.vvalueProperty().addListener(scrollListener);
 
@@ -2272,25 +2486,31 @@ public class ChatView {
         typingLabel = new Label("Đang gõ...");
         typingLabel.setVisible(false);
         typingLabel.setPadding(new Insets(4, 24, 4, 24));
-        typingLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-style: italic;");
+        typingLabel.setStyle(
+                "-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-style: italic;");
 
         // Input bar
         HBox inputBar = new HBox(12);
         inputBar.setAlignment(Pos.CENTER);
         inputBar.setPadding(new Insets(16, 24, 16, 24));
-        inputBar.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 1 0 0 0;");
+        inputBar.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: "
+                + StyleConstants.BORDER_COLOR + "; -fx-border-width: 1 0 0 0;");
 
         Button attachBtn = new Button("+");
-        attachBtn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
+        attachBtn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: "
+                + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 20px; -fx-font-weight: bold; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;");
 
         // Emoji picker button
         Button emojiBtn = new Button("😊");
         emojiBtn.setStyle("-fx-background-color: #222; -fx-text-fill: " + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;");
-        emojiBtn.setOnMouseEntered(e -> emojiBtn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: "
-                + StyleConstants.TEXT_WHITE + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;"));
-        emojiBtn.setOnMouseExited(e -> emojiBtn.setStyle("-fx-background-color: #222; -fx-text-fill: " + StyleConstants.TEXT_WHITE
+        emojiBtn.setOnMouseEntered(e -> emojiBtn.setStyle("-fx-background-color: " + StyleConstants.ACCENT
+                + "; -fx-text-fill: "
+                + StyleConstants.TEXT_WHITE
+                + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;"));
+        emojiBtn.setOnMouseExited(e -> emojiBtn.setStyle("-fx-background-color: #222; -fx-text-fill: "
+                + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 18px; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;"));
         emojiBtn.setOnAction(e -> showEmojiPicker(emojiBtn));
 
@@ -2308,7 +2528,7 @@ public class ChatView {
         // Visible overlay – renders text + emoji images inline
         messageDisplayFlow = new TextFlow();
         messageDisplayFlow.setLineSpacing(4);
-        messageDisplayFlow.setMouseTransparent(true);  // let clicks fall through to the TextField
+        messageDisplayFlow.setMouseTransparent(true); // let clicks fall through to the TextField
         messageDisplayFlow.setPadding(new Insets(0, 0, 0, 4));
         messageDisplayFlow.setStyle("-fx-background-color: " + StyleConstants.BG_BLACK + ";"
                 + " -fx-border-color: transparent; -fx-border-radius: 24px; -fx-background-radius: 24px;"
@@ -2337,7 +2557,8 @@ public class ChatView {
         });
 
         Button sendBtn = new Button("Gửi");
-        sendBtn.setStyle("-fx-background-color: " + StyleConstants.TEXT_WHITE + "; -fx-text-fill: " + StyleConstants.BG_BLACK
+        sendBtn.setStyle("-fx-background-color: " + StyleConstants.TEXT_WHITE + "; -fx-text-fill: "
+                + StyleConstants.BG_BLACK
                 + "; -fx-font-size: 15px; -fx-font-weight: bold; -fx-background-radius: 24px; -fx-padding: 12px 24px; -fx-cursor: hand;");
         sendBtn.setOnAction(e -> sendMessage());
         messageInput.setOnAction(e -> sendMessage());
@@ -2348,20 +2569,23 @@ public class ChatView {
         replyPreviewBar = new HBox(12);
         replyPreviewBar.setAlignment(Pos.CENTER_LEFT);
         replyPreviewBar.setPadding(new Insets(8, 24, 8, 24));
-        replyPreviewBar.setStyle("-fx-background-color: #141026; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 1 0 0 0;");
+        replyPreviewBar.setStyle("-fx-background-color: #141026; -fx-border-color: " + StyleConstants.BORDER_COLOR
+                + "; -fx-border-width: 1 0 0 0;");
         replyPreviewBar.setVisible(false);
         replyPreviewBar.setManaged(false);
 
         VBox replyInfo = new VBox(2);
         replyPreviewUserLabel = new Label("Đang trả lời ai đó");
-        replyPreviewUserLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + StyleConstants.ACCENT + "; -fx-font-size: 12px;");
+        replyPreviewUserLabel
+                .setStyle("-fx-font-weight: bold; -fx-text-fill: " + StyleConstants.ACCENT + "; -fx-font-size: 12px;");
         replyPreviewContentLabel = new Label("Nội dung trích dẫn");
         replyPreviewContentLabel.setStyle("-fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 13px;");
         replyInfo.getChildren().addAll(replyPreviewUserLabel, replyPreviewContentLabel);
         HBox.setHgrow(replyInfo, Priority.ALWAYS);
 
         Button cancelReplyBtn = new Button("✕");
-        cancelReplyBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 4px;");
+        cancelReplyBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED
+                + "; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 4px;");
         cancelReplyBtn.setOnAction(e -> cancelReply());
         replyPreviewBar.getChildren().addAll(replyInfo, cancelReplyBtn);
 
@@ -2369,7 +2593,8 @@ public class ChatView {
         forwardPreviewBar = new HBox(12);
         forwardPreviewBar.setAlignment(Pos.CENTER_LEFT);
         forwardPreviewBar.setPadding(new Insets(8, 24, 8, 24));
-        forwardPreviewBar.setStyle("-fx-background-color: #141026; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 1 0 0 0;");
+        forwardPreviewBar.setStyle("-fx-background-color: #141026; -fx-border-color: " + StyleConstants.BORDER_COLOR
+                + "; -fx-border-width: 1 0 0 0;");
         forwardPreviewBar.setVisible(false);
         forwardPreviewBar.setManaged(false);
 
@@ -2382,11 +2607,13 @@ public class ChatView {
         HBox.setHgrow(forwardInfo, Priority.ALWAYS);
 
         Button cancelForwardBtn = new Button("✕");
-        cancelForwardBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 4px;");
+        cancelForwardBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED
+                + "; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 4px;");
         cancelForwardBtn.setOnAction(e -> cancelForward());
         forwardPreviewBar.getChildren().addAll(forwardInfo, cancelForwardBtn);
 
-        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar, forwardPreviewBar, inputBar);
+        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar,
+                forwardPreviewBar, inputBar);
         return panel;
     }
 
@@ -2395,7 +2622,8 @@ public class ChatView {
         panel.setPrefWidth(250);
         panel.setAlignment(Pos.TOP_CENTER);
         panel.setPadding(new Insets(30, 20, 20, 20));
-        panel.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 0 0 1;");
+        panel.setStyle("-fx-background-color: " + StyleConstants.PANEL_DARK + "; -fx-border-color: "
+                + StyleConstants.BORDER_COLOR + "; -fx-border-width: 0 0 0 1;");
 
         currentAvatarImage = ImageUtils.createDefaultAvatarImage();
         initialAvatarImage = currentAvatarImage;
@@ -2419,7 +2647,8 @@ public class ChatView {
         });
 
         nameLabel = new Label("Sinh viên");
-        nameLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
+        nameLabel.setStyle(
+                "-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
         VBox.setMargin(nameLabel, new Insets(8, 0, 12, 0));
 
         Button avatarBtn = createProfileButton("Đổi avatar", true);
@@ -2452,7 +2681,8 @@ public class ChatView {
 
     private ContextMenu createAvatarContextMenu() {
         ContextMenu menu = new ContextMenu();
-        menu.setStyle("-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
+        menu.setStyle(
+                "-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
 
         MenuItem changeItem = new MenuItem("Đổi avatar");
         changeItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
@@ -2464,7 +2694,8 @@ public class ChatView {
         });
 
         MenuItem restoreItem = new MenuItem("Khôi phục lại avatar ban đầu");
-        restoreItem.setStyle("-fx-text-fill: #cccccc; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+        restoreItem
+                .setStyle("-fx-text-fill: #cccccc; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
         restoreItem.setOnAction(e -> {
             if (currentAvatarImage == initialAvatarImage) {
                 showToast("Ảnh đại diện đã là ảnh ban đầu!");
@@ -2490,7 +2721,8 @@ public class ChatView {
         btn.setStyle("-fx-background-color: #222; -fx-text-fill: " + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 14px; -fx-cursor: hand;");
         btn.setOnMouseEntered(e -> btn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: "
-                + StyleConstants.TEXT_WHITE + "; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 14px; -fx-cursor: hand;"));
+                + StyleConstants.TEXT_WHITE
+                + "; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 14px; -fx-cursor: hand;"));
         btn.setOnMouseExited(e -> btn.setStyle("-fx-background-color: #222; -fx-text-fill: " + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 14px; -fx-cursor: hand;"));
         return btn;
@@ -2511,7 +2743,8 @@ public class ChatView {
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setPrefHeight(42);
         if (accent) {
-            btn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
+            btn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: "
+                    + StyleConstants.TEXT_WHITE
                     + "; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-radius: 12px; -fx-cursor: hand;");
         } else {
             btn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED
@@ -2547,7 +2780,8 @@ public class ChatView {
 
     private void showToast(String text) {
         Label toast = new Label(text);
-        toast.setStyle("-fx-background-color: #cc3333; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 14 22; -fx-background-radius: 14px;");
+        toast.setStyle(
+                "-fx-background-color: #cc3333; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 14 22; -fx-background-radius: 14px;");
 
         Stage toastStage = new Stage();
         toastStage.initOwner(stage);
@@ -2566,7 +2800,8 @@ public class ChatView {
 
     private void updateUnreadBadge(long conversationId) {
         Label badge = unreadBadgesByConvId.get(conversationId);
-        if (badge == null) return;
+        if (badge == null)
+            return;
         int count = unreadCounts.getOrDefault(conversationId, 0);
         Platform.runLater(() -> {
             if (count > 0) {
@@ -2588,7 +2823,8 @@ public class ChatView {
         }
 
         String preview = content != null && content.length() > 60
-                ? content.substring(0, 60) + "…" : (content != null ? content : "");
+                ? content.substring(0, 60) + "…"
+                : (content != null ? content : "");
 
         Label iconLabel = new Label("💬");
         iconLabel.setStyle("-fx-font-size: 20px;");
@@ -2598,13 +2834,15 @@ public class ChatView {
 
         int unread = unreadCounts.getOrDefault(conversationId, 0);
         Label countBadge = new Label(unread > 99 ? "99+" : String.valueOf(unread));
-        countBadge.setStyle("-fx-background-color: #ff4444; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 9px; -fx-padding: 2px 6px;");
+        countBadge.setStyle(
+                "-fx-background-color: #ff4444; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 9px; -fx-padding: 2px 6px;");
 
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);
 
         Button closeBtn = new Button("✕");
-        closeBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #888888; -fx-font-size: 13px; -fx-cursor: hand;");
+        closeBtn.setStyle(
+                "-fx-background-color: transparent; -fx-text-fill: #888888; -fx-font-size: 13px; -fx-cursor: hand;");
 
         HBox headerRow = new HBox(8, iconLabel, nameLabel, countBadge, headerSpacer, closeBtn);
         headerRow.setAlignment(Pos.CENTER_LEFT);
@@ -2617,7 +2855,8 @@ public class ChatView {
         VBox toastContent = new VBox(8, headerRow, previewLabel);
         toastContent.setPadding(new Insets(14, 16, 14, 16));
         toastContent.setMaxWidth(300);
-        toastContent.setStyle("-fx-background-color: #1e1e1e; -fx-background-radius: 14px; -fx-border-color: #7c5cfc; -fx-border-width: 1.5px; -fx-border-radius: 14px;");
+        toastContent.setStyle(
+                "-fx-background-color: #1e1e1e; -fx-background-radius: 14px; -fx-border-color: #7c5cfc; -fx-border-width: 1.5px; -fx-border-radius: 14px;");
         toastContent.setCursor(javafx.scene.Cursor.HAND);
 
         StackPane toastRoot = new StackPane(toastContent);
@@ -2664,7 +2903,8 @@ public class ChatView {
         new javafx.animation.ParallelTransition(slideIn, fadeIn).play();
 
         scheduler.schedule(() -> Platform.runLater(() -> {
-            if (!toastStage.isShowing()) return;
+            if (!toastStage.isShowing())
+                return;
             javafx.animation.FadeTransition fadeOut = new javafx.animation.FadeTransition(
                     javafx.util.Duration.millis(350), toastRoot);
             fadeOut.setFromValue(1.0);
@@ -2694,8 +2934,10 @@ public class ChatView {
 
         @Override
         public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false;
+            if (this == obj)
+                return true;
+            if (obj == null || getClass() != obj.getClass())
+                return false;
             ReaderInfo other = (ReaderInfo) obj;
             return userId == other.userId;
         }
