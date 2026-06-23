@@ -133,6 +133,25 @@ public class Database {
         } catch (SQLException e) {
             logger.error("Database migration (forward_from_id) failed: {}", e.getMessage(), e);
         }
+
+        // Migration 3: action_user_id trong friendships table
+        String checkActionUserColumn = "SHOW COLUMNS FROM friendships LIKE 'action_user_id'";
+        String addActionUserColumn = "ALTER TABLE friendships ADD COLUMN action_user_id BIGINT DEFAULT NULL";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkActionUserColumn)) {
+
+            if (!rs.next()) {
+                logger.info("Column 'action_user_id' not found in table 'friendships'. Running migration...");
+                stmt.executeUpdate(addActionUserColumn);
+                logger.info("Database migration completed: added 'action_user_id' to 'friendships'.");
+            } else {
+                logger.info("Database schema is up to date. Column 'action_user_id' already exists in 'friendships'.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (action_user_id) failed: {}", e.getMessage(), e);
+        }
     }
 }
 

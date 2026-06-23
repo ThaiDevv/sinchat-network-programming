@@ -117,6 +117,7 @@ public class ChatView {
 
     // Pagination
     private long currentConversationId = -1;
+    private long currentPeerId = -1;
     private int currentMessageOffset = 0;
     private boolean hasMoreMessages = true;
     private boolean isLoadingMore = false;
@@ -187,6 +188,8 @@ public class ChatView {
         tcp.setOnUserAvatarChanged(this::onUserAvatarChanged);
         tcp.setOnMessageStatusChanged(this::onMessageStatusChanged);
         tcp.setOnLeftGroup(this::onLeftGroupReceived);
+        tcp.setOnFriendRequestReceived(this::onFriendRequestReceived);
+        tcp.setOnFriendAccepted(this::onFriendAccepted);
         tcp.setOnConnected(() -> System.out.println("TCP socket connected for user " + currentUserId));
         tcp.setOnDisconnected(reason -> System.out.println("TCP socket disconnected: " + reason));
 
@@ -238,7 +241,7 @@ public class ChatView {
             updateUnreadBadge(conversationId);
             String senderName = json.has("senderUsername") ? json.get("senderUsername").getAsString()
                     : conversationDisplayNames.getOrDefault(conversationId, "Ai đó");
-            showNewMessageNotification(senderName, content, conversationId);
+            showNewMessageNotification(senderName, content, conversationId, senderId);
         }
         Platform.runLater(this::loadConversations);
     }
@@ -261,6 +264,20 @@ public class ChatView {
                 });
             }
         }
+        Platform.runLater(this::loadConversations);
+    }
+
+    private void onFriendRequestReceived(JsonObject json) {
+        long senderId = json.get("senderId").getAsLong();
+        String senderName = json.has("senderName") ? json.get("senderName").getAsString() : "Ai đó";
+        System.out.println("[CHAT_VIEW] Friend request received from " + senderName + " (id=" + senderId + ")");
+        Platform.runLater(this::loadConversations);
+    }
+
+    private void onFriendAccepted(JsonObject json) {
+        long acceptorId = json.get("acceptorId").getAsLong();
+        String acceptorName = json.has("acceptorName") ? json.get("acceptorName").getAsString() : "Ai đó";
+        System.out.println("[CHAT_VIEW] Friend request accepted by " + acceptorName + " (id=" + acceptorId + ")");
         Platform.runLater(this::loadConversations);
     }
 
@@ -493,6 +510,9 @@ public class ChatView {
 
     public void setCurrentConversation(long conversationId, String name) {
         this.currentConversationId = conversationId;
+        // Save peerId BEFORE loadConversations() clears the map
+        Long peer = peerIdByConversationId.get(conversationId);
+        if (peer != null) this.currentPeerId = peer;
         unreadCounts.remove(conversationId);
         updateUnreadBadge(conversationId);
         messagesBox.getChildren().clear();
@@ -1788,6 +1808,161 @@ public class ChatView {
         });
     }
 
+    // ==================== FRIENDSHIP CONTEXT MENU ====================
+
+    private void showFriendshipContextMenu(Button anchor) {
+        if (currentConversationId <= 0) {
+            showToast("Hãy chọn một cuộc trò chuyện trước");
+            return;
+        }
+        // Use saved currentPeerId first, fallback to map
+        long peerId = currentPeerId;
+        if (peerId <= 0) {
+            Long fromMap = peerIdByConversationId.get(currentConversationId);
+            if (fromMap == null || fromMap <= 0) {
+                showToast("Không xác định được người dùng");
+                return;
+            }
+            peerId = fromMap;
+        }
+
+        // Show menu immediately with loading, then update after TCP response
+        final long finalPeerId = peerId;
+        buildAndShowFriendshipMenu(anchor, finalPeerId, "LOADING");
+    }
+
+    private void buildAndShowFriendshipMenu(Button anchor, long peerId, String status) {
+        ContextMenu menu = new ContextMenu();
+        String menuStyle = "-fx-background-color: #1e1e1e; -fx-border-color: #333333; -fx-border-width: 1px; "
+                + "-fx-background-radius: 12px; -fx-border-radius: 12px; -fx-padding: 6px;";
+        menu.setStyle(menuStyle);
+
+        String itemNormal = "-fx-text-fill: #ffffff; -fx-font-size: 14px; -fx-padding: 8px 18px;";
+        String itemDanger = "-fx-text-fill: #ff5555; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 18px;";
+        String itemAccent = "-fx-text-fill: #7c5cfc; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 18px;";
+
+        if ("LOADING".equals(status)) {
+            // Show menu instantly with loading + history, then async-load real status
+            MenuItem loading = new MenuItem("⏳ Đang tải...");
+            loading.setStyle(itemNormal);
+            loading.setDisable(true);
+
+            MenuItem history = new MenuItem("📋 Lịch sử kết bạn");
+            history.setStyle(itemNormal);
+            history.setOnAction(e -> new FriendRequestHistoryDialog(stage, controller).show());
+
+            menu.getItems().addAll(loading, new SeparatorMenuItem(), history);
+            menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+
+            // Fetch real status in background, then rebuild menu
+            controller.getFriendshipStatus(peerId,
+                    realStatus -> {
+                        menu.hide();
+                        buildAndShowFriendshipMenu(anchor, peerId, realStatus);
+                    },
+                    err -> {
+                        menu.hide();
+                        buildAndShowFriendshipMenu(anchor, peerId, "NONE");
+                    });
+            return;
+        }
+
+        switch (status) {
+            case "NONE": {
+                MenuItem addFriend = new MenuItem("➕ Kết bạn");
+                addFriend.setStyle(itemAccent);
+                addFriend.setOnAction(e -> controller.sendFriendRequest(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                MenuItem block = new MenuItem("🚫 Chặn");
+                block.setStyle(itemDanger);
+                block.setOnAction(e -> controller.blockUser(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                menu.getItems().addAll(addFriend, new SeparatorMenuItem(), block);
+                break;
+            }
+            case "PENDING_SENT": {
+                MenuItem cancel = new MenuItem("↩ Hủy lời mời đã gửi");
+                cancel.setStyle(itemNormal);
+                cancel.setOnAction(e -> controller.cancelFriendRequest(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                MenuItem block = new MenuItem("🚫 Chặn");
+                block.setStyle(itemDanger);
+                block.setOnAction(e -> controller.blockUser(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                menu.getItems().addAll(cancel, new SeparatorMenuItem(), block);
+                break;
+            }
+            case "PENDING_RECEIVED": {
+                MenuItem accept = new MenuItem("✅ Chấp nhận lời mời");
+                accept.setStyle(itemAccent);
+                accept.setOnAction(e -> controller.respondFriendRequest(peerId, "ACCEPTED",
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                MenuItem reject = new MenuItem("✖ Từ chối lời mời");
+                reject.setStyle(itemNormal);
+                reject.setOnAction(e -> controller.respondFriendRequest(peerId, "REJECTED",
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                MenuItem block = new MenuItem("🚫 Chặn");
+                block.setStyle(itemDanger);
+                block.setOnAction(e -> controller.blockUser(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                menu.getItems().addAll(accept, reject, new SeparatorMenuItem(), block);
+                break;
+            }
+            case "ACCEPTED": {
+                MenuItem unfriend = new MenuItem("💔 Hủy kết bạn");
+                unfriend.setStyle(itemNormal);
+                unfriend.setOnAction(e -> controller.unfriend(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                MenuItem block = new MenuItem("🚫 Chặn");
+                block.setStyle(itemDanger);
+                block.setOnAction(e -> controller.blockUser(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                menu.getItems().addAll(unfriend, new SeparatorMenuItem(), block);
+                break;
+            }
+            case "BLOCKED": {
+                MenuItem unblock = new MenuItem("🔓 Gỡ chặn");
+                unblock.setStyle(itemAccent);
+                unblock.setOnAction(e -> controller.unblockUser(peerId,
+                        msg -> showToast(msg),
+                        err -> showToast(err)));
+
+                menu.getItems().add(unblock);
+                break;
+            }
+        }
+
+        // Always add friend request history option
+        MenuItem history = new MenuItem("📋 Lịch sử kết bạn");
+        history.setStyle(itemNormal);
+        history.setOnAction(e -> new FriendRequestHistoryDialog(stage, controller).show());
+
+        if (!menu.getItems().isEmpty()) {
+            menu.getItems().add(new SeparatorMenuItem());
+        }
+        menu.getItems().add(history);
+
+        menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
+    }
+
     // ==================== UI LAYOUT ====================
 
     private VBox createLeftPanel() {
@@ -1864,7 +2039,8 @@ public class ChatView {
                         JsonObject user = element.getAsJsonObject();
                         long uId = user.get("userId").getAsLong();
                         String username = user.get("username").getAsString();
-                        addSearchResultContact(uId, username, searchField);
+                        String friendshipStatus = user.has("friendshipStatus") ? user.get("friendshipStatus").getAsString() : "NONE";
+                        addSearchResultContact(uId, username, friendshipStatus, searchField);
                     }
                 }, errMsg -> {
                     System.err.println("[ChatView] Search users failed: " + errMsg);
@@ -1882,7 +2058,7 @@ public class ChatView {
         return panel;
     }
 
-    private void addSearchResultContact(long uId, String username, TextField searchField) {
+    private void addSearchResultContact(long uId, String username, String friendshipStatus, TextField searchField) {
         HBox contact = new HBox(12);
         contact.setAlignment(Pos.CENTER_LEFT);
         contact.setPadding(new Insets(12, 14, 12, 14));
@@ -1901,11 +2077,56 @@ public class ChatView {
         info.getChildren().addAll(nameLabel, msgLabel);
         contact.getChildren().addAll(avatar, info);
 
+        // Add friend action button based on friendship status
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        contact.getChildren().add(spacer);
+
+        String btnBase = "-fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 14px; -fx-border-radius: 14px; -fx-min-height: 28px; -fx-padding: 0 12px; -fx-cursor: hand;";
+        if ("NONE".equals(friendshipStatus)) {
+            Button addFriendBtn = new Button("➕ Kết bạn");
+            addFriendBtn.setStyle(btnBase + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;");
+            addFriendBtn.setOnMouseEntered(e -> addFriendBtn.setStyle(btnBase + "-fx-background-color: #7c5cfc; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
+            addFriendBtn.setOnMouseExited(e -> addFriendBtn.setStyle(btnBase + "-fx-background-color: rgba(124, 92, 252, 0.2); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.4); -fx-border-width: 1px;"));
+            addFriendBtn.setOnAction(e -> {
+                e.consume();
+                controller.sendFriendRequest(uId,
+                    msg -> showToast(msg),
+                    err -> showToast(err));
+            });
+            contact.getChildren().add(addFriendBtn);
+        } else if ("PENDING_SENT".equals(friendshipStatus)) {
+            Button cancelBtn = new Button("↩ Đã gửi");
+            cancelBtn.setStyle(btnBase + "-fx-background-color: rgba(255, 255, 255, 0.1); -fx-text-fill: #aaaaaa; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-width: 1px;");
+            cancelBtn.setOnAction(e -> {
+                e.consume();
+                controller.cancelFriendRequest(uId,
+                    msg -> showToast(msg),
+                    err -> showToast(err));
+            });
+            contact.getChildren().add(cancelBtn);
+        } else if ("PENDING_RECEIVED".equals(friendshipStatus)) {
+            Button acceptBtn = new Button("✅ Chấp nhận");
+            acceptBtn.setStyle(btnBase + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;");
+            acceptBtn.setOnMouseEntered(e -> acceptBtn.setStyle(btnBase + "-fx-background-color: #34c759; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1px;"));
+            acceptBtn.setOnMouseExited(e -> acceptBtn.setStyle(btnBase + "-fx-background-color: rgba(52, 199, 89, 0.2); -fx-text-fill: #34c759; -fx-border-color: rgba(52, 199, 89, 0.4); -fx-border-width: 1px;"));
+            acceptBtn.setOnAction(e -> {
+                e.consume();
+                controller.respondFriendRequest(uId, "ACCEPTED",
+                    msg -> showToast(msg),
+                    err -> showToast(err));
+            });
+            contact.getChildren().add(acceptBtn);
+        }
+        // For ACCEPTED and BLOCKED, no extra action button needed (left-click to chat)
+
         contact.setOnMouseEntered(e -> contact.setStyle(StyleConstants.contactItemHoverStyle(radius)));
         contact.setOnMouseExited(e -> contact.setStyle(StyleConstants.contactItemNormalStyle(radius)));
         contact.setOnMouseClicked(e -> {
             controller.getOrCreateConversation(uId, convId -> {
                 searchField.clear();
+                peerIdByConversationId.put(convId, uId);
+                currentPeerId = uId;
                 loadConversations();
                 setCurrentConversation(convId, username);
             });
@@ -1984,8 +2205,14 @@ public class ChatView {
             }
         });
 
+        Button friendActionBtn = new Button("⋮");
+        friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;");
+        friendActionBtn.setOnMouseEntered(e -> friendActionBtn.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
+        friendActionBtn.setOnMouseExited(e -> friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
+        friendActionBtn.setOnAction(e -> showFriendshipContextMenu(friendActionBtn));
+
         actions.getChildren().addAll(messageSearchField, messageSearchButton,
-                createIconButton("Call"), createIconButton("Video"), leaveGroupBtn);
+                createIconButton("Call"), createIconButton("Video"), friendActionBtn, leaveGroupBtn);
         chatHeader.getChildren().addAll(headerAvatar, headerInfo, spacer, actions);
 
         // Search results panel
@@ -2354,7 +2581,7 @@ public class ChatView {
         });
     }
 
-    private void showNewMessageNotification(String senderName, String content, long conversationId) {
+    private void showNewMessageNotification(String senderName, String content, long conversationId, long senderId) {
         if (activeNotificationStages.size() >= 3) {
             Stage oldest = activeNotificationStages.remove(0);
             Platform.runLater(oldest::close);
@@ -2415,6 +2642,8 @@ public class ChatView {
         toastContent.setOnMouseClicked(e -> {
             toastStage.close();
             activeNotificationStages.remove(toastStage);
+            peerIdByConversationId.put(conversationId, senderId);
+            currentPeerId = senderId;
             setCurrentConversation(conversationId, senderName);
         });
         closeBtn.setOnMouseClicked(e -> {

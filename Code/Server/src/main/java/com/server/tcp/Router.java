@@ -6,10 +6,21 @@ import com.server.handler.message.*;
 import com.server.handler.changeavatar.*;
 import com.server.handler.avatar.GetAvatarHandler;
 import com.server.handler.changeName.NameHandler;
+
+import com.server.handler.friendship.BlockUserHandler;
+import com.server.handler.friendship.GetFriendRequestsHandler;
+import com.server.handler.friendship.GetFriendsHandler;
+import com.server.handler.friendship.GetFriendshipStatusHandler;
+import com.server.handler.friendship.RespondFriendRequestHandler;
+import com.server.handler.friendship.SendFriendRequestHandler;
+import com.server.handler.friendship.UnblockUserHandler;
+import com.server.handler.friendship.UnfriendHandler;
+
 import com.server.handler.JoinHandler;
 import com.server.handler.PingHandler;
 import com.server.handler.TypingHandler;
 import com.server.ProfileHandler;
+import com.server.service.FriendshipService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +48,17 @@ public class Router {
     private static NameHandler nameHandler = new NameHandler();
     private static CreateGroupHandler createGroupHandler = new CreateGroupHandler();
     private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
+
+    // ---- friendship handlers (require FriendshipService) ----
+    private static FriendshipService friendshipService = new FriendshipService();
+    private static SendFriendRequestHandler sendFriendRequestHandler = new SendFriendRequestHandler(friendshipService);
+    private static RespondFriendRequestHandler respondFriendRequestHandler = new RespondFriendRequestHandler(friendshipService);
+    private static GetFriendRequestsHandler getFriendRequestsHandler = new GetFriendRequestsHandler(friendshipService);
+    private static GetFriendsHandler getFriendsHandler = new GetFriendsHandler(friendshipService);
+    private static GetFriendshipStatusHandler getFriendshipStatusHandler = new GetFriendshipStatusHandler(friendshipService);
+    private static UnfriendHandler unfriendHandler = new UnfriendHandler(friendshipService);
+    private static BlockUserHandler blockUserHandler = new BlockUserHandler(friendshipService);
+    private static UnblockUserHandler unblockUserHandler = new UnblockUserHandler(friendshipService);
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -152,10 +174,40 @@ public class Router {
                     response = leaveGroupHandler.handleTcp(request, conn);
                     break;
 
+                // ---- friendship actions ----
+                case "SEND_FRIEND_REQUEST":
+                    response = sendFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "RESPOND_FRIEND_REQUEST":
+                    response = respondFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIEND_REQUESTS":
+                    response = getFriendRequestsHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIENDS":
+                    response = getFriendsHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIENDSHIP_STATUS":
+                    response = getFriendshipStatusHandler.handleTcp(request, conn);
+                    break;
+                case "UNFRIEND":
+                    response = unfriendHandler.handleTcp(request, conn);
+                    break;
+                case "BLOCK_USER":
+                    response = blockUserHandler.handleTcp(request, conn);
+                    break;
+                case "UNBLOCK_USER":
+                    response = unblockUserHandler.handleTcp(request, conn);
+                    break;
+
                 default:
                     logger.warn("[ROUTER] Unknown action='{}' from Remote={} | UserId={}",
                             action, conn.getRemoteAddress(), conn.getUserId());
-                    conn.sendError("Unknown action: " + action);
+                    JsonObject err = new JsonObject();
+                    err.addProperty("status", "error");
+                    err.addProperty("message", "Unknown action: " + action);
+                    if (requestId != null) err.addProperty("requestId", requestId);
+                    conn.send(err);
                     return;
             }
 
@@ -179,7 +231,8 @@ public class Router {
                     action, conn.getRemoteAddress(), conn.getUserId(), e.getMessage(), e);
             JsonObject err = new JsonObject();
             err.addProperty("action", action + "_RESPONSE");
-            if (requestId != null) err.addProperty("requestId", requestId);
+            if (requestId != null)
+                err.addProperty("requestId", requestId);
             err.addProperty("status", "error");
             err.addProperty("message", "Internal server error: " + e.getMessage());
             conn.send(err);
