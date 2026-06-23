@@ -18,7 +18,7 @@ public class MessageRepository {
      * Tra ve ID do database tu sinh.
      */
     public long save(Message message) throws SQLException {
-        String query = "INSERT INTO messages (conversation_id, sender_id, type, content) VALUES (?, ?, ?, ?)";
+        String query = "INSERT INTO messages (conversation_id, sender_id, type, content, reply_to_message_id, forward_from_id) VALUES (?, ?, ?, ?, ?, ?)";
         String updateConvQuery = "UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?";
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -28,6 +28,16 @@ public class MessageRepository {
                 pstmt.setLong(2, message.getSenderId());
                 pstmt.setString(3, message.getType() != null ? message.getType().name() : Message.MessageType.TEXT.name());
                 pstmt.setString(4, message.getContent());
+                if (message.getReplyToId() != null) {
+                    pstmt.setLong(5, message.getReplyToId());
+                } else {
+                    pstmt.setNull(5, java.sql.Types.BIGINT);
+                }
+                if (message.getForwardFromId() != null) {
+                    pstmt.setLong(6, message.getForwardFromId());
+                } else {
+                    pstmt.setNull(6, java.sql.Types.BIGINT);
+                }
                 pstmt.executeUpdate();
 
                 long generatedId = -1;
@@ -58,8 +68,16 @@ public class MessageRepository {
     public List<Message> getByConversationId(long conversationId, int limit, int offset) {
         List<Message> messages = new ArrayList<>();
         StringBuilder query = new StringBuilder(
-                "SELECT id, conversation_id, sender_id, type, content, created_at " +
-                "FROM messages WHERE conversation_id = ? ORDER BY created_at DESC");
+                "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
+                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
+                "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content " +
+                "FROM messages m " +
+                "JOIN users u ON m.sender_id = u.id " +
+                "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
+                "LEFT JOIN users pu ON pm.sender_id = pu.id " +
+                "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
+                "LEFT JOIN users fu ON fm.sender_id = fu.id " +
+                "WHERE m.conversation_id = ? ORDER BY m.created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
         if (offset > 0) query.append(" OFFSET ?");
         try (Connection conn = Database.getConnection();
@@ -76,6 +94,32 @@ public class MessageRepository {
         }
         return messages;
     }
+
+    public Message findById(long messageId) {
+        String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
+                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
+                "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content " +
+                "FROM messages m " +
+                "JOIN users u ON m.sender_id = u.id " +
+                "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
+                "LEFT JOIN users pu ON pm.sender_id = pu.id " +
+                "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
+                "LEFT JOIN users fu ON fm.sender_id = fu.id " +
+                "WHERE m.id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, messageId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching message by ID: {}", messageId, e);
+        }
+        return null;
+    }
+
 
     public List<MessageSearchResult> searchByConversation(long conversationId, String keyword, int limit, int offset) {
         List<MessageSearchResult> messages = new ArrayList<>();
@@ -103,7 +147,7 @@ public class MessageRepository {
     }
 
     private Message mapRow(ResultSet rs) throws SQLException {
-        return new Message(
+        Message msg = new Message(
                 rs.getLong("id"),
                 rs.getLong("conversation_id"),
                 rs.getLong("sender_id"),
@@ -111,6 +155,26 @@ public class MessageRepository {
                 rs.getString("content"),
                 rs.getTimestamp("created_at")
         );
+        try {
+            msg.setSenderUsername(rs.getString("sender_username"));
+        } catch (SQLException ignored) {}
+        try {
+            long replyToIdVal = rs.getLong("reply_to_message_id");
+            if (!rs.wasNull()) {
+                msg.setReplyToId(replyToIdVal);
+                msg.setReplyToUsername(rs.getString("reply_to_username"));
+                msg.setReplyToContent(rs.getString("reply_to_content"));
+            }
+        } catch (SQLException ignored) {}
+        try {
+            long forwardFromIdVal = rs.getLong("forward_from_id");
+            if (!rs.wasNull()) {
+                msg.setForwardFromId(forwardFromIdVal);
+                msg.setForwardFromUsername(rs.getString("forward_from_username"));
+                msg.setForwardFromContent(rs.getString("forward_from_content"));
+            }
+        } catch (SQLException ignored) {}
+        return msg;
     }
 
     private MessageSearchResult mapSearchRow(ResultSet rs) throws SQLException {

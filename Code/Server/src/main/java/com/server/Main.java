@@ -23,6 +23,9 @@ public class Main {
         String portStr = dotenv.get("PORT");
         int port = (portStr != null) ? Integer.parseInt(portStr) : 3000;
 
+        // Run DB migrations
+        com.server.config.Database.runMigrations();
+
         TcpServer server = new TcpServer(port);
         server.start();
         logger.info("Main Server started TCP on port {}", port);

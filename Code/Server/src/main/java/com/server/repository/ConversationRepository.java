@@ -158,15 +158,17 @@ public class ConversationRepository {
 
     public JsonArray getConversationsWithDetails(long userId) {
         JsonArray array = new JsonArray();
-        String query = "SELECT c.id, c.type, " +
+        // For PRIVATE: show peer name & presence; for GROUP: show group name with no peer presence
+        String query = "SELECT c.id, c.type, c.name AS group_name, " +
                 "CASE WHEN c.type = 'PRIVATE' THEN u.username ELSE c.name END AS display_name, " +
                 "u.id AS peer_id, " +
                 "CASE WHEN c.type = 'PRIVATE' THEN COALESCE(u.is_online, 0) ELSE 0 END AS is_online, " +
                 "u.last_seen AS last_seen, " +
-                "(SELECT content FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message, "
-                +
-                "(SELECT sender_id FROM messages m WHERE m.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_sender_id, "
-                +
+                "(SELECT COALESCE(NULLIF(m.content, ''), fm.content, m.content) FROM messages m " +
+                "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
+                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message, " +
+                "(SELECT m.sender_id FROM messages m " +
+                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_sender_id, " +
                 "c.last_message_at " +
                 "FROM conversations c " +
                 "JOIN conversation_members cm ON c.id = cm.conversation_id " +
@@ -183,20 +185,27 @@ public class ConversationRepository {
                 while (rs.next()) {
                     JsonObject obj = new JsonObject();
                     obj.addProperty("conversationId", rs.getLong("id"));
-                    obj.addProperty("type", rs.getString("type"));
+                    String type = rs.getString("type");
+                    obj.addProperty("type", type);
 
                     String displayName = rs.getString("display_name");
                     obj.addProperty("displayName", displayName != null ? displayName : "Unknown");
 
-                    long peerId = rs.getLong("peer_id");
-                    if (!rs.wasNull()) {
-                        obj.addProperty("peerId", peerId);
-                    }
-                    obj.addProperty("isOnline", rs.getBoolean("is_online"));
+                    if ("GROUP".equals(type)) {
+                        String groupName = rs.getString("group_name");
+                        obj.addProperty("groupName", groupName != null ? groupName : "");
+                    } else {
+                        // PRIVATE: include peer info
+                        long peerId = rs.getLong("peer_id");
+                        if (!rs.wasNull()) {
+                            obj.addProperty("peerId", peerId);
+                        }
+                        obj.addProperty("isOnline", rs.getBoolean("is_online"));
 
-                    Timestamp lastSeen = rs.getTimestamp("last_seen");
-                    if (lastSeen != null) {
-                        obj.addProperty("lastSeen", TS_FMT.format(lastSeen.toLocalDateTime()));
+                        Timestamp lastSeen = rs.getTimestamp("last_seen");
+                        if (lastSeen != null) {
+                            obj.addProperty("lastSeen", TS_FMT.format(lastSeen.toLocalDateTime()));
+                        }
                     }
 
                     String lastMessage = rs.getString("last_message");
@@ -238,10 +247,77 @@ public class ConversationRepository {
     }
 
     /**
-     * Find all distinct user IDs that share at least one conversation with the
-     * given user.
-     * Used to broadcast presence changes to conversation peers (not just friends).
+     * Create a new GROUP conversation with a given name and member list.
+     * This is done atomically in a single transaction.
      */
+    public long createGroupConversation(long creatorId, String groupName, List<Long> memberIds) throws SQLException {
+        String createQuery = "INSERT INTO conversations (type, name, created_by) VALUES ('GROUP', ?, ?)";
+        String addMemberQuery = "INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                long newId;
+                try (PreparedStatement createStmt = conn.prepareStatement(createQuery, Statement.RETURN_GENERATED_KEYS)) {
+                    createStmt.setString(1, groupName);
+                    createStmt.setLong(2, creatorId);
+                    createStmt.executeUpdate();
+                    try (ResultSet rs = createStmt.getGeneratedKeys()) {
+                        if (rs.next()) {
+                            newId = rs.getLong(1);
+                        } else {
+                            throw new SQLException("Failed to create group conversation — no generated key");
+                        }
+                    }
+                }
+
+                try (PreparedStatement addStmt = conn.prepareStatement(addMemberQuery)) {
+                    for (Long memberId : memberIds) {
+                        addStmt.setLong(1, newId);
+                        addStmt.setLong(2, memberId);
+                        addStmt.executeUpdate();
+                    }
+                }
+
+                conn.commit();
+                logger.info("Created group conversation id={} name='{}' creatorId={} members={}",
+                        newId, groupName, creatorId, memberIds);
+                return newId;
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        }
+    }
+
+    public String getConversationType(long conversationId) {
+        String query = "SELECT type FROM conversations WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, conversationId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("type");
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching conversation type for id: {}", conversationId, e);
+        }
+        return null;
+    }
+
+    public void removeMember(long conversationId, long userId) throws SQLException {
+        String query = "DELETE FROM conversation_members WHERE conversation_id = ? AND user_id = ?";
+        try (Connection conn = Database.getConnection();
+                PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, conversationId);
+            pstmt.setLong(2, userId);
+            pstmt.executeUpdate();
+        }
+    }
+
     public List<Long> findConversationPeers(long userId) {
         List<Long> peerIds = new ArrayList<>();
         String query = "SELECT DISTINCT cm2.user_id " +

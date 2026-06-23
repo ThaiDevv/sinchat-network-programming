@@ -28,38 +28,26 @@ public class Router {
     private static final Logger logger = LoggerFactory.getLogger(Router.class);
 
     // Dung chung handler de giam tao object va de thay mock khi test.
-    private static final LoginHandler loginHandler = new LoginHandler();
-    private static final RegisterHandler registerHandler = new RegisterHandler();
-    private static final ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
-    private static final ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
-    private static final ProfileHandler profileHandler = new ProfileHandler();
-    private static final GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
-    private static final SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
-    private static final SendMessageHandler sendMessageHandler = new SendMessageHandler();
-    private static final ConversationHandler conversationHandler = new ConversationHandler();
-    private static final GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
-    private static final SearchUserHandler searchUserHandler = new SearchUserHandler();
-    private static final AvatarHandler avatarHandler = new AvatarHandler();
-    private static final GetAvatarHandler getAvatarHandler = new GetAvatarHandler();
-    private static final JoinHandler joinHandler = new JoinHandler();
-    private static final PingHandler pingHandler = new PingHandler();
-    private static final TypingHandler typingHandler = new TypingHandler();
-    private static final UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
-    private static final NameHandler nameHandler = new NameHandler();
-    // Friendship handlers
-    private static final FriendshipService friendshipService = new FriendshipService();
-    private static final SendFriendRequestHandler sendFriendRequestHandler = new SendFriendRequestHandler(
-            friendshipService);
-    private static final RespondFriendRequestHandler respondFriendRequestHandler = new RespondFriendRequestHandler(
-            friendshipService);
-    private static final GetFriendsHandler getFriendsHandler = new GetFriendsHandler(friendshipService);
-    private static final GetFriendRequestsHandler getFriendRequestsHandler = new GetFriendRequestsHandler(
-            friendshipService);
-    private static final UnfriendHandler unfriendHandler = new UnfriendHandler(friendshipService);
-    private static final BlockUserHandler blockUserHandler = new BlockUserHandler(friendshipService);
-    private static final UnblockUserHandler unblockUserHandler = new UnblockUserHandler(friendshipService);
-    private static final GetFriendshipStatusHandler getFriendshipStatusHandler = new GetFriendshipStatusHandler(
-            friendshipService);
+    private static LoginHandler loginHandler = new LoginHandler();
+    private static RegisterHandler registerHandler = new RegisterHandler();
+    private static ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
+    private static ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
+    private static ProfileHandler profileHandler = new ProfileHandler();
+    private static GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
+    private static SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
+    private static SendMessageHandler sendMessageHandler = new SendMessageHandler();
+    private static ConversationHandler conversationHandler = new ConversationHandler();
+    private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
+    private static SearchUserHandler searchUserHandler = new SearchUserHandler();
+    private static AvatarHandler avatarHandler = new AvatarHandler();
+    private static GetAvatarHandler getAvatarHandler = new GetAvatarHandler();
+    private static JoinHandler joinHandler = new JoinHandler();
+    private static PingHandler pingHandler = new PingHandler();
+    private static TypingHandler typingHandler = new TypingHandler();
+    private static UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
+    private static NameHandler nameHandler = new NameHandler();
+    private static CreateGroupHandler createGroupHandler = new CreateGroupHandler();
+    private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -168,29 +156,11 @@ public class Router {
                 case "CHANGE_NAME":
                     response = nameHandler.handle(conn, request);
                     break;
-                case "SEND_FRIEND_REQUEST":
-                    response = sendFriendRequestHandler.handleTcp(request, conn);
+                case "CREATE_GROUP":
+                    response = createGroupHandler.handleTcp(request, conn);
                     break;
-                case "RESPOND_FRIEND_REQUEST":
-                    response = respondFriendRequestHandler.handleTcp(request, conn);
-                    break;
-                case "GET_FRIENDS":
-                    response = getFriendsHandler.handleTcp(request, conn);
-                    break;
-                case "GET_FRIEND_REQUESTS":
-                    response = getFriendRequestsHandler.handleTcp(request, conn);
-                    break;
-                case "UNFRIEND":
-                    response = unfriendHandler.handleTcp(request, conn);
-                    break;
-                case "BLOCK_USER":
-                    response = blockUserHandler.handleTcp(request, conn);
-                    break;
-                case "UNBLOCK_USER":
-                    response = unblockUserHandler.handleTcp(request, conn);
-                    break;
-                case "GET_FRIENDSHIP_STATUS":
-                    response = getFriendshipStatusHandler.handleTcp(request, conn);
+                case "LEAVE_GROUP":
+                    response = leaveGroupHandler.handleTcp(request, conn);
                     break;
 
                 default:

@@ -6,6 +6,9 @@ import com.server.tcp.ClientConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
+
 /**
  * Xu ly action REGISTER gui qua TCP socket.
  */
@@ -26,10 +29,11 @@ public class RegisterHandler {
 
     public JsonObject handleTcp(JsonObject request, ClientConnection conn) {
         JsonObject response = new JsonObject();
+        String remoteAddress = conn != null ? conn.getRemoteAddress() : "unknown";
         try {
             if (!request.has("username") || !request.has("password") || !request.has("email")) {
                 logger.warn("[REGISTER] Remote={} | Missing required fields (username, password, email)",
-                        conn.getRemoteAddress());
+                        remoteAddress);
                 response.addProperty("status", "error");
                 response.addProperty("message", "Missing required fields: username, password, email");
                 return response;
@@ -63,12 +67,6 @@ public class RegisterHandler {
                 return response;
             }
 
-            if (!password.matches("^[a-zA-Z0-9_]+$")) {
-                response.addProperty("status", "error");
-                response.addProperty("message", "Password can only contain letters, numbers, and underscores");
-                return response;
-            }
-
             // Validate email
             if (email.length() > MAX_EMAIL_LENGTH) {
                 response.addProperty("status", "error");
@@ -82,34 +80,47 @@ public class RegisterHandler {
             }
 
             logger.info("[REGISTER ATTEMPT] Remote={} | Username={} | Email={} | Registration attempt",
-                    conn.getRemoteAddress(), username, email);
+                    remoteAddress, username, email);
 
             if (authService.register(username, password, email)) {
                 logger.info("[REGISTER SUCCESS] Remote={} | Username={} | Email={} | Registration successful",
-                        conn.getRemoteAddress(), username, email);
+                        remoteAddress, username, email);
                 response.addProperty("status", "success");
                 response.addProperty("message", "Registration successful");
             } else {
                 logger.warn("[REGISTER FAILED] Remote={} | Username={} | Email={} | Registration failed (service returned false)",
-                        conn.getRemoteAddress(), username, email);
+                        remoteAddress, username, email);
                 response.addProperty("status", "error");
-                response.addProperty("message", "Registration failed");
+                response.addProperty("message", "Registration failed: no user row inserted");
             }
         } catch (Exception dbEx) {
             logger.error("[REGISTER ERROR] Remote={} | Username={} | Email={} | Database error: {}",
-                    conn.getRemoteAddress(),
+                    remoteAddress,
                     request.has("username") ? request.get("username").getAsString() : "?",
                     request.has("email") ? request.get("email").getAsString() : "?",
                     dbEx.getMessage(), dbEx);
-            String errMsg = "Registration failed";
-            if (dbEx.getMessage() != null && dbEx.getMessage().contains("Duplicate")) {
+            String errMsg = "Registration failed: " + (dbEx.getMessage() != null ? dbEx.getMessage() : "unknown database error");
+            if (isDuplicateKeyError(dbEx)) {
                 errMsg = "Username or email already exists";
                 logger.warn("[REGISTER DUPLICATE] Remote={} | Duplicate username or email detected",
-                        conn.getRemoteAddress());
+                        remoteAddress);
             }
             response.addProperty("status", "error");
             response.addProperty("message", errMsg);
         }
         return response;
+    }
+
+    private boolean isDuplicateKeyError(Exception exception) {
+        if (exception instanceof SQLIntegrityConstraintViolationException) {
+            return true;
+        }
+        if (exception instanceof SQLException sqlException) {
+            if ("23000".equals(sqlException.getSQLState()) || sqlException.getErrorCode() == 1062) {
+                return true;
+            }
+        }
+        String message = exception.getMessage();
+        return message != null && message.toLowerCase().contains("duplicate");
     }
 }
