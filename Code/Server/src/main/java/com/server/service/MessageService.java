@@ -64,5 +64,28 @@ public class MessageService {
     public Message getMessageById(long messageId) {
         return messageRepository.findById(messageId);
     }
+
+    public boolean editMessage(long messageId, long senderId, String newContent) {
+        Message msg = messageRepository.findById(messageId);
+        if (msg == null) {
+            return false;
+        }
+        if (msg.getSenderId() != senderId) {
+            throw new SecurityException("Unauthorized: you cannot edit someone else's message");
+        }
+        return messageRepository.updateContent(messageId, newContent);
+    }
+
+    public boolean deleteMessage(long messageId, long senderId) {
+        Message msg = messageRepository.findById(messageId);
+        if (msg == null) {
+            return false;
+        }
+        if (msg.getSenderId() != senderId) {
+            throw new SecurityException("Unauthorized: you cannot delete someone else's message");
+        }
+        return messageRepository.updateContent(messageId, "Tin nhắn đã bị thu hồi");
+    }
 }
+
 

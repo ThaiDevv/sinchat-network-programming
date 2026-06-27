@@ -86,6 +86,8 @@ public class ChatService {
 
     // ---- callbacks for server-push events ----
     private Consumer<JsonObject> onNewMessage;
+    private Consumer<JsonObject> onMessageEdited;
+    private Consumer<JsonObject> onMessageDeleted;
     private Consumer<JsonObject> onUserTyping;
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
@@ -104,6 +106,8 @@ public class ChatService {
 
     // ---- public callback setters ----
     public void setOnNewMessage(Consumer<JsonObject> callback) { this.onNewMessage = callback; }
+    public void setOnMessageEdited(Consumer<JsonObject> callback) { this.onMessageEdited = callback; }
+    public void setOnMessageDeleted(Consumer<JsonObject> callback) { this.onMessageDeleted = callback; }
     public void setOnUserTyping(Consumer<JsonObject> callback) { this.onUserTyping = callback; }
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
@@ -280,6 +284,12 @@ public class ChatService {
             switch (action) {
                 case "NEW_MESSAGE":
                     if (onNewMessage != null) Platform.runLater(() -> onNewMessage.accept(json));
+                    break;
+                case "EDIT_MESSAGE_EVENT":
+                    if (onMessageEdited != null) Platform.runLater(() -> onMessageEdited.accept(json));
+                    break;
+                case "DELETE_MESSAGE_EVENT":
+                    if (onMessageDeleted != null) Platform.runLater(() -> onMessageDeleted.accept(json));
                     break;
                 case "MESSAGE_STATUS_EVENT":
                     if (onMessageStatusChanged != null) Platform.runLater(() -> onMessageStatusChanged.accept(json));
@@ -619,6 +629,23 @@ public class ChatService {
         JsonObject req = new JsonObject();
         req.addProperty("action", "UNBLOCK_USER");
         req.addProperty("targetUserId", targetUserId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse editMessage(long messageId, long conversationId, String content) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "EDIT_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("content", content);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse deleteMessage(long messageId, long conversationId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "DELETE_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
         return sendRequestSync(req);
     }
 }

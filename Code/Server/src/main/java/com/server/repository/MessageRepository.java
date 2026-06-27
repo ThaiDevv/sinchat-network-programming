@@ -183,9 +183,23 @@ public class MessageRepository {
                 rs.getLong("conversation_id"),
                 rs.getLong("sender_id"),
                 rs.getString("sender_username"),
-                Message.MessageType.valueOf(rs.getString("type")),
+                rs.getString("type") != null ? Message.MessageType.valueOf(rs.getString("type")) : Message.MessageType.TEXT,
                 rs.getString("content"),
                 rs.getTimestamp("created_at")
         );
     }
+
+    public boolean updateContent(long messageId, String newContent) {
+        String query = "UPDATE messages SET content = ? WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setString(1, newContent);
+            pstmt.setLong(2, messageId);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            logger.error("Error updating message content for ID: {}", messageId, e);
+        }
+        return false;
+    }
 }
+
