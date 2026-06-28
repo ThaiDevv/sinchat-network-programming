@@ -48,6 +48,7 @@ public class Router {
     private static NameHandler nameHandler = new NameHandler();
     private static CreateGroupHandler createGroupHandler = new CreateGroupHandler();
     private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
+    private static GroupManagementHandler groupManagementHandler = new GroupManagementHandler();
 
     // ---- friendship handlers (require FriendshipService) ----
     private static FriendshipService friendshipService = new FriendshipService();
@@ -172,6 +173,9 @@ public class Router {
                     break;
                 case "LEAVE_GROUP":
                     response = leaveGroupHandler.handleTcp(request, conn);
+                    break;
+                case "MANAGE_GROUP":
+                    response = groupManagementHandler.handleTcp(request, conn);
                     break;
 
                 // ---- friendship actions ----

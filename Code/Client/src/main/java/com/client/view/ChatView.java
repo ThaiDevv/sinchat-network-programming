@@ -57,6 +57,10 @@ public class ChatView {
     private Label typingLabel;
     private Label loadingIndicator;
     private Button leaveGroupBtn;
+    private Button manageGroupBtn;
+    private Button callBtn;
+    private Button videoBtn;
+    private Button friendActionBtn;
 
     // Message search fields
     private TextField messageSearchField;
@@ -86,6 +90,7 @@ public class ChatView {
     private final Map<Long, Node> messageBubbleById = new HashMap<>();
     private final Map<Long, Integer> unreadCounts = new HashMap<>();
     private final Map<Long, String> conversationDisplayNames = new HashMap<>();
+    private final Map<Long, String> conversationTypes = new HashMap<>();
     private final Map<Long, Label> unreadBadgesByConvId = new HashMap<>();
     private final List<Stage> activeNotificationStages = new ArrayList<>();
     private final Map<Long, List<Circle>> peerAvatarCircles = new ConcurrentHashMap<>();
@@ -260,6 +265,10 @@ public class ChatView {
                     if (leaveGroupBtn != null) {
                         leaveGroupBtn.setVisible(false);
                         leaveGroupBtn.setManaged(false);
+                    }
+                    if (manageGroupBtn != null) {
+                        manageGroupBtn.setVisible(false);
+                        manageGroupBtn.setManaged(false);
                     }
                 });
             }
@@ -530,7 +539,8 @@ public class ChatView {
         if (headerChatName != null) headerChatName.setText(name);
 
         Long peerId = peerIdByConversationId.get(conversationId);
-        if (peerId != null) {
+        boolean isGroupConversation = "GROUP".equals(conversationTypes.get(conversationId));
+        if (!isGroupConversation && peerId != null) {
             Boolean online = peerOnlineByPeerId.get(peerId);
             String lastSeen = peerLastSeenByPeerId.get(peerId);
             updateHeaderPresence(online != null ? online : false, online == null || !online ? lastSeen : null);
@@ -548,6 +558,11 @@ public class ChatView {
                 leaveGroupBtn.setVisible(false);
                 leaveGroupBtn.setManaged(false);
             }
+            if (manageGroupBtn != null) {
+                manageGroupBtn.setVisible(false);
+                manageGroupBtn.setManaged(false);
+            }
+            setPrivateHeaderActionsVisible(true);
         } else {
             // Group conversation — show "Members" in status and a group icon colour
             if (chatStatus != null) {
@@ -564,6 +579,11 @@ public class ChatView {
                 leaveGroupBtn.setVisible(true);
                 leaveGroupBtn.setManaged(true);
             }
+            if (manageGroupBtn != null && conversationId > 0) {
+                manageGroupBtn.setVisible(true);
+                manageGroupBtn.setManaged(true);
+            }
+            setPrivateHeaderActionsVisible(false);
         }
 
         loadConversations();
@@ -578,6 +598,7 @@ public class ChatView {
         statusDotsByPeerId.clear();
         conversationIdByPeerId.clear();
         peerIdByConversationId.clear();
+        conversationTypes.clear();
 
         controller.loadConversations(
                 data -> {
@@ -591,12 +612,40 @@ public class ChatView {
                         String lastMsg = conv.has("lastMessage") && !conv.get("lastMessage").isJsonNull()
                                 ? conv.get("lastMessage").getAsString() : "";
                         boolean isSelected = (id == currentConversationId);
+                        String type = conv.has("type") && !conv.get("type").isJsonNull()
+                                ? conv.get("type").getAsString() : "PRIVATE";
+                        conversationTypes.put(id, type);
                         if (isSelected) {
                             activeConvStillExists = true;
-                            boolean online = conv.has("isOnline") && conv.get("isOnline").getAsBoolean();
-                            String lastSeen = conv.has("lastSeen") && !conv.get("lastSeen").isJsonNull()
-                                    ? conv.get("lastSeen").getAsString() : null;
-                            updateHeaderPresence(online, lastSeen);
+                            if ("GROUP".equals(type)) {
+                                if (chatStatus != null) {
+                                    chatStatus.setText("Nhóm chat");
+                                    chatStatus.setStyle("-fx-font-size: 12px; -fx-text-fill: " + StyleConstants.ACCENT + ";");
+                                }
+                                if (manageGroupBtn != null) {
+                                    manageGroupBtn.setVisible(true);
+                                    manageGroupBtn.setManaged(true);
+                                }
+                                if (leaveGroupBtn != null) {
+                                    leaveGroupBtn.setVisible(true);
+                                    leaveGroupBtn.setManaged(true);
+                                }
+                                setPrivateHeaderActionsVisible(false);
+                            } else {
+                                boolean online = conv.has("isOnline") && conv.get("isOnline").getAsBoolean();
+                                String lastSeen = conv.has("lastSeen") && !conv.get("lastSeen").isJsonNull()
+                                        ? conv.get("lastSeen").getAsString() : null;
+                                updateHeaderPresence(online, lastSeen);
+                                if (manageGroupBtn != null) {
+                                    manageGroupBtn.setVisible(false);
+                                    manageGroupBtn.setManaged(false);
+                                }
+                                if (leaveGroupBtn != null) {
+                                    leaveGroupBtn.setVisible(false);
+                                    leaveGroupBtn.setManaged(false);
+                                }
+                                setPrivateHeaderActionsVisible(true);
+                            }
                         }
                         addContactWithPresence(id, name, lastMsg, isSelected, conv);
                     }
@@ -693,6 +742,21 @@ public class ChatView {
         }
         contact.setOnMouseClicked(e -> setCurrentConversation(conversationId, name));
         contactList.getChildren().add(contact);
+    }
+
+    private void setPrivateHeaderActionsVisible(boolean visible) {
+        if (callBtn != null) {
+            callBtn.setVisible(visible);
+            callBtn.setManaged(visible);
+        }
+        if (videoBtn != null) {
+            videoBtn.setVisible(visible);
+            videoBtn.setManaged(visible);
+        }
+        if (friendActionBtn != null) {
+            friendActionBtn.setVisible(visible);
+            friendActionBtn.setManaged(visible);
+        }
     }
 
     // ==================== HEADER PRESENCE ====================
@@ -2200,19 +2264,41 @@ public class ChatView {
                         leaveGroupBtn.setVisible(false);
                         leaveGroupBtn.setManaged(false);
                     }
+                    if (manageGroupBtn != null) {
+                        manageGroupBtn.setVisible(false);
+                        manageGroupBtn.setManaged(false);
+                    }
+                    setPrivateHeaderActionsVisible(true);
                     loadConversations();
                 }, err -> showToast("Không thể thoát nhóm: " + err));
             }
         });
 
-        Button friendActionBtn = new Button("⋮");
+        // Manage group button — visible only for group conversations
+        manageGroupBtn = new Button("⚙️ Quản lý");
+        manageGroupBtn.setStyle("-fx-background-color: rgba(124, 92, 252, 0.15); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;");
+        manageGroupBtn.setOnMouseEntered(e -> manageGroupBtn.setStyle("-fx-background-color: #7c5cfc; -fx-text-fill: white; -fx-border-color: transparent; -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
+        manageGroupBtn.setOnMouseExited(e -> manageGroupBtn.setStyle("-fx-background-color: rgba(124, 92, 252, 0.15); -fx-text-fill: #7c5cfc; -fx-border-color: rgba(124, 92, 252, 0.3); -fx-border-width: 1.2px; -fx-border-radius: 18px; -fx-font-weight: bold; -fx-font-size: 13px; -fx-background-radius: 18px; -fx-min-height: 38px; -fx-padding: 0 16px; -fx-cursor: hand;"));
+        manageGroupBtn.setVisible(false);
+        manageGroupBtn.setManaged(false);
+        manageGroupBtn.setOnAction(e -> {
+            new ManageGroupDialog(stage, controller, currentConversationId, () -> {
+                loadConversations();
+                loadMessagesForCurrentConversation(true);
+            }).show();
+        });
+
+        friendActionBtn = new Button("⋮");
         friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;");
         friendActionBtn.setOnMouseEntered(e -> friendActionBtn.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: white; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
         friendActionBtn.setOnMouseExited(e -> friendActionBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #cccccc; -fx-font-size: 20px; -fx-font-weight: bold; -fx-min-width: 36px; -fx-min-height: 36px; -fx-cursor: hand; -fx-padding: 0;"));
         friendActionBtn.setOnAction(e -> showFriendshipContextMenu(friendActionBtn));
 
+        callBtn = createIconButton("Call");
+        videoBtn = createIconButton("Video");
+
         actions.getChildren().addAll(messageSearchField, messageSearchButton,
-                createIconButton("Call"), createIconButton("Video"), friendActionBtn, leaveGroupBtn);
+                callBtn, videoBtn, friendActionBtn, manageGroupBtn, leaveGroupBtn);
         chatHeader.getChildren().addAll(headerAvatar, headerInfo, spacer, actions);
 
         // Search results panel

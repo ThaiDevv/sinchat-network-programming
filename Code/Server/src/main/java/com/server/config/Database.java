@@ -152,6 +152,41 @@ public class Database {
         } catch (SQLException e) {
             logger.error("Database migration (action_user_id) failed: {}", e.getMessage(), e);
         }
+
+        // Migration 4: role column in conversation_members (ADMIN/MEMBER)
+        String checkRoleColumn = "SHOW COLUMNS FROM conversation_members LIKE 'role'";
+        String addRoleColumn = "ALTER TABLE conversation_members ADD COLUMN role VARCHAR(10) NOT NULL DEFAULT 'MEMBER'";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkRoleColumn)) {
+
+            if (!rs.next()) {
+                logger.info("Column 'role' not found in table 'conversation_members'. Running migration...");
+                stmt.executeUpdate(addRoleColumn);
+                logger.info("Database migration completed: added 'role' to 'conversation_members'.");
+            } else {
+                logger.info("Database schema is up to date. Column 'role' already exists in 'conversation_members'.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (conversation_members.role) failed: {}", e.getMessage(), e);
+        }
+
+        // Migration 5: Set ADMIN role for existing group creators
+        String updateAdminRole = "UPDATE conversation_members cm " +
+                "JOIN conversations c ON cm.conversation_id = c.id " +
+                "SET cm.role = 'ADMIN' " +
+                "WHERE c.type = 'GROUP' AND cm.user_id = c.created_by AND cm.role != 'ADMIN'";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+            int updated = stmt.executeUpdate(updateAdminRole);
+            if (updated > 0) {
+                logger.info("Database migration: set ADMIN role for {} existing group creators.", updated);
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (set ADMIN role) failed: {}", e.getMessage(), e);
+        }
     }
 }
 
