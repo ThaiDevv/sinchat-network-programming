@@ -174,6 +174,20 @@ public class LoginView {
                 backToLogin
         );
 
+        // Nhấn Enter trên các ô input => thực hiện đăng ký
+        usernameField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) registerButton.fire();
+        });
+        emailField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) registerButton.fire();
+        });
+        passwordField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) registerButton.fire();
+        });
+        confirmPasswordField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) registerButton.fire();
+        });
+
         setCenter(registerBox);
     }
 
@@ -228,6 +242,11 @@ public class LoginView {
                 backToLogin
         );
 
+        // Nhấn Enter trên ô username => tạo mã xác nhận
+        accountField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) createCodeButton.fire();
+        });
+
         setCenter(forgotBox);
     }
 
@@ -271,6 +290,11 @@ public class LoginView {
                 confirmButton,
                 changeAccount
         );
+
+        // Nhấn Enter trên ô nhập mã => xác nhận
+        codeField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) confirmButton.fire();
+        });
 
         setCenter(verifyBox);
     }
@@ -334,6 +358,14 @@ public class LoginView {
                 backToLogin
         );
 
+        // Nhấn Enter trên các ô input => đổi mật khẩu
+        newPasswordField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) saveButton.fire();
+        });
+        confirmPasswordField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ENTER) saveButton.fire();
+        });
+
         setCenter(passwordBox);
     }
 
@@ -369,12 +401,23 @@ public class LoginView {
 
     private Button createPasswordToggleButton() {
         Button eyeButton = new Button("Hi\u1ec7n");
-        eyeButton.setStyle("""
+        String baseStyle = """
                 -fx-background-color: transparent;
-                -fx-text-fill: #aaa;
                 -fx-font-size: 13px;
                 -fx-cursor: hand;
-                """);
+                """;
+        String defaultStyle = baseStyle + "-fx-text-fill: #aaa;";
+        String focusStyle = baseStyle + "-fx-text-fill: #ff7777;";
+
+        eyeButton.setStyle(defaultStyle);
+
+        eyeButton.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                eyeButton.setStyle(focusStyle);
+            } else {
+                eyeButton.setStyle(defaultStyle);
+            }
+        });
         return eyeButton;
     }
 
@@ -430,17 +473,7 @@ public class LoginView {
     private TextField createInput(String prompt) {
         TextField input = new TextField();
         input.setPromptText(prompt);
-        input.setStyle("""
-                -fx-background-color: black;
-                -fx-border-color: #444;
-                -fx-border-width: 2px;
-                -fx-border-radius: 24px;
-                -fx-background-radius: 24px;
-                -fx-text-fill: white;
-                -fx-prompt-text-fill: #666;
-                -fx-font-size: 18px;
-                -fx-padding: 18px;
-                """);
+        applyInputStyle(input);
         input.setPrefHeight(65);
         return input;
     }
@@ -448,9 +481,15 @@ public class LoginView {
     private PasswordField createPasswordInput(String prompt) {
         PasswordField input = new PasswordField();
         input.setPromptText(prompt);
-        input.setStyle("""
+        applyInputStyle(input);
+        input.setPrefHeight(65);
+        return input;
+    }
+
+    private void applyInputStyle(javafx.scene.control.TextInputControl input) {
+        // Style mặc định
+        String baseStyle = """
                 -fx-background-color: black;
-                -fx-border-color: #444;
                 -fx-border-width: 2px;
                 -fx-border-radius: 24px;
                 -fx-background-radius: 24px;
@@ -458,33 +497,81 @@ public class LoginView {
                 -fx-prompt-text-fill: #666;
                 -fx-font-size: 18px;
                 -fx-padding: 18px;
-                """);
-        input.setPrefHeight(65);
-        return input;
+                """;
+        
+        String defaultBorder = "-fx-border-color: #444;";
+        String focusBorder = "-fx-border-color: #ff7777;";
+
+        input.setStyle(baseStyle + defaultBorder);
+
+        input.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                input.setStyle(baseStyle + focusBorder);
+            } else {
+                input.setStyle(baseStyle + defaultBorder);
+            }
+        });
     }
 
     private Button createPrimaryButton(String text) {
         Button button = new Button(text);
-        button.setStyle("""
+        applyButtonStyle(button);
+        button.setPrefHeight(65);
+        button.setMaxWidth(Double.MAX_VALUE);
+        return button;
+    }
+
+    private void applyButtonStyle(Button button) {
+        String baseStyle = """
                 -fx-background-color: white;
                 -fx-text-fill: black;
                 -fx-font-size: 20px;
                 -fx-font-weight: bold;
                 -fx-background-radius: 24px;
                 -fx-cursor: hand;
-                """);
-        button.setPrefHeight(65);
-        button.setMaxWidth(Double.MAX_VALUE);
-        return button;
+                -fx-border-width: 3px;
+                -fx-border-radius: 24px;
+                """;
+        
+        String defaultBorder = "-fx-border-color: transparent;";
+        String focusBorder = "-fx-border-color: #ff7777;";
+
+        button.setStyle(baseStyle + defaultBorder);
+
+        button.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                button.setStyle(baseStyle + focusBorder);
+            } else {
+                button.setStyle(baseStyle + defaultBorder);
+            }
+        });
     }
 
     private Hyperlink createLink(String text) {
         Hyperlink link = new Hyperlink(text);
-        link.setStyle("""
+        applyLinkStyle(link);
+        return link;
+    }
+
+    private void applyLinkStyle(Hyperlink link) {
+        String baseStyle = """
                 -fx-text-fill: #aaa;
                 -fx-border-color: transparent;
-                """);
-        return link;
+                -fx-underline: false;
+                """;
+        
+        String defaultStyle = baseStyle;
+        String focusStyle = baseStyle + "-fx-text-fill: #ff7777; -fx-underline: true;";
+
+        link.setStyle(defaultStyle);
+
+        link.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                link.setStyle(focusStyle);
+            } else {
+                link.setStyle(defaultStyle);
+            }
+        });
     }
 
     private Label createMessageLabel() {
