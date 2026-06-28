@@ -52,14 +52,14 @@ public class EditMessageHandler {
             }
 
             try {
-                boolean success = messageService.editMessage(messageId, connectedUserId.longValue(), content);
-                if (success) {
+                long newMsgId = messageService.editMessage(messageId, connectedUserId.longValue(), content);
+                if (newMsgId > 0) {
                     response.addProperty("status", "success");
                     response.addProperty("messageId", messageId);
                     response.addProperty("conversationId", conversationId);
                     response.addProperty("content", content);
 
-                    // Broadcast edit event to members
+                    // Broadcast edit event to members — client will update the old bubble in-place
                     JsonObject event = new JsonObject();
                     event.addProperty("action", "EDIT_MESSAGE_EVENT");
                     event.addProperty("messageId", messageId);

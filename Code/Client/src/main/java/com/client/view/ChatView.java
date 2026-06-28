@@ -845,7 +845,7 @@ public class ChatView {
                 VBox bubbleGroup = new VBox(4);
                 bubbleGroup.setAlignment(Pos.TOP_RIGHT);
                 if (isFwd) {
-                    Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+                    Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                     forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                     bubbleGroup.getChildren().add(forwardLabel);
                 }
@@ -956,7 +956,7 @@ public class ChatView {
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_RIGHT);
             if (isForward) {
-                Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+                Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                 forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
@@ -996,8 +996,7 @@ public class ChatView {
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_LEFT);
             if (isForward2) {
-                String fwdLabelText = (senderUsername != null ? senderUsername : "Ai đó") + " đã chuyển tiếp một tin nhắn";
-                Label forwardLabel = new Label(fwdLabelText);
+                Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                 forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
@@ -1075,7 +1074,7 @@ public class ChatView {
         VBox bubbleGroup = new VBox(4);
         bubbleGroup.setAlignment(Pos.TOP_RIGHT);
         if (isForward) {
-            Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+            Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
             forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
             bubbleGroup.getChildren().add(forwardLabel);
         }
@@ -1334,10 +1333,20 @@ public class ChatView {
                     boolean isMine = parent.getAlignment() == Pos.TOP_RIGHT;
                     String bg = isMine ? StyleConstants.ACCENT : "#1e1e1e";
                     String radius = isMine ? "18px 18px 4px 18px" : "18px 18px 18px 4px";
-                    Node newBubble = createMessageBubble(content + " (đã chỉnh sửa)", bg, radius);
+                    Node newBubble = createMessageBubble(content, bg, radius);
                     String senderName = isMine ? "Bạn" : "Người khác";
                     addContextMenuToBubble(newBubble, messageId, senderName, content);
-                    parent.getChildren().set(index, newBubble);
+
+                    // Wrap bubble with "Đã chỉnh sửa" label, similar to forward indicator
+                    VBox editedGroup = new VBox(4);
+                    editedGroup.setAlignment(isMine ? Pos.TOP_RIGHT : Pos.TOP_LEFT);
+                    Label editedLabel = new Label("Đã chỉnh sửa");
+                    String editPadding = isMine ? "-fx-padding: 0 4px 2px 0;" : "-fx-padding: 0 0 2px 4px;";
+                    editedLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; " + editPadding);
+                    editedGroup.getChildren().add(editedLabel);
+                    editedGroup.getChildren().add(newBubble);
+
+                    parent.getChildren().set(index, editedGroup);
                     messageBubbleById.put(messageId, newBubble);
                 }
             }
