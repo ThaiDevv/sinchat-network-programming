@@ -327,6 +327,19 @@ Once successfully authenticated, the Client must send a `JOIN` request to map th
       "content": "Hi! Nice to meet you."
     }
     ```
+*   **Optional reply fields** (for replying to a message):
+    ```json
+    {
+      "replyToId": 1001
+    }
+    ```
+*   **Optional forward fields** (for forwarding a message from another conversation):
+    ```json
+    {
+      "forwardFromId": 1000
+    }
+    ```
+    > `forwardFromId`: ID of the original message being forwarded. The server resolves the sender username and original content automatically.
 *   **Direct Success Response to Sender**:
     ```json
     {
@@ -348,6 +361,34 @@ Once successfully authenticated, the Client must send a `JOIN` request to map th
       "senderId": 12,
       "content": "Hi! Nice to meet you.",
       "messageId": 1002
+    }
+    ```
+    **With reply metadata** (if `replyToId` was provided):
+    ```json
+    {
+      "action": "NEW_MESSAGE",
+      "conversationId": 45,
+      "senderId": 12,
+      "senderUsername": "alice",
+      "content": "OK!",
+      "messageId": 1003,
+      "replyToId": 1002,
+      "replyToUsername": "bob",
+      "replyToContent": "Hi! Nice to meet you."
+    }
+    ```
+    **With forward metadata** (if `forwardFromId` was provided):
+    ```json
+    {
+      "action": "NEW_MESSAGE",
+      "conversationId": 46,
+      "senderId": 12,
+      "senderUsername": "alice",
+      "content": "Check this out!",
+      "messageId": 1004,
+      "forwardFromId": 1000,
+      "forwardFromUsername": "bob",
+      "forwardFromContent": "Tin nhắn gốc được chuyển tiếp"
     }
     ```
 

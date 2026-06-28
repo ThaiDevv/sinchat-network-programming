@@ -5,10 +5,22 @@ import com.server.handler.auth.*;
 import com.server.handler.message.*;
 import com.server.handler.changeavatar.*;
 import com.server.handler.avatar.GetAvatarHandler;
+import com.server.handler.changeName.NameHandler;
+
+import com.server.handler.friendship.BlockUserHandler;
+import com.server.handler.friendship.GetFriendRequestsHandler;
+import com.server.handler.friendship.GetFriendsHandler;
+import com.server.handler.friendship.GetFriendshipStatusHandler;
+import com.server.handler.friendship.RespondFriendRequestHandler;
+import com.server.handler.friendship.SendFriendRequestHandler;
+import com.server.handler.friendship.UnblockUserHandler;
+import com.server.handler.friendship.UnfriendHandler;
+
 import com.server.handler.JoinHandler;
 import com.server.handler.PingHandler;
 import com.server.handler.TypingHandler;
 import com.server.ProfileHandler;
+import com.server.service.FriendshipService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,23 +28,39 @@ public class Router {
     private static final Logger logger = LoggerFactory.getLogger(Router.class);
 
     // Dung chung handler de giam tao object va de thay mock khi test.
-    private static final LoginHandler loginHandler = new LoginHandler();
-    private static final RegisterHandler registerHandler = new RegisterHandler();
-    private static final ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
-    private static final ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
-    private static final ProfileHandler profileHandler = new ProfileHandler();
-    private static final GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
-    private static final SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
-    private static final SendMessageHandler sendMessageHandler = new SendMessageHandler();
-    private static final ConversationHandler conversationHandler = new ConversationHandler();
-    private static final GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
-    private static final SearchUserHandler searchUserHandler = new SearchUserHandler();
-    private static final AvatarHandler avatarHandler = new AvatarHandler();
-    private static final GetAvatarHandler getAvatarHandler = new GetAvatarHandler();
-    private static final JoinHandler joinHandler = new JoinHandler();
-    private static final PingHandler pingHandler = new PingHandler();
-    private static final TypingHandler typingHandler = new TypingHandler();
-    private static final UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
+    private static LoginHandler loginHandler = new LoginHandler();
+    private static RegisterHandler registerHandler = new RegisterHandler();
+    private static ForgotPasswordHandler forgotPasswordHandler = new ForgotPasswordHandler();
+    private static ChangePasswordHandler changePasswordHandler = new ChangePasswordHandler();
+    private static ProfileHandler profileHandler = new ProfileHandler();
+    private static GetMessagesHandler getMessagesHandler = new GetMessagesHandler();
+    private static SearchMessagesHandler searchMessagesHandler = new SearchMessagesHandler();
+    private static SendMessageHandler sendMessageHandler = new SendMessageHandler();
+    private static ConversationHandler conversationHandler = new ConversationHandler();
+    private static GetConversationsHandler getConversationsHandler = new GetConversationsHandler();
+    private static SearchUserHandler searchUserHandler = new SearchUserHandler();
+    private static AvatarHandler avatarHandler = new AvatarHandler();
+    private static GetAvatarHandler getAvatarHandler = new GetAvatarHandler();
+    private static JoinHandler joinHandler = new JoinHandler();
+    private static PingHandler pingHandler = new PingHandler();
+    private static TypingHandler typingHandler = new TypingHandler();
+    private static UpdateMessageStatusHandler updateMessageStatusHandler = new UpdateMessageStatusHandler();
+    private static NameHandler nameHandler = new NameHandler();
+    private static CreateGroupHandler createGroupHandler = new CreateGroupHandler();
+    private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
+    private static DeleteMessageHandler deleteMessageHandler = new DeleteMessageHandler();
+    private static EditMessageHandler editMessageHandler = new EditMessageHandler();
+
+    // ---- friendship handlers (require FriendshipService) ----
+    private static FriendshipService friendshipService = new FriendshipService();
+    private static SendFriendRequestHandler sendFriendRequestHandler = new SendFriendRequestHandler(friendshipService);
+    private static RespondFriendRequestHandler respondFriendRequestHandler = new RespondFriendRequestHandler(friendshipService);
+    private static GetFriendRequestsHandler getFriendRequestsHandler = new GetFriendRequestsHandler(friendshipService);
+    private static GetFriendsHandler getFriendsHandler = new GetFriendsHandler(friendshipService);
+    private static GetFriendshipStatusHandler getFriendshipStatusHandler = new GetFriendshipStatusHandler(friendshipService);
+    private static UnfriendHandler unfriendHandler = new UnfriendHandler(friendshipService);
+    private static BlockUserHandler blockUserHandler = new BlockUserHandler(friendshipService);
+    private static UnblockUserHandler unblockUserHandler = new UnblockUserHandler(friendshipService);
 
     public static void route(JsonObject request, ClientConnection conn) {
         if (!request.has("action")) {
@@ -138,11 +166,56 @@ public class Router {
                 case "UPDATE_MESSAGE_STATUS":
                     response = updateMessageStatusHandler.handleTcp(request, conn);
                     break;
+                case "CHANGE_NAME":
+                    response = nameHandler.handle(conn, request);
+                    break;
+                case "CREATE_GROUP":
+                    response = createGroupHandler.handleTcp(request, conn);
+                    break;
+                case "LEAVE_GROUP":
+                    response = leaveGroupHandler.handleTcp(request, conn);
+                    break;
+                case "DELETE_MESSAGE":
+                    response = deleteMessageHandler.handleTcp(request, conn);
+                    break;
+                case "EDIT_MESSAGE":
+                    response = editMessageHandler.handleTcp(request, conn);
+                    break;
+
+                // ---- friendship actions ----
+                case "SEND_FRIEND_REQUEST":
+                    response = sendFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "RESPOND_FRIEND_REQUEST":
+                    response = respondFriendRequestHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIEND_REQUESTS":
+                    response = getFriendRequestsHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIENDS":
+                    response = getFriendsHandler.handleTcp(request, conn);
+                    break;
+                case "GET_FRIENDSHIP_STATUS":
+                    response = getFriendshipStatusHandler.handleTcp(request, conn);
+                    break;
+                case "UNFRIEND":
+                    response = unfriendHandler.handleTcp(request, conn);
+                    break;
+                case "BLOCK_USER":
+                    response = blockUserHandler.handleTcp(request, conn);
+                    break;
+                case "UNBLOCK_USER":
+                    response = unblockUserHandler.handleTcp(request, conn);
+                    break;
 
                 default:
                     logger.warn("[ROUTER] Unknown action='{}' from Remote={} | UserId={}",
                             action, conn.getRemoteAddress(), conn.getUserId());
-                    conn.sendError("Unknown action: " + action);
+                    JsonObject err = new JsonObject();
+                    err.addProperty("status", "error");
+                    err.addProperty("message", "Unknown action: " + action);
+                    if (requestId != null) err.addProperty("requestId", requestId);
+                    conn.send(err);
                     return;
             }
 
@@ -166,7 +239,8 @@ public class Router {
                     action, conn.getRemoteAddress(), conn.getUserId(), e.getMessage(), e);
             JsonObject err = new JsonObject();
             err.addProperty("action", action + "_RESPONSE");
-            if (requestId != null) err.addProperty("requestId", requestId);
+            if (requestId != null)
+                err.addProperty("requestId", requestId);
             err.addProperty("status", "error");
             err.addProperty("message", "Internal server error: " + e.getMessage());
             conn.send(err);

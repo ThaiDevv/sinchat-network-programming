@@ -1,38 +1,49 @@
-.deps/
-*.class
-*.log
+# ============================================================
+#  SinChat — .gitignore
+#  Chỉ track source code (.java) và file test.
+#  Mọi file build, IDE, OS, log, binary đều bị bỏ qua.
+# ============================================================
 
-# IDE files
-.idea/
-.claude/
-*.iml
-.vscode/settings.json
-
-# Environment files
-.env
-Code/Server/.env
-
-# Maven build output
+# ---- Maven build output ----
 target/
-Code/Server/target/
-Code/Client/target/
+target/**
 dependency-reduced-pom.xml
 
-# Build output
-out/
+# ---- Compiled classes ----
+*.class
 
-# Test reports (generated)
-test-reports/
+# ---- IDE files ----
+.idea/
+*.iml
+.claude/
+.codebuddy/
+.settings/
+.project
+.classpath
+.vscode/
 
-# Local/generated artifacts
+# ---- OS generated files ----
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---- Logs ----
+*.log
+
+# ---- Environment / secrets ----
+.env
+*.env
+Code/Server/.env
+
+# ---- Uploaded user content (avatars, attachments) ----
+uploads/
+uploads/avatars/
+Code/Server/uploads/
+
+# ---- Generated / temporary files ----
 *.sql
 sql.txt
 API_DOCUMENTATION.md
-
-# Uploaded user content
-uploads/avatars/
-
-# OS files
-.DS_Store
-Thumbs.db
-/Code/Server/uploads
+test-reports/
+out/
+.deps/
