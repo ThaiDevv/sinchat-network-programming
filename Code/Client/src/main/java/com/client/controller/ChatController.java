@@ -450,4 +450,27 @@ public class ChatController {
         if ("DELIVERED".equalsIgnoreCase(status)) return "Delivered";
         return "Sent";
     }
+
+    public void editMessage(long messageId, long conversationId, String content, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.editMessage(messageId, conversationId, content),
+                response -> {
+                    if (response != null && !response.isSuccess()) {
+                        Platform.runLater(() -> onError.accept(response.message()));
+                    }
+                }
+        );
+    }
+
+    public void deleteMessage(long messageId, long conversationId, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.deleteMessage(messageId, conversationId),
+                response -> {
+                    if (response != null && !response.isSuccess()) {
+                        Platform.runLater(() -> onError.accept(response.message()));
+                    }
+                }
+        );
+    }
 }
+
