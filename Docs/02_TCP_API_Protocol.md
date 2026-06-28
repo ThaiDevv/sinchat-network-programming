@@ -60,7 +60,7 @@ The system uses an asynchronous **Request-Response** pairing model utilizing a `
       "action": "LOGIN_RESPONSE",
       "requestId": "req-login-1",
       "status": "error",
-      "message": "Invalid username or password"
+      "message": "Sai tên đăng nhập hoặc mật khẩu"
     }
     ```
 
