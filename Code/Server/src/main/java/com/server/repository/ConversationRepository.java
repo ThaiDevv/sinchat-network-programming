@@ -1,18 +1,23 @@
 package com.server.repository;
 
-import com.server.config.Database;
-import com.server.model.Conversation;
-
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.server.config.Database;
+import com.server.model.Conversation;
 
 public class ConversationRepository {
     private static final Logger logger = LoggerFactory.getLogger(ConversationRepository.class);
@@ -166,13 +171,9 @@ public class ConversationRepository {
                 "u.last_seen AS last_seen, " +
                 "(SELECT COALESCE(NULLIF(m.content, ''), fm.content, m.content) FROM messages m " +
                 "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
-                "WHERE m.conversation_id = c.id AND m.is_deleted = 0 " +
-                "AND m.id NOT IN (SELECT edited_to_id FROM messages WHERE edited_to_id IS NOT NULL) " +
-                "ORDER BY m.created_at DESC LIMIT 1) as last_message, " +
+                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message, " +
                 "(SELECT m.sender_id FROM messages m " +
-                "WHERE m.conversation_id = c.id AND m.is_deleted = 0 " +
-                "AND m.id NOT IN (SELECT edited_to_id FROM messages WHERE edited_to_id IS NOT NULL) " +
-                "ORDER BY m.created_at DESC LIMIT 1) as last_message_sender_id, " +
+                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_sender_id, " +
                 "c.last_message_at " +
                 "FROM conversations c " +
                 "JOIN conversation_members cm ON c.id = cm.conversation_id " +
@@ -253,10 +254,12 @@ public class ConversationRepository {
     /**
      * Create a new GROUP conversation with a given name and member list.
      * This is done atomically in a single transaction.
+     * Also inserts roles: creator → OWNER, other members → MEMBER.
      */
     public long createGroupConversation(long creatorId, String groupName, List<Long> memberIds) throws SQLException {
         String createQuery = "INSERT INTO conversations (type, name, created_by) VALUES ('GROUP', ?, ?)";
         String addMemberQuery = "INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)";
+        String addRoleQuery = "INSERT INTO conversation_roles (conversation_id, user_id, role) VALUES (?, ?, ?)";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -275,11 +278,18 @@ public class ConversationRepository {
                     }
                 }
 
-                try (PreparedStatement addStmt = conn.prepareStatement(addMemberQuery)) {
+                try (PreparedStatement addStmt = conn.prepareStatement(addMemberQuery);
+                     PreparedStatement addRoleStmt = conn.prepareStatement(addRoleQuery)) {
                     for (Long memberId : memberIds) {
                         addStmt.setLong(1, newId);
                         addStmt.setLong(2, memberId);
                         addStmt.executeUpdate();
+
+                        // Assign role: creator = OWNER, others = MEMBER
+                        addRoleStmt.setLong(1, newId);
+                        addRoleStmt.setLong(2, memberId);
+                        addRoleStmt.setString(3, memberId == creatorId ? "OWNER" : "MEMBER");
+                        addRoleStmt.executeUpdate();
                     }
                 }
 
@@ -341,5 +351,78 @@ public class ConversationRepository {
             logger.error("Error finding conversation peers for userId: {}", userId, e);
         }
         return peerIds;
+    }
+
+    // ==================== PIN / ROLE METHODS ====================
+
+    public String getUserRoleInConversation(long convId, long userId) {
+        String query = "SELECT role FROM conversation_roles WHERE conversation_id = ? AND user_id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, convId);
+            pstmt.setLong(2, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("role");
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching user role for convId: {} userId: {}", convId, userId, e);
+        }
+        return null;
+    }
+
+    public boolean isAdminOnlyPinEnabled(long convId) {
+        String query = "SELECT admin_only_pin FROM conversations WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, convId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getBoolean("admin_only_pin");
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching admin_only_pin for convId: {}", convId, e);
+        }
+        return false;
+    }
+
+    public int getPinLimit(long convId) {
+        String query = "SELECT pin_limit FROM conversations WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, convId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("pin_limit");
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching pin_limit for convId: {}", convId, e);
+        }
+        return 5;
+    }
+
+    public void setAdminOnlyPin(long convId, boolean flag) throws SQLException {
+        String query = "UPDATE conversations SET admin_only_pin = ? WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setBoolean(1, flag);
+            pstmt.setLong(2, convId);
+            pstmt.executeUpdate();
+        }
+    }
+
+    public void addConversationRole(long convId, long userId, String role) throws SQLException {
+        String query = "INSERT INTO conversation_roles (conversation_id, user_id, role) VALUES (?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE role = VALUES(role)";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, convId);
+            pstmt.setLong(2, userId);
+            pstmt.setString(3, role);
+            pstmt.executeUpdate();
+        }
     }
 }

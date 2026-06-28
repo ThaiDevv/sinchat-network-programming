@@ -1,19 +1,29 @@
 package com.client.service;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
+import javax.net.SocketFactory;
+import javax.net.ssl.SSLSocketFactory;
+
 import com.client.model.ApiResponse;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import javafx.application.Platform;
 
-import javax.net.SocketFactory;
-import javax.net.ssl.SSLSocketFactory;
-import java.io.*;
-import java.net.Socket;
-import java.util.UUID;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import javafx.application.Platform;
 
 /**
  * Core TCP networking service.
@@ -88,6 +98,7 @@ public class ChatService {
     private Consumer<JsonObject> onNewMessage;
     private Consumer<JsonObject> onMessageEdited;
     private Consumer<JsonObject> onMessageDeleted;
+    private Consumer<JsonObject> onMessagePinned;
     private Consumer<JsonObject> onUserTyping;
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
@@ -108,6 +119,7 @@ public class ChatService {
     public void setOnNewMessage(Consumer<JsonObject> callback) { this.onNewMessage = callback; }
     public void setOnMessageEdited(Consumer<JsonObject> callback) { this.onMessageEdited = callback; }
     public void setOnMessageDeleted(Consumer<JsonObject> callback) { this.onMessageDeleted = callback; }
+    public void setOnMessagePinned(Consumer<JsonObject> callback) { this.onMessagePinned = callback; }
     public void setOnUserTyping(Consumer<JsonObject> callback) { this.onUserTyping = callback; }
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
@@ -290,6 +302,10 @@ public class ChatService {
                     break;
                 case "DELETE_MESSAGE_EVENT":
                     if (onMessageDeleted != null) Platform.runLater(() -> onMessageDeleted.accept(json));
+                    break;
+                case "PIN_MESSAGE_EVENT":
+                case "UNPIN_MESSAGE_EVENT":
+                    if (onMessagePinned != null) Platform.runLater(() -> onMessagePinned.accept(json));
                     break;
                 case "MESSAGE_STATUS_EVENT":
                     if (onMessageStatusChanged != null) Platform.runLater(() -> onMessageStatusChanged.accept(json));
@@ -646,6 +662,30 @@ public class ChatService {
         req.addProperty("action", "DELETE_MESSAGE");
         req.addProperty("messageId", messageId);
         req.addProperty("conversationId", conversationId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse pinMessage(long messageId, long conversationId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "PIN_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse unpinMessage(long messageId, long conversationId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "UNPIN_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse setPinPolicy(long conversationId, boolean adminOnly) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SET_PIN_POLICY");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("adminOnly", adminOnly);
         return sendRequestSync(req);
     }
 }

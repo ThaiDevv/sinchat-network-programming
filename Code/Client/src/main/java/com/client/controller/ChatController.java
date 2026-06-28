@@ -1,14 +1,17 @@
 package com.client.controller;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
 import com.client.model.ApiResponse;
 import com.client.service.ChatService;
 import com.client.util.ImageUtils;
-import com.google.gson.*;
-import javafx.application.Platform;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
-import java.util.Base64;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
+import javafx.application.Platform;
 
 /**
  * Controller for all chat operations.
@@ -468,6 +471,43 @@ public class ChatController {
                 response -> {
                     if (response != null && !response.isSuccess()) {
                         Platform.runLater(() -> onError.accept(response.message()));
+                    }
+                }
+        );
+    }
+
+    public void pinMessage(long messageId, long conversationId, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.pinMessage(messageId, conversationId),
+                response -> {
+                    if (response != null && !response.isSuccess()) {
+                        Platform.runLater(() -> onError.accept(response.message()));
+                    }
+                }
+        );
+    }
+
+    public void unpinMessage(long messageId, long conversationId, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.unpinMessage(messageId, conversationId),
+                response -> {
+                    if (response != null && !response.isSuccess()) {
+                        Platform.runLater(() -> onError.accept(response.message()));
+                    }
+                }
+        );
+    }
+
+    public void setPinPolicy(long conversationId, boolean adminOnly,
+                             Consumer<Boolean> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.setPinPolicy(conversationId, adminOnly),
+                response -> {
+                    if (response != null && response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(adminOnly));
+                    } else {
+                        String err = response != null ? response.message() : "Không thể cập nhật chính sách ghim";
+                        Platform.runLater(() -> onError.accept(err));
                     }
                 }
         );

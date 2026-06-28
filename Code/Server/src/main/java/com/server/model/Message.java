@@ -20,11 +20,10 @@ public class Message {
     private Long forwardFromId;
     private String forwardFromUsername;
     private String forwardFromContent;
-    private boolean isDeleted;
-    private boolean isEdited;
-    private Timestamp editedAt;
-    private Long editedToId;           // FK → messages.id — next message in edit chain
-    private String resolvedContent;    // Latest content after following edit chain (not persisted)
+    private boolean pinned;
+    private Long pinnedBy;
+    private boolean deleted;
+    private Long editedToId;
 
     public Message() {}
 
@@ -50,18 +49,8 @@ public class Message {
     public MessageType getType() { return type; }
     public void setType(MessageType type) { this.type = type; }
 
-    /**
-     * Returns the latest content after following the edit chain.
-     * If this message has been edited, returns the resolved latest content;
-     * otherwise returns the original content.
-     */
-    public String getContent() {
-        return resolvedContent != null ? resolvedContent : content;
-    }
+    public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
-
-    /** Returns the original (unresolved) content, ignoring edit chain. */
-    public String getOriginalContent() { return content; }
 
     public Timestamp getCreatedAt() { return createdAt; }
     public void setCreatedAt(Timestamp createdAt) { this.createdAt = createdAt; }
@@ -90,21 +79,17 @@ public class Message {
     public String getForwardFromContent() { return forwardFromContent; }
     public void setForwardFromContent(String forwardFromContent) { this.forwardFromContent = forwardFromContent; }
 
-    public boolean isDeleted() { return isDeleted; }
-    public void setDeleted(boolean deleted) { isDeleted = deleted; }
+    public boolean isPinned() { return pinned; }
+    public void setPinned(boolean pinned) { this.pinned = pinned; }
 
-    public boolean isEdited() { return isEdited; }
-    public void setEdited(boolean edited) { isEdited = edited; }
+    public Long getPinnedBy() { return pinnedBy; }
+    public void setPinnedBy(Long pinnedBy) { this.pinnedBy = pinnedBy; }
 
-    public Timestamp getEditedAt() { return editedAt; }
-    public void setEditedAt(Timestamp editedAt) { this.editedAt = editedAt; }
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
 
     public Long getEditedToId() { return editedToId; }
     public void setEditedToId(Long editedToId) { this.editedToId = editedToId; }
-
-    /** Latest content after following the edit chain. Set by MessageService after resolution. */
-    public String getResolvedContent() { return resolvedContent; }
-    public void setResolvedContent(String resolvedContent) { this.resolvedContent = resolvedContent; }
 
     public static class SeenUserInfo {
         private long userId;

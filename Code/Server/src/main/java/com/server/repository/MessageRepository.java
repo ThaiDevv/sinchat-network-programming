@@ -1,16 +1,19 @@
 package com.server.repository;
 
-import com.server.config.Database;
-import com.server.model.Message;
-import com.server.model.MessageSearchResult;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.server.config.Database;
+import com.server.model.Message;
+import com.server.model.MessageSearchResult;
 
 public class MessageRepository {
     private static final Logger logger = LoggerFactory.getLogger(MessageRepository.class);
@@ -69,22 +72,18 @@ public class MessageRepository {
 
     public List<Message> getByConversationId(long conversationId, int limit, int offset) {
         List<Message> messages = new ArrayList<>();
-        // Exclude deleted messages AND messages that are edit-children (referenced by edited_to_id)
         StringBuilder query = new StringBuilder(
                 "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
                 "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
                 "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
-                "m.is_deleted, m.is_edited, m.edited_at, m.edited_to_id " +
+                "m.pinned, m.pinned_by, m.deleted, m.edited_to_id " +
                 "FROM messages m " +
                 "JOIN users u ON m.sender_id = u.id " +
                 "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
                 "LEFT JOIN users pu ON pm.sender_id = pu.id " +
                 "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
                 "LEFT JOIN users fu ON fm.sender_id = fu.id " +
-                "WHERE m.conversation_id = ? " +
-                "AND m.is_deleted = 0 " +
-                "AND m.id NOT IN (SELECT edited_to_id FROM messages WHERE edited_to_id IS NOT NULL) " +
-                "ORDER BY m.created_at DESC");
+                "WHERE m.conversation_id = ? AND m.deleted = FALSE AND m.edited_to_id IS NULL ORDER BY m.created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
         if (offset > 0) query.append(" OFFSET ?");
         try (Connection conn = Database.getConnection();
@@ -99,8 +98,6 @@ public class MessageRepository {
         } catch (SQLException e) {
             logger.error("Error fetching messages for conversation: {}", conversationId, e);
         }
-        // Resolve edit chains: follow edited_to_id to get the latest content
-        resolveEditChains(messages);
         return messages;
     }
 
@@ -108,7 +105,7 @@ public class MessageRepository {
         String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
                 "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
                 "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
-                "m.is_deleted, m.is_edited, m.edited_at, m.edited_to_id " +
+                "m.pinned, m.pinned_by, m.deleted, m.edited_to_id " +
                 "FROM messages m " +
                 "JOIN users u ON m.sender_id = u.id " +
                 "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
@@ -139,9 +136,7 @@ public class MessageRepository {
                 "m.type, m.content, m.created_at " +
                 "FROM messages m " +
                 "JOIN users u ON u.id = m.sender_id " +
-                "WHERE m.conversation_id = ? AND m.is_deleted = 0 " +
-                "AND m.id NOT IN (SELECT edited_to_id FROM messages WHERE edited_to_id IS NOT NULL) " +
-                "AND LOWER(m.content) LIKE LOWER(?) " +
+                "WHERE m.conversation_id = ? AND m.deleted = FALSE AND LOWER(m.content) LIKE LOWER(?) " +
                 "ORDER BY m.created_at DESC LIMIT ? OFFSET ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -187,15 +182,14 @@ public class MessageRepository {
             }
         } catch (SQLException ignored) {}
         try {
-            msg.setDeleted(rs.getBoolean("is_deleted"));
+            msg.setPinned(rs.getBoolean("pinned"));
+            long pinnedByVal = rs.getLong("pinned_by");
+            if (!rs.wasNull()) {
+                msg.setPinnedBy(pinnedByVal);
+            }
         } catch (SQLException ignored) {}
         try {
-            msg.setEdited(rs.getBoolean("is_edited"));
-        } catch (SQLException ignored) {}
-        try {
-            msg.setEditedAt(rs.getTimestamp("edited_at"));
-        } catch (SQLException ignored) {}
-        try {
+            msg.setDeleted(rs.getBoolean("deleted"));
             long editedToIdVal = rs.getLong("edited_to_id");
             if (!rs.wasNull()) {
                 msg.setEditedToId(editedToIdVal);
@@ -210,161 +204,62 @@ public class MessageRepository {
                 rs.getLong("conversation_id"),
                 rs.getLong("sender_id"),
                 rs.getString("sender_username"),
-                rs.getString("type") != null ? Message.MessageType.valueOf(rs.getString("type")) : Message.MessageType.TEXT,
+                Message.MessageType.valueOf(rs.getString("type")),
                 rs.getString("content"),
                 rs.getTimestamp("created_at")
         );
     }
 
-    /**
-     * Soft-delete a message by setting is_deleted = 1.
-     * The original content is preserved in the database.
-     */
-    public boolean softDelete(long messageId) {
-        String query = "UPDATE messages SET is_deleted = 1 WHERE id = ?";
+    public boolean pinMessage(long msgId, long userId) throws SQLException {
+        String query = "UPDATE messages SET pinned = TRUE, pinned_by = ? WHERE id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
-            pstmt.setLong(1, messageId);
+            pstmt.setLong(1, userId);
+            pstmt.setLong(2, msgId);
             return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error("Error soft-deleting message ID: {}", messageId, e);
         }
-        return false;
     }
 
-    /**
-     * Mark an old message as edited and link it to the new replacement message.
-     * Does NOT modify the original content.
-     */
-    public boolean markAsEdited(long oldMessageId, long newMessageId) {
-        String query = "UPDATE messages SET is_edited = 1, edited_at = NOW(), edited_to_id = ? WHERE id = ?";
+    public boolean unpinMessage(long msgId) throws SQLException {
+        String query = "UPDATE messages SET pinned = FALSE, pinned_by = NULL WHERE id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
-            pstmt.setLong(1, newMessageId);
-            pstmt.setLong(2, oldMessageId);
+            pstmt.setLong(1, msgId);
             return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            logger.error("Error marking message {} as edited → {}", oldMessageId, newMessageId, e);
-        }
-        return false;
-    }
-
-    /**
-     * Follow edit chains for all messages with is_edited=1.
-     * Loads the entire chain in batches (max depth 10) and sets resolvedContent
-     * to the latest content in the chain.
-     */
-    private void resolveEditChains(List<Message> messages) {
-        if (messages.isEmpty()) return;
-
-        // Collect all edited_to_id values we need to resolve
-        Map<Long, Message> messageMap = new HashMap<>();
-        for (Message m : messages) {
-            messageMap.put(m.getId(), m);
-            if (m.isEdited() && m.getEditedToId() != null) {
-                messageMap.put(m.getEditedToId(), null); // placeholder
-            }
-        }
-
-        // Batch-load all referenced messages (max 10 depth to prevent infinite loops)
-        int maxDepth = 10;
-        for (int depth = 0; depth < maxDepth; depth++) {
-            List<Long> toLoad = new ArrayList<>();
-            for (Map.Entry<Long, Message> entry : messageMap.entrySet()) {
-                if (entry.getValue() == null) {
-                    toLoad.add(entry.getKey());
-                }
-            }
-            if (toLoad.isEmpty()) break;
-
-            // Load in batches of 100
-            for (int i = 0; i < toLoad.size(); i += 100) {
-                int end = Math.min(i + 100, toLoad.size());
-                List<Long> batch = toLoad.subList(i, end);
-                loadMessagesByIds(batch, messageMap);
-            }
-
-            // Check if newly loaded messages have further edited_to_id
-            for (Long id : toLoad) {
-                Message loaded = messageMap.get(id);
-                if (loaded != null && loaded.isEdited() && loaded.getEditedToId() != null
-                        && !messageMap.containsKey(loaded.getEditedToId())) {
-                    messageMap.put(loaded.getEditedToId(), null);
-                }
-            }
-        }
-
-        // Resolve: for each edited message, follow chain to latest and set resolvedContent
-        for (Message m : messages) {
-            if (m.isEdited() && m.getEditedToId() != null) {
-                String latest = followChain(m.getEditedToId(), messageMap, new java.util.HashSet<>());
-                if (latest != null) {
-                    m.setResolvedContent(latest);
-                }
-            }
         }
     }
 
-    private void loadMessagesByIds(List<Long> ids, Map<Long, Message> messageMap) {
-        if (ids.isEmpty()) return;
-        StringBuilder placeholders = new StringBuilder();
-        for (int i = 0; i < ids.size(); i++) {
-            if (i > 0) placeholders.append(",");
-            placeholders.append("?");
-        }
-        String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
-                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
-                "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
-                "m.is_deleted, m.is_edited, m.edited_at, m.edited_to_id " +
-                "FROM messages m " +
-                "JOIN users u ON m.sender_id = u.id " +
-                "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
-                "LEFT JOIN users pu ON pm.sender_id = pu.id " +
-                "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
-                "LEFT JOIN users fu ON fm.sender_id = fu.id " +
-                "WHERE m.id IN (" + placeholders.toString() + ")";
+    public int countPinned(long conversationId) throws SQLException {
+        String query = "SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND pinned = TRUE AND deleted = FALSE";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
-            for (int i = 0; i < ids.size(); i++) {
-                pstmt.setLong(i + 1, ids.get(i));
-            }
+            pstmt.setLong(1, conversationId);
             try (ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) {
-                    Message msg = mapRow(rs);
-                    messageMap.put(msg.getId(), msg);
-                }
+                if (rs.next()) return rs.getInt(1);
             }
-        } catch (SQLException e) {
-            logger.error("Error batch-loading messages by IDs", e);
         }
+        return 0;
     }
 
-    /** Follow the edited_to_id chain and return the latest content. */
-    private String followChain(long currentId, Map<Long, Message> messageMap, java.util.Set<Long> visited) {
-        if (!visited.add(currentId)) return null; // cycle detected
-        Message msg = messageMap.get(currentId);
-        if (msg == null) return null;
-        if (msg.isEdited() && msg.getEditedToId() != null) {
-            return followChain(msg.getEditedToId(), messageMap, visited);
-        }
-        return msg.getContent();
-    }
-
-    /**
-     * @deprecated Use {@link #softDelete(long)} for deletion or {@link #updateContentWithEditFlag(long, String)} for editing.
-     */
-    @Deprecated
-    public boolean updateContent(long messageId, String newContent) {
-        String query = "UPDATE messages SET content = ? WHERE id = ?";
+    public void markAsEdited(long originalMsgId, long editedMsgId) throws SQLException {
+        String query = "UPDATE messages SET edited_to_id = ? WHERE id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
-            pstmt.setString(1, newContent);
-            pstmt.setLong(2, messageId);
+            pstmt.setLong(1, editedMsgId);
+            pstmt.setLong(2, originalMsgId);
+            pstmt.executeUpdate();
+        }
+    }
+
+    public boolean softDelete(long msgId) {
+        String query = "UPDATE messages SET deleted = TRUE WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+            pstmt.setLong(1, msgId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            logger.error("Error updating message content for ID: {}", messageId, e);
+            logger.error("Error soft-deleting message: {}", msgId, e);
+            return false;
         }
-        return false;
     }
 }
-

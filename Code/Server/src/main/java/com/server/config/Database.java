@@ -1,15 +1,17 @@
 package com.server.config;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import io.github.cdimascio.dotenv.Dotenv;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.ResultSet;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import io.github.cdimascio.dotenv.Dotenv;
 
 public class Database {
     private static final Logger logger = LoggerFactory.getLogger(Database.class);
@@ -153,9 +155,33 @@ public class Database {
             logger.error("Database migration (action_user_id) failed: {}", e.getMessage(), e);
         }
 
-        // Migration 4: edited_to_id — edit chain support
+        // Migration 4: pinned columns on messages table
+        String checkPinnedColumn = "SHOW COLUMNS FROM messages LIKE 'pinned'";
+        String addPinnedColumns = "ALTER TABLE messages " +
+                "ADD COLUMN pinned BOOLEAN DEFAULT FALSE, " +
+                "ADD COLUMN pinned_by BIGINT DEFAULT NULL, " +
+                "ADD CONSTRAINT fk_pinned_by FOREIGN KEY (pinned_by) REFERENCES users(id) ON DELETE SET NULL";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkPinnedColumn)) {
+
+            if (!rs.next()) {
+                logger.info("Column 'pinned' not found in table 'messages'. Running migration...");
+                stmt.executeUpdate(addPinnedColumns);
+                logger.info("Database migration completed: added 'pinned' and 'pinned_by' to 'messages'.");
+            } else {
+                logger.info("Database schema is up to date. Column 'pinned' already exists in 'messages'.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (pinned/pinned_by) failed: {}", e.getMessage(), e);
+        }
+
+        // Migration 5: edited_to_id and deleted on messages table (for edit/delete features)
         String checkEditedToColumn = "SHOW COLUMNS FROM messages LIKE 'edited_to_id'";
-        String addEditedToColumn = "ALTER TABLE messages ADD COLUMN edited_to_id BIGINT DEFAULT NULL, " +
+        String addEditedToDeletedColumns = "ALTER TABLE messages " +
+                "ADD COLUMN edited_to_id BIGINT DEFAULT NULL, " +
+                "ADD COLUMN deleted BOOLEAN DEFAULT FALSE, " +
                 "ADD CONSTRAINT fk_edited_to_message FOREIGN KEY (edited_to_id) REFERENCES messages(id) ON DELETE SET NULL";
 
         try (Connection conn = getConnection();
@@ -164,13 +190,60 @@ public class Database {
 
             if (!rs.next()) {
                 logger.info("Column 'edited_to_id' not found in table 'messages'. Running migration...");
-                stmt.executeUpdate(addEditedToColumn);
-                logger.info("Database migration completed: added 'edited_to_id' to 'messages'.");
+                stmt.executeUpdate(addEditedToDeletedColumns);
+                logger.info("Database migration completed: added 'edited_to_id' and 'deleted' to 'messages'.");
             } else {
-                logger.info("Database schema is up to date. Column 'edited_to_id' already exists.");
+                logger.info("Database schema is up to date. Column 'edited_to_id' already exists in 'messages'.");
             }
         } catch (SQLException e) {
-            logger.error("Database migration (edited_to_id) failed: {}", e.getMessage(), e);
+            logger.error("Database migration (edited_to_id/deleted) failed: {}", e.getMessage(), e);
+        }
+
+        // Migration 7: admin_only_pin and pin_limit on conversations table
+        String checkAdmPinColumn = "SHOW COLUMNS FROM conversations LIKE 'admin_only_pin'";
+        String addAdmPinColumns = "ALTER TABLE conversations " +
+                "ADD COLUMN admin_only_pin BOOLEAN DEFAULT FALSE, " +
+                "ADD COLUMN pin_limit INT DEFAULT 5";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkAdmPinColumn)) {
+
+            if (!rs.next()) {
+                logger.info("Column 'admin_only_pin' not found in table 'conversations'. Running migration...");
+                stmt.executeUpdate(addAdmPinColumns);
+                logger.info("Database migration completed: added 'admin_only_pin' and 'pin_limit' to 'conversations'.");
+            } else {
+                logger.info("Database schema is up to date. Column 'admin_only_pin' already exists in 'conversations'.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (admin_only_pin/pin_limit) failed: {}", e.getMessage(), e);
+        }
+
+        // Migration 8: conversation_roles table
+        String checkConvRolesTable = "SHOW TABLES LIKE 'conversation_roles'";
+        String createConvRolesTable = "CREATE TABLE IF NOT EXISTS conversation_roles (" +
+                "conversation_id BIGINT NOT NULL, " +
+                "user_id BIGINT NOT NULL, " +
+                "role VARCHAR(20) NOT NULL CHECK (role IN ('OWNER','ADMIN','MEMBER')), " +
+                "PRIMARY KEY (conversation_id, user_id), " +
+                "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE, " +
+                "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE" +
+                ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkConvRolesTable)) {
+
+            if (!rs.next()) {
+                logger.info("Table 'conversation_roles' not found. Running migration...");
+                stmt.executeUpdate(createConvRolesTable);
+                logger.info("Database migration completed: created 'conversation_roles' table.");
+            } else {
+                logger.info("Database schema is up to date. Table 'conversation_roles' already exists.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (conversation_roles) failed: {}", e.getMessage(), e);
         }
     }
 }

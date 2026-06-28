@@ -17,6 +17,8 @@ public class Message {
     private Long forwardFromId;
     private String forwardFromUsername;
     private String forwardFromContent;
+    private boolean pinned;
+    private Long pinnedBy;
 
     public Message() {}
 
@@ -58,4 +60,10 @@ public class Message {
 
     public String getForwardFromContent() { return forwardFromContent; }
     public void setForwardFromContent(String forwardFromContent) { this.forwardFromContent = forwardFromContent; }
+
+    public boolean isPinned() { return pinned; }
+    public void setPinned(boolean pinned) { this.pinned = pinned; }
+
+    public Long getPinnedBy() { return pinnedBy; }
+    public void setPinnedBy(Long pinnedBy) { this.pinnedBy = pinnedBy; }
 }

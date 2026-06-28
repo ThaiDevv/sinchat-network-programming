@@ -1,8 +1,8 @@
 package com.server.service;
-import com.server.model.Conversation;
-import com.server.repository.ConversationRepository;
 import java.sql.SQLException;
 import java.util.List;
+
+import com.server.repository.ConversationRepository;
 
 public class ConversationService {
 
@@ -34,5 +34,27 @@ public class ConversationService {
 
     public String getConversationType(long conversationId) {
         return conversationRepo.getConversationType(conversationId);
+    }
+
+    // ==================== PIN / ROLE METHODS ====================
+
+    public String getUserRole(long convId, long userId) {
+        return conversationRepo.getUserRoleInConversation(convId, userId);
+    }
+
+    public boolean isAdminOnlyPinEnabled(long convId) {
+        return conversationRepo.isAdminOnlyPinEnabled(convId);
+    }
+
+    public int getPinLimit(long convId) {
+        return conversationRepo.getPinLimit(convId);
+    }
+
+    public void setAdminOnlyPin(long convId, boolean flag) throws SQLException {
+        conversationRepo.setAdminOnlyPin(convId, flag);
+    }
+
+    public void addConversationRole(long convId, long userId, String role) throws SQLException {
+        conversationRepo.addConversationRole(convId, userId, role);
     }
 }

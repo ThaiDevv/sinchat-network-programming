@@ -1,5 +1,21 @@
 package com.client.view;
 
+import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
 import com.client.controller.ChatController;
 import com.client.emoji.EmojiDef;
 import com.client.emoji.EmojiManager;
@@ -7,17 +23,36 @@ import com.client.service.ChatService;
 import com.client.util.ImageUtils;
 import com.client.util.StyleConstants;
 import com.client.util.TimeUtils;
-import com.google.gson.*;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.OverrunStyle;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputControl;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.image.WritableImage;
-import javafx.scene.layout.*;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.ImagePattern;
 import javafx.scene.shape.Circle;
@@ -26,10 +61,6 @@ import javafx.stage.Modality;
 import javafx.stage.Popup;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
-
-import java.io.ByteArrayInputStream;
-import java.util.*;
-import java.util.concurrent.*;
 
 /**
  * Main chat view — composes left panel (contacts), center panel (messages),
@@ -57,6 +88,8 @@ public class ChatView {
     private Label typingLabel;
     private Label loadingIndicator;
     private Button leaveGroupBtn;
+    private HBox pinPolicyBox;
+    private javafx.scene.control.CheckBox adminOnlyPinCheckBox;
 
     // Message search fields
     private TextField messageSearchField;
@@ -195,6 +228,7 @@ public class ChatView {
         tcp.setOnMessageStatusChanged(this::onMessageStatusChanged);
         tcp.setOnMessageEdited(this::onMessageEdited);
         tcp.setOnMessageDeleted(this::onMessageDeleted);
+        tcp.setOnMessagePinned(this::onMessagePinned);
         tcp.setOnLeftGroup(this::onLeftGroupReceived);
         tcp.setOnFriendRequestReceived(this::onFriendRequestReceived);
         tcp.setOnFriendAccepted(this::onFriendAccepted);
@@ -268,6 +302,10 @@ public class ChatView {
                     if (leaveGroupBtn != null) {
                         leaveGroupBtn.setVisible(false);
                         leaveGroupBtn.setManaged(false);
+                    }
+                    if (pinPolicyBox != null) {
+                        pinPolicyBox.setVisible(false);
+                        pinPolicyBox.setManaged(false);
                     }
                 });
             }
@@ -556,6 +594,10 @@ public class ChatView {
                 leaveGroupBtn.setVisible(false);
                 leaveGroupBtn.setManaged(false);
             }
+            if (pinPolicyBox != null) {
+                pinPolicyBox.setVisible(false);
+                pinPolicyBox.setManaged(false);
+            }
         } else {
             // Group conversation — show "Members" in status and a group icon colour
             if (chatStatus != null) {
@@ -571,6 +613,11 @@ public class ChatView {
             if (leaveGroupBtn != null && conversationId > 0) {
                 leaveGroupBtn.setVisible(true);
                 leaveGroupBtn.setManaged(true);
+            }
+            // Show pin policy toggle for group conversations
+            if (pinPolicyBox != null) {
+                pinPolicyBox.setVisible(true);
+                pinPolicyBox.setManaged(true);
             }
         }
 
@@ -819,6 +866,11 @@ public class ChatView {
             String forwardFromContent = msg.has("forwardFromContent") && !msg.get("forwardFromContent").isJsonNull()
                     ? msg.get("forwardFromContent").getAsString() : null;
 
+            boolean pinned = msg.has("pinned") && msg.get("pinned").getAsBoolean();
+            if (messageId > 0) {
+                setMessagePinnedState(messageId, pinned);
+            }
+
             boolean isMine = (senderId == currentUserId);
             HBox seenContainer = createSeenContainer(isMine);
             if (messageId > 0) {
@@ -844,6 +896,11 @@ public class ChatView {
 
                 VBox bubbleGroup = new VBox(4);
                 bubbleGroup.setAlignment(Pos.TOP_RIGHT);
+                if (pinned) {
+                    Label pinLabel = new Label("\uD83D\uDCCC Đã ghim");
+                    pinLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #ffd166; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
+                    bubbleGroup.getChildren().add(pinLabel);
+                }
                 if (isFwd) {
                     Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                     forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
@@ -995,6 +1052,12 @@ public class ChatView {
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_LEFT);
+            // Show pin indicator if message is pinned
+            if (messageId > 0 && isMessagePinned(messageId)) {
+                Label pinLabel = new Label("\uD83D\uDCCC Đã ghim");
+                pinLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #ffd166; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
+                bubbleGroup.getChildren().add(pinLabel);
+            }
             if (isForward2) {
                 Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                 forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
@@ -1146,6 +1209,29 @@ public class ChatView {
 
         menu.getItems().addAll(forwardItem, replyItem);
 
+        // Pin / Unpin item
+        // Determine if this message is currently pinned by checking the messageSeenUsers (we store pinned state)
+        // For simplicity, always show Pin when !pinned and Unpin when pinned (check via messageBubbleById)
+        // Actually, we need a better way. Let's get the pinned state from the existing message data.
+        boolean msgPinned = isMessagePinned(messageId);
+        if (msgPinned) {
+            MenuItem unpinItem = new MenuItem("Bỏ ghim");
+            unpinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+            unpinItem.setOnAction(e -> {
+                controller.unpinMessage(messageId, currentConversationId,
+                        err -> Platform.runLater(() -> showToast("Bỏ ghim thất bại: " + err)));
+            });
+            menu.getItems().add(unpinItem);
+        } else {
+            MenuItem pinItem = new MenuItem("Ghim tin nhắn");
+            pinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+            pinItem.setOnAction(e -> {
+                controller.pinMessage(messageId, currentConversationId,
+                        err -> Platform.runLater(() -> showToast("Ghim thất bại: " + err)));
+            });
+            menu.getItems().add(pinItem);
+        }
+
         if ("Bạn".equals(senderUsername)) {
             MenuItem editItem = new MenuItem("Sửa");
             editItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
@@ -1183,6 +1269,16 @@ public class ChatView {
                 });
             }
         }
+    }
+
+    private final Map<Long, Boolean> messagePinnedState = new HashMap<>();
+
+    private boolean isMessagePinned(long messageId) {
+        return messagePinnedState.getOrDefault(messageId, false);
+    }
+
+    private void setMessagePinnedState(long messageId, boolean pinned) {
+        messagePinnedState.put(messageId, pinned);
     }
 
     private HBox createSeenContainer(boolean isMine) {
@@ -1375,6 +1471,65 @@ public class ChatView {
                     if (statusLabel != null) {
                         statusLabel.setVisible(false);
                     }
+                }
+            }
+        });
+    }
+
+    private void onMessagePinned(JsonObject json) {
+        if (!json.has("messageId") || !json.has("conversationId")) return;
+        long messageId = json.get("messageId").getAsLong();
+        long conversationId = json.get("conversationId").getAsLong();
+
+        if (conversationId != currentConversationId) return;
+
+        // Get the updated message from the event (contains pinned/pinnedBy fields)
+        JsonObject msgObj = json.has("message") ? json.getAsJsonObject("message") : null;
+        boolean isPinned = msgObj != null && msgObj.has("pinned") && msgObj.get("pinned").getAsBoolean();
+
+        // Update pin state
+        setMessagePinnedState(messageId, isPinned);
+
+        Platform.runLater(() -> {
+            Node oldBubble = messageBubbleById.get(messageId);
+            if (oldBubble != null && oldBubble.getParent() instanceof VBox) {
+                VBox container = (VBox) oldBubble.getParent();
+
+                // Check if pin label already exists in the container's children
+                String pinStyle = "-fx-font-size: 11px; -fx-text-fill: #ffd166; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;";
+                Label existingPinLabel = null;
+                VBox existingPinGroup = null;
+
+                for (javafx.scene.Node child : container.getChildren()) {
+                    if (child instanceof VBox) {
+                        VBox group = (VBox) child;
+                        if (!group.getChildren().isEmpty() && group.getChildren().get(0) instanceof Label) {
+                            Label first = (Label) group.getChildren().get(0);
+                            if ("\uD83D\uDCCC Đã ghim".equals(first.getText())) {
+                                existingPinLabel = first;
+                                existingPinGroup = group;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (isPinned && existingPinLabel == null) {
+                    // Add pin label at the top of the bubble group
+                    // Find the bubble group — it's the first VBox child of the container
+                    for (javafx.scene.Node child : container.getChildren()) {
+                        if (child instanceof VBox) {
+                            VBox group = (VBox) child;
+                            if (group.getChildren().contains(oldBubble)) {
+                                Label newPinLabel = new Label("\uD83D\uDCCC Đã ghim");
+                                newPinLabel.setStyle(pinStyle);
+                                group.getChildren().add(0, newPinLabel);
+                                break;
+                            }
+                        }
+                    }
+                } else if (!isPinned && existingPinLabel != null && existingPinGroup != null) {
+                    existingPinGroup.getChildren().remove(existingPinLabel);
                 }
             }
         });
@@ -2578,6 +2733,29 @@ public class ChatView {
         Button passBtn = createProfileButton("Đổi mật khẩu", false);
         passBtn.setOnAction(e -> new ChangePasswordDialog(stage, controller).show());
 
+        // Pin policy toggle for group conversations
+        adminOnlyPinCheckBox = new javafx.scene.control.CheckBox("Chỉ quản trị viên mới được ghim tin nhắn");
+        adminOnlyPinCheckBox.setStyle("-fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 12px;");
+        adminOnlyPinCheckBox.setSelected(false);
+        adminOnlyPinCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            if (currentConversationId > 0) {
+                controller.setPinPolicy(currentConversationId, newVal,
+                        result -> showToast(newVal ? "Đã bật chế độ ghim chỉ dành cho quản trị viên" : "Đã tắt chế độ ghim chỉ dành cho quản trị viên"),
+                        err -> {
+                            showToast("Lỗi: " + err);
+                            // Revert checkbox
+                            adminOnlyPinCheckBox.setSelected(!newVal);
+                        });
+            }
+        });
+
+        pinPolicyBox = new HBox(8);
+        pinPolicyBox.setAlignment(Pos.CENTER_LEFT);
+        pinPolicyBox.setPadding(new Insets(4, 0, 4, 0));
+        pinPolicyBox.getChildren().add(adminOnlyPinCheckBox);
+        pinPolicyBox.setVisible(false);
+        pinPolicyBox.setManaged(false);
+
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
 
@@ -2589,7 +2767,7 @@ public class ChatView {
             stage.setScene(loginView.createScene());
         });
 
-        panel.getChildren().addAll(profileAvatarCircle, nameLabel, avatarBtn, nameBtn, passBtn, spacer, logoutBtn);
+        panel.getChildren().addAll(profileAvatarCircle, nameLabel, avatarBtn, nameBtn, passBtn, pinPolicyBox, spacer, logoutBtn);
         return panel;
     }
 
