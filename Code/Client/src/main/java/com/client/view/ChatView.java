@@ -118,6 +118,12 @@ public class ChatView {
     private Label forwardPreviewContentLabel;
     private Long activeForwardFromId = null;
     private String activeForwardFromUsername = null;
+
+    // Message edit state
+    private HBox editPreviewBar;
+    private Label editPreviewContentLabel;
+    private Long activeEditMessageId = null;
+    private String activeEditOriginalContent = null;
     private String activeForwardFromContent = null;
 
     // Pagination
@@ -192,6 +198,8 @@ public class ChatView {
         tcp.setOnUserStatusChange(this::onUserStatusChange);
         tcp.setOnUserAvatarChanged(this::onUserAvatarChanged);
         tcp.setOnMessageStatusChanged(this::onMessageStatusChanged);
+        tcp.setOnMessageEdited(this::onMessageEdited);
+        tcp.setOnMessageDeleted(this::onMessageDeleted);
         tcp.setOnLeftGroup(this::onLeftGroupReceived);
         tcp.setOnFriendRequestReceived(this::onFriendRequestReceived);
         tcp.setOnFriendAccepted(this::onFriendAccepted);
@@ -901,7 +909,7 @@ public class ChatView {
                 VBox bubbleGroup = new VBox(4);
                 bubbleGroup.setAlignment(Pos.TOP_RIGHT);
                 if (isFwd) {
-                    Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+                    Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                     forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                     bubbleGroup.getChildren().add(forwardLabel);
                 }
@@ -1012,7 +1020,7 @@ public class ChatView {
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_RIGHT);
             if (isForward) {
-                Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+                Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                 forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
@@ -1052,8 +1060,7 @@ public class ChatView {
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_LEFT);
             if (isForward2) {
-                String fwdLabelText = (senderUsername != null ? senderUsername : "Ai đó") + " đã chuyển tiếp một tin nhắn";
-                Label forwardLabel = new Label(fwdLabelText);
+                Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                 forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
@@ -1131,7 +1138,7 @@ public class ChatView {
         VBox bubbleGroup = new VBox(4);
         bubbleGroup.setAlignment(Pos.TOP_RIGHT);
         if (isForward) {
-            Label forwardLabel = new Label("Bạn đã chuyển tiếp một tin nhắn");
+            Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
             forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
             bubbleGroup.getChildren().add(forwardLabel);
         }
@@ -1202,6 +1209,18 @@ public class ChatView {
         replyItem.setOnAction(e -> setReplyTarget(messageId, senderUsername, content));
 
         menu.getItems().addAll(forwardItem, replyItem);
+
+        if ("Bạn".equals(senderUsername)) {
+            MenuItem editItem = new MenuItem("Sửa");
+            editItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+            editItem.setOnAction(e -> startEditMessage(messageId, content));
+
+            MenuItem deleteItem = new MenuItem("Xóa");
+            deleteItem.setStyle("-fx-text-fill: #ff4a4a; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+            deleteItem.setOnAction(e -> deleteMessage(messageId));
+
+            menu.getItems().addAll(editItem, deleteItem);
+        }
 
         // Attach context menu for right‑click
         if (bubble instanceof javafx.scene.control.Control) {
@@ -1283,13 +1302,21 @@ public class ChatView {
     private void sendMessage() {
         String text = messageInput.getText().trim();
         if (!text.isEmpty() && controller.getChatService().isConnected() && currentConversationId > 0) {
-            Long replyId = activeReplyToId;
-            Long forwardId = activeForwardFromId;
-            controller.sendMessage(currentConversationId, text, replyId, forwardId,
-                    err -> showToast("Gửi tin nhắn thất bại: " + err));
-            messageInput.clear();
-            cancelReply();
-            cancelForward();
+            if (activeEditMessageId != null) {
+                long msgId = activeEditMessageId;
+                controller.editMessage(msgId, currentConversationId, text,
+                        err -> showToast("Sửa tin nhắn thất bại: " + err));
+                messageInput.clear();
+                cancelEdit();
+            } else {
+                Long replyId = activeReplyToId;
+                Long forwardId = activeForwardFromId;
+                controller.sendMessage(currentConversationId, text, replyId, forwardId,
+                        err -> showToast("Gửi tin nhắn thất bại: " + err));
+                messageInput.clear();
+                cancelReply();
+                cancelForward();
+            }
         }
     }
 
@@ -1320,6 +1347,101 @@ public class ChatView {
             replyPreviewBar.setVisible(false);
             replyPreviewBar.setManaged(false);
         }
+    }
+
+    private void cancelEdit() {
+        activeEditMessageId = null;
+        activeEditOriginalContent = null;
+        if (editPreviewBar != null) {
+            editPreviewBar.setVisible(false);
+            editPreviewBar.setManaged(false);
+        }
+        messageInput.clear();
+    }
+
+    private void startEditMessage(long messageId, String content) {
+        cancelReply();
+        cancelForward();
+        activeEditMessageId = messageId;
+        activeEditOriginalContent = content;
+        editPreviewContentLabel.setText(content);
+        if (editPreviewBar != null) {
+            editPreviewBar.setVisible(true);
+            editPreviewBar.setManaged(true);
+        }
+        messageInput.setText(content);
+        messageInput.requestFocus();
+    }
+
+    private void deleteMessage(long messageId) {
+        if (currentConversationId > 0) {
+            controller.deleteMessage(messageId, currentConversationId,
+                    err -> showToast("Xóa tin nhắn thất bại: " + err));
+        }
+    }
+
+    private void onMessageEdited(JsonObject json) {
+        if (!json.has("messageId") || !json.has("conversationId") || !json.has("content")) return;
+        long messageId = json.get("messageId").getAsLong();
+        long conversationId = json.get("conversationId").getAsLong();
+        String content = json.get("content").getAsString();
+
+        if (conversationId != currentConversationId) return;
+
+        Platform.runLater(() -> {
+            Node oldBubble = messageBubbleById.get(messageId);
+            if (oldBubble != null && oldBubble.getParent() instanceof VBox) {
+                VBox parent = (VBox) oldBubble.getParent();
+                int index = parent.getChildren().indexOf(oldBubble);
+                if (index >= 0) {
+                    boolean isMine = parent.getAlignment() == Pos.TOP_RIGHT;
+                    String bg = isMine ? StyleConstants.ACCENT : "#1e1e1e";
+                    String radius = isMine ? "18px 18px 4px 18px" : "18px 18px 18px 4px";
+                    Node newBubble = createMessageBubble(content, bg, radius);
+                    String senderName = isMine ? "Bạn" : "Người khác";
+                    addContextMenuToBubble(newBubble, messageId, senderName, content);
+
+                    // Wrap bubble with "Đã chỉnh sửa" label, similar to forward indicator
+                    VBox editedGroup = new VBox(4);
+                    editedGroup.setAlignment(isMine ? Pos.TOP_RIGHT : Pos.TOP_LEFT);
+                    Label editedLabel = new Label("Đã chỉnh sửa");
+                    String editPadding = isMine ? "-fx-padding: 0 4px 2px 0;" : "-fx-padding: 0 0 2px 4px;";
+                    editedLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; " + editPadding);
+                    editedGroup.getChildren().add(editedLabel);
+                    editedGroup.getChildren().add(newBubble);
+
+                    parent.getChildren().set(index, editedGroup);
+                    messageBubbleById.put(messageId, newBubble);
+                }
+            }
+        });
+    }
+
+    private void onMessageDeleted(JsonObject json) {
+        if (!json.has("messageId") || !json.has("conversationId")) return;
+        long messageId = json.get("messageId").getAsLong();
+        long conversationId = json.get("conversationId").getAsLong();
+
+        if (conversationId != currentConversationId) return;
+
+        Platform.runLater(() -> {
+            Node oldBubble = messageBubbleById.get(messageId);
+            if (oldBubble != null && oldBubble.getParent() instanceof VBox) {
+                VBox parent = (VBox) oldBubble.getParent();
+                int index = parent.getChildren().indexOf(oldBubble);
+                if (index >= 0) {
+                    Label deletedLabel = new Label("Tin nhắn đã bị thu hồi");
+                    deletedLabel.setStyle("-fx-text-fill: #888888; -fx-font-size: 14px; -fx-font-style: italic; -fx-padding: 8px 12px; -fx-background-color: #2b2b2b; -fx-background-radius: 10px;");
+                    deletedLabel.setMaxWidth(360);
+                    parent.getChildren().set(index, deletedLabel);
+                    messageBubbleById.remove(messageId);
+                    Label statusLabel = messageStatusLabels.get(messageId);
+                    if (statusLabel != null) {
+                        statusLabel.setVisible(false);
+                    }
+                }
+            }
+        });
     }
 
     // ==================== FORWARD ====================
@@ -2472,7 +2594,28 @@ public class ChatView {
         cancelForwardBtn.setOnAction(e -> cancelForward());
         forwardPreviewBar.getChildren().addAll(forwardInfo, cancelForwardBtn);
 
-        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar, forwardPreviewBar, inputBar);
+        // Construct editPreviewBar (hidden by default)
+        editPreviewBar = new HBox(12);
+        editPreviewBar.setAlignment(Pos.CENTER_LEFT);
+        editPreviewBar.setPadding(new Insets(8, 24, 8, 24));
+        editPreviewBar.setStyle("-fx-background-color: #141026; -fx-border-color: " + StyleConstants.BORDER_COLOR + "; -fx-border-width: 1 0 0 0;");
+        editPreviewBar.setVisible(false);
+        editPreviewBar.setManaged(false);
+
+        VBox editInfo = new VBox(2);
+        Label editPreviewTitleLabel = new Label("Đang chỉnh sửa tin nhắn");
+        editPreviewTitleLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + StyleConstants.ACCENT + "; -fx-font-size: 12px;");
+        editPreviewContentLabel = new Label("Nội dung tin nhắn");
+        editPreviewContentLabel.setStyle("-fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 13px;");
+        editInfo.getChildren().addAll(editPreviewTitleLabel, editPreviewContentLabel);
+        HBox.setHgrow(editInfo, Priority.ALWAYS);
+
+        Button cancelEditBtn = new Button("✕");
+        cancelEditBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + StyleConstants.TEXT_MUTED + "; -fx-font-size: 14px; -fx-cursor: hand; -fx-padding: 4px;");
+        cancelEditBtn.setOnAction(e -> cancelEdit());
+        editPreviewBar.getChildren().addAll(editInfo, cancelEditBtn);
+
+        panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar, forwardPreviewBar, editPreviewBar, inputBar);
         return panel;
     }
 

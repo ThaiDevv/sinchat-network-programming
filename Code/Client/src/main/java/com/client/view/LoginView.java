@@ -153,6 +153,13 @@ public class LoginView {
 
         registerBox.getChildren().addAll(title, subtitle, usernameField, emailField,
                 passwordField, confirmPasswordField, message, registerButton, backToLogin);
+
+        // Enter key triggers register
+        usernameField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) registerButton.fire(); });
+        emailField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) registerButton.fire(); });
+        passwordField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) registerButton.fire(); });
+        confirmPasswordField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) registerButton.fire(); });
+
         setCenter(registerBox);
     }
 
@@ -195,6 +202,10 @@ public class LoginView {
         backToLogin.setOnAction(e -> showLoginView(accountField.getText().trim()));
 
         forgotBox.getChildren().addAll(title, subtitle, accountField, message, createCodeButton, backToLogin);
+
+        // Enter key triggers create code
+        accountField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) createCodeButton.fire(); });
+
         setCenter(forgotBox);
     }
 
@@ -231,6 +242,10 @@ public class LoginView {
             verifyBox.getChildren().add(createCodeLabel(resetCode));
         }
         verifyBox.getChildren().addAll(codeField, message, confirmButton, changeAccount);
+
+        // Enter key triggers confirm
+        codeField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) confirmButton.fire(); });
+
         setCenter(verifyBox);
     }
 
@@ -281,6 +296,11 @@ public class LoginView {
 
         passwordBox.getChildren().addAll(title, subtitle, newPasswordField,
                 confirmPasswordField, message, saveButton, backToLogin);
+
+        // Enter key triggers save
+        newPasswordField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) saveButton.fire(); });
+        confirmPasswordField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) saveButton.fire(); });
+
         setCenter(passwordBox);
     }
 

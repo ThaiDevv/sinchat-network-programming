@@ -166,9 +166,13 @@ public class ConversationRepository {
                 "u.last_seen AS last_seen, " +
                 "(SELECT COALESCE(NULLIF(m.content, ''), fm.content, m.content) FROM messages m " +
                 "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
-                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message, " +
+                "WHERE m.conversation_id = c.id AND m.is_deleted = 0 " +
+                "AND m.id NOT IN (SELECT edited_to_id FROM messages WHERE edited_to_id IS NOT NULL) " +
+                "ORDER BY m.created_at DESC LIMIT 1) as last_message, " +
                 "(SELECT m.sender_id FROM messages m " +
-                "WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_sender_id, " +
+                "WHERE m.conversation_id = c.id AND m.is_deleted = 0 " +
+                "AND m.id NOT IN (SELECT edited_to_id FROM messages WHERE edited_to_id IS NOT NULL) " +
+                "ORDER BY m.created_at DESC LIMIT 1) as last_message_sender_id, " +
                 "c.last_message_at " +
                 "FROM conversations c " +
                 "JOIN conversation_members cm ON c.id = cm.conversation_id " +

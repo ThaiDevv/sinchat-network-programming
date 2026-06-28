@@ -153,6 +153,7 @@ public class Database {
             logger.error("Database migration (action_user_id) failed: {}", e.getMessage(), e);
         }
 
+
         // Migration 4: role column in conversation_members (ADMIN/MEMBER)
         String checkRoleColumn = "SHOW COLUMNS FROM conversation_members LIKE 'role'";
         String addRoleColumn = "ALTER TABLE conversation_members ADD COLUMN role VARCHAR(10) NOT NULL DEFAULT 'MEMBER'";
@@ -186,6 +187,26 @@ public class Database {
             }
         } catch (SQLException e) {
             logger.error("Database migration (set ADMIN role) failed: {}", e.getMessage(), e);
+=======
+        // Migration 4: edited_to_id — edit chain support
+        String checkEditedToColumn = "SHOW COLUMNS FROM messages LIKE 'edited_to_id'";
+        String addEditedToColumn = "ALTER TABLE messages ADD COLUMN edited_to_id BIGINT DEFAULT NULL, " +
+                "ADD CONSTRAINT fk_edited_to_message FOREIGN KEY (edited_to_id) REFERENCES messages(id) ON DELETE SET NULL";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(checkEditedToColumn)) {
+
+            if (!rs.next()) {
+                logger.info("Column 'edited_to_id' not found in table 'messages'. Running migration...");
+                stmt.executeUpdate(addEditedToColumn);
+                logger.info("Database migration completed: added 'edited_to_id' to 'messages'.");
+            } else {
+                logger.info("Database schema is up to date. Column 'edited_to_id' already exists.");
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (edited_to_id) failed: {}", e.getMessage(), e);
+
         }
     }
 }

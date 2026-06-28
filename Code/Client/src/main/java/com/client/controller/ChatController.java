@@ -451,6 +451,7 @@ public class ChatController {
         return "Sent";
     }
 
+
     // ---- group management ----
 
     public void getGroupMembers(long conversationId, Consumer<JsonObject> onSuccess, Consumer<String> onError) {
@@ -543,6 +544,25 @@ public class ChatController {
                         String err = response.message() != null && !response.message().isBlank()
                                 ? response.message() : "Không thể giải tán nhóm.";
                         Platform.runLater(() -> onError.accept(err));
+=======
+    public void editMessage(long messageId, long conversationId, String content, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.editMessage(messageId, conversationId, content),
+                response -> {
+                    if (response != null && !response.isSuccess()) {
+                        Platform.runLater(() -> onError.accept(response.message()));
+                    }
+                }
+        );
+    }
+
+    public void deleteMessage(long messageId, long conversationId, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.deleteMessage(messageId, conversationId),
+                response -> {
+                    if (response != null && !response.isSuccess()) {
+                        Platform.runLater(() -> onError.accept(response.message()));
+
                     }
                 }
         );
