@@ -35,7 +35,7 @@ public final class StyleConstants {
         "-fx-padding: 18px;";
 
     public static final String STYLE_INPUT_NORMAL  = STYLE_INPUT_BASE + "-fx-border-color: #444;";
-    public static final String STYLE_INPUT_FOCUSED = STYLE_INPUT_BASE + "-fx-border-color: #e96161ff;";
+    public static final String STYLE_INPUT_FOCUSED = STYLE_INPUT_BASE + "-fx-border-color: #e96161;";
 
     public static final String STYLE_BTN_NORMAL =
         "-fx-background-color: white; -fx-text-fill: black;" +
