@@ -1,6 +1,7 @@
 package com.client.view;
 
 import com.client.controller.ChatController;
+import com.client.util.ImageUtils;
 import com.client.util.StyleConstants;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -10,8 +11,10 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.ImagePattern;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -287,6 +290,18 @@ public class ManageGroupDialog {
         Label initLabel = new Label(username.substring(0, 1).toUpperCase());
         initLabel.setStyle("-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold;");
         StackPane avatarPane = new StackPane(avatar, initLabel);
+
+        // Load avatar image asynchronously
+        controller.loadPeerAvatar(userId,
+                dataUrl -> {
+                    Image img = ImageUtils.decodeAvatarDataUrl(dataUrl);
+                    if (img != null) {
+                        avatar.setFill(new ImagePattern(img));
+                        initLabel.setVisible(false);
+                    }
+                },
+                null
+        );
 
         // Name + role
         VBox nameBox = new VBox(2);
