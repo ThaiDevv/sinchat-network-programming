@@ -544,7 +544,11 @@ public class ChatController {
                         String err = response.message() != null && !response.message().isBlank()
                                 ? response.message() : "Không thể giải tán nhóm.";
                         Platform.runLater(() -> onError.accept(err));
-=======
+                    }
+                }
+        );
+    }
+
     public void editMessage(long messageId, long conversationId, String content, Consumer<String> onError) {
         asyncCall(
                 () -> chatService.editMessage(messageId, conversationId, content),

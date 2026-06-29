@@ -187,8 +187,9 @@ public class Database {
             }
         } catch (SQLException e) {
             logger.error("Database migration (set ADMIN role) failed: {}", e.getMessage(), e);
-=======
-        // Migration 4: edited_to_id — edit chain support
+        }
+
+        // Migration 6: edited_to_id — edit chain support
         String checkEditedToColumn = "SHOW COLUMNS FROM messages LIKE 'edited_to_id'";
         String addEditedToColumn = "ALTER TABLE messages ADD COLUMN edited_to_id BIGINT DEFAULT NULL, " +
                 "ADD CONSTRAINT fk_edited_to_message FOREIGN KEY (edited_to_id) REFERENCES messages(id) ON DELETE SET NULL";
@@ -206,7 +207,6 @@ public class Database {
             }
         } catch (SQLException e) {
             logger.error("Database migration (edited_to_id) failed: {}", e.getMessage(), e);
-
         }
     }
 }

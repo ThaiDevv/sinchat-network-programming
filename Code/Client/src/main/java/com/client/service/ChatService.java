@@ -709,7 +709,9 @@ public class ChatService {
         req.addProperty("action", "MANAGE_GROUP");
         req.addProperty("conversationId", conversationId);
         req.addProperty("subAction", "DISBAND");
-=======
+        return sendRequestSync(req);
+    }
+
     public ApiResponse editMessage(long messageId, long conversationId, String content) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "EDIT_MESSAGE");

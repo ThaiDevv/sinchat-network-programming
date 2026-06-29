@@ -50,7 +50,6 @@ public class Router {
     private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
 
     private static GroupManagementHandler groupManagementHandler = new GroupManagementHandler();
-=======
     private static DeleteMessageHandler deleteMessageHandler = new DeleteMessageHandler();
     private static EditMessageHandler editMessageHandler = new EditMessageHandler();
 
@@ -182,13 +181,12 @@ public class Router {
 
                 case "MANAGE_GROUP":
                     response = groupManagementHandler.handleTcp(request, conn);
-=======
+                    break;
                 case "DELETE_MESSAGE":
                     response = deleteMessageHandler.handleTcp(request, conn);
                     break;
                 case "EDIT_MESSAGE":
                     response = editMessageHandler.handleTcp(request, conn);
-
                     break;
 
                 // ---- friendship actions ----
