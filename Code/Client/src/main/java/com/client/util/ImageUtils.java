@@ -7,6 +7,7 @@ import javafx.scene.paint.Color;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.util.Base64;
@@ -71,5 +72,25 @@ public final class ImageUtils {
         SnapshotParameters params = new SnapshotParameters();
         params.setFill(Color.TRANSPARENT);
         return canvas.snapshot(params, null);
+    }
+
+    /**
+     * Decodes a base64-encoded image data URL or normal URL to a JavaFX Image.
+     */
+    public static Image decodeAvatarDataUrl(String dataUrl) {
+        try {
+            if (dataUrl != null && dataUrl.startsWith("data:image/")) {
+                String base64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+                byte[] imgBytes = Base64.getDecoder().decode(base64);
+                return new Image(new ByteArrayInputStream(imgBytes));
+            }
+            if (dataUrl != null && !dataUrl.isEmpty()) {
+                return new Image(dataUrl, true);
+            }
+            return null;
+        } catch (Exception e) {
+            System.err.println("Failed to decode avatar: " + e.getMessage());
+            return null;
+        }
     }
 }

@@ -451,6 +451,104 @@ public class ChatController {
         return "Sent";
     }
 
+
+    // ---- group management ----
+
+    public void getGroupMembers(long conversationId, Consumer<JsonObject> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.getGroupMembers(conversationId),
+                response -> {
+                    if (response.isSuccess() && response.rawBody() != null) {
+                        try {
+                            JsonObject json = gson.fromJson(response.rawBody(), JsonObject.class);
+                            Platform.runLater(() -> onSuccess.accept(json));
+                        } catch (Exception e) {
+                            if (onError != null) Platform.runLater(() -> onError.accept("Không đọc được dữ liệu thành viên."));
+                        }
+                    } else {
+                        String err = response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể lấy danh sách thành viên.";
+                        if (onError != null) Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    public void renameGroup(long conversationId, String newName, Consumer<String> onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.renameGroup(conversationId, newName),
+                response -> {
+                    if (response.isSuccess()) {
+                        Platform.runLater(() -> onSuccess.accept(newName));
+                    } else {
+                        String err = response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể đổi tên nhóm.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    public void addGroupMember(long conversationId, long targetUserId, Runnable onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.addGroupMember(conversationId, targetUserId),
+                response -> {
+                    if (response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể thêm thành viên.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    public void kickGroupMember(long conversationId, long targetUserId, Runnable onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.kickGroupMember(conversationId, targetUserId),
+                response -> {
+                    if (response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể xóa thành viên.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    public void transferGroupAdmin(long conversationId, long targetUserId, Runnable onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.transferGroupAdmin(conversationId, targetUserId),
+                response -> {
+                    if (response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể chuyển quyền admin.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
+    public void disbandGroup(long conversationId, Runnable onSuccess, Consumer<String> onError) {
+        asyncCall(
+                () -> chatService.disbandGroup(conversationId),
+                response -> {
+                    if (response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response.message() != null && !response.message().isBlank()
+                                ? response.message() : "Không thể giải tán nhóm.";
+                        Platform.runLater(() -> onError.accept(err));
+                    }
+                }
+        );
+    }
+
     public void editMessage(long messageId, long conversationId, String content, Consumer<String> onError) {
         asyncCall(
                 () -> chatService.editMessage(messageId, conversationId, content),
@@ -468,6 +566,7 @@ public class ChatController {
                 response -> {
                     if (response != null && !response.isSuccess()) {
                         Platform.runLater(() -> onError.accept(response.message()));
+
                     }
                 }
         );
