@@ -282,7 +282,7 @@ public class ChatService {
                 CompletableFuture<ApiResponse> future = pendingRequests.remove(requestId);
                 if (future != null) {
                     String status = json.has("status") ? json.get("status").getAsString() : "";
-                    String message = json.has("message") ? json.get("message").getAsString() : "";
+                    String message = extractMessage(json);
                     String code = json.has("code") ? json.get("code").getAsString() : "";
                     Long uid = json.has("userId") ? json.get("userId").getAsLong() : null;
                     int statusCode = "success".equals(status) ? 200 : 400;
@@ -337,6 +337,17 @@ public class ChatService {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Safely extracts the "message" field from a server response.
+     * Some responses (e.g. PIN_MESSAGE_RESPONSE) have a JSON object in "message",
+     * while others have a plain string.
+     */
+    private static String extractMessage(JsonObject json) {
+        if (!json.has("message")) return "";
+        var el = json.get("message");
+        return el.isJsonPrimitive() ? el.getAsString() : "";
     }
 
     // ---- I/O helpers ----

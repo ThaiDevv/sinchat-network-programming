@@ -177,11 +177,10 @@ public class Database {
             logger.error("Database migration (pinned/pinned_by) failed: {}", e.getMessage(), e);
         }
 
-        // Migration 5: edited_to_id and deleted on messages table (for edit/delete features)
+        // Migration 5: edited_to_id on messages table (for edit features; uses existing is_deleted column)
         String checkEditedToColumn = "SHOW COLUMNS FROM messages LIKE 'edited_to_id'";
-        String addEditedToDeletedColumns = "ALTER TABLE messages " +
+        String addEditedToColumn = "ALTER TABLE messages " +
                 "ADD COLUMN edited_to_id BIGINT DEFAULT NULL, " +
-                "ADD COLUMN deleted BOOLEAN DEFAULT FALSE, " +
                 "ADD CONSTRAINT fk_edited_to_message FOREIGN KEY (edited_to_id) REFERENCES messages(id) ON DELETE SET NULL";
 
         try (Connection conn = getConnection();
@@ -190,13 +189,13 @@ public class Database {
 
             if (!rs.next()) {
                 logger.info("Column 'edited_to_id' not found in table 'messages'. Running migration...");
-                stmt.executeUpdate(addEditedToDeletedColumns);
-                logger.info("Database migration completed: added 'edited_to_id' and 'deleted' to 'messages'.");
+                stmt.executeUpdate(addEditedToColumn);
+                logger.info("Database migration completed: added 'edited_to_id' to 'messages'.");
             } else {
                 logger.info("Database schema is up to date. Column 'edited_to_id' already exists in 'messages'.");
             }
         } catch (SQLException e) {
-            logger.error("Database migration (edited_to_id/deleted) failed: {}", e.getMessage(), e);
+            logger.error("Database migration (edited_to_id) failed: {}", e.getMessage(), e);
         }
 
         // Migration 7: admin_only_pin and pin_limit on conversations table
@@ -245,6 +244,7 @@ public class Database {
         } catch (SQLException e) {
             logger.error("Database migration (conversation_roles) failed: {}", e.getMessage(), e);
         }
+
     }
 }
 

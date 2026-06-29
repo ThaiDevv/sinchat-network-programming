@@ -76,14 +76,14 @@ public class MessageRepository {
                 "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
                 "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
                 "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
-                "m.pinned, m.pinned_by, m.deleted, m.edited_to_id " +
+                "m.pinned, m.pinned_by, m.is_deleted, m.edited_to_id " +
                 "FROM messages m " +
                 "JOIN users u ON m.sender_id = u.id " +
                 "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
                 "LEFT JOIN users pu ON pm.sender_id = pu.id " +
                 "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
                 "LEFT JOIN users fu ON fm.sender_id = fu.id " +
-                "WHERE m.conversation_id = ? AND m.deleted = FALSE AND m.edited_to_id IS NULL ORDER BY m.created_at DESC");
+                "WHERE m.conversation_id = ? AND m.is_deleted = FALSE AND m.edited_to_id IS NULL ORDER BY m.created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
         if (offset > 0) query.append(" OFFSET ?");
         try (Connection conn = Database.getConnection();
@@ -105,7 +105,7 @@ public class MessageRepository {
         String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
                 "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
                 "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
-                "m.pinned, m.pinned_by, m.deleted, m.edited_to_id " +
+                "m.pinned, m.pinned_by, m.is_deleted, m.edited_to_id " +
                 "FROM messages m " +
                 "JOIN users u ON m.sender_id = u.id " +
                 "LEFT JOIN messages pm ON m.reply_to_message_id = pm.id " +
@@ -136,7 +136,7 @@ public class MessageRepository {
                 "m.type, m.content, m.created_at " +
                 "FROM messages m " +
                 "JOIN users u ON u.id = m.sender_id " +
-                "WHERE m.conversation_id = ? AND m.deleted = FALSE AND LOWER(m.content) LIKE LOWER(?) " +
+                "WHERE m.conversation_id = ? AND m.is_deleted = FALSE AND LOWER(m.content) LIKE LOWER(?) " +
                 "ORDER BY m.created_at DESC LIMIT ? OFFSET ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
@@ -189,7 +189,7 @@ public class MessageRepository {
             }
         } catch (SQLException ignored) {}
         try {
-            msg.setDeleted(rs.getBoolean("deleted"));
+            msg.setDeleted(rs.getBoolean("is_deleted"));
             long editedToIdVal = rs.getLong("edited_to_id");
             if (!rs.wasNull()) {
                 msg.setEditedToId(editedToIdVal);
@@ -230,7 +230,7 @@ public class MessageRepository {
     }
 
     public int countPinned(long conversationId) throws SQLException {
-        String query = "SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND pinned = TRUE AND deleted = FALSE";
+        String query = "SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND pinned = TRUE AND is_deleted = FALSE";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, conversationId);
@@ -242,7 +242,7 @@ public class MessageRepository {
     }
 
     public void markAsEdited(long originalMsgId, long editedMsgId) throws SQLException {
-        String query = "UPDATE messages SET edited_to_id = ? WHERE id = ?";
+        String query = "UPDATE messages SET edited_to_id = ?, is_edited = TRUE, edited_at = CURRENT_TIMESTAMP WHERE id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, editedMsgId);
@@ -252,7 +252,7 @@ public class MessageRepository {
     }
 
     public boolean softDelete(long msgId) {
-        String query = "UPDATE messages SET deleted = TRUE WHERE id = ?";
+        String query = "UPDATE messages SET is_deleted = TRUE WHERE id = ?";
         try (Connection conn = Database.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setLong(1, msgId);
