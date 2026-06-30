@@ -1234,26 +1234,34 @@ public class ChatView {
             MenuItem unpinItem = new MenuItem("Bỏ ghim");
             unpinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
             unpinItem.setOnAction(e -> {
+                // Optimistic update — apply immediately
+                applyPinStateToBubble(messageId, false);
+                refreshPinnedMessagesBar();
                 controller.unpinMessage(messageId, currentConversationId,
-                        () -> Platform.runLater(() -> {
-                            applyPinStateToBubble(messageId, false);
+                        () -> Platform.runLater(() -> showToast("Đã bỏ ghim tin nhắn")),
+                        err -> Platform.runLater(() -> {
+                            // Revert on failure
+                            applyPinStateToBubble(messageId, true);
                             refreshPinnedMessagesBar();
-                            showToast("Đã bỏ ghim tin nhắn");
-                        }),
-                        err -> Platform.runLater(() -> showToast("Bỏ ghim thất bại: " + err)));
+                            showToast("Bỏ ghim thất bại: " + err);
+                        }));
             });
             menu.getItems().add(unpinItem);
         } else {
             MenuItem pinItem = new MenuItem("Ghim tin nhắn");
             pinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
             pinItem.setOnAction(e -> {
+                // Optimistic update — apply immediately
+                applyPinStateToBubble(messageId, true);
+                refreshPinnedMessagesBar();
                 controller.pinMessage(messageId, currentConversationId,
-                        () -> Platform.runLater(() -> {
-                            applyPinStateToBubble(messageId, true);
+                        () -> Platform.runLater(() -> showToast("Đã ghim tin nhắn")),
+                        err -> Platform.runLater(() -> {
+                            // Revert on failure
+                            applyPinStateToBubble(messageId, false);
                             refreshPinnedMessagesBar();
-                            showToast("Đã ghim tin nhắn");
-                        }),
-                        err -> Platform.runLater(() -> showToast("Ghim thất bại: " + err)));
+                            showToast("Ghim thất bại: " + err);
+                        }));
             });
             menu.getItems().add(pinItem);
         }
