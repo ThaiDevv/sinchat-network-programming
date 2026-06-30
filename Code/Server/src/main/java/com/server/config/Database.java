@@ -155,29 +155,43 @@ public class Database {
             logger.error("Database migration (action_user_id) failed: {}", e.getMessage(), e);
         }
 
-        // Migration 4: pinned columns on messages table
-        String checkPinnedColumn = "SHOW COLUMNS FROM messages LIKE 'pinned'";
-        String addPinnedColumns = "ALTER TABLE messages " +
-                "ADD COLUMN pinned BOOLEAN DEFAULT FALSE, " +
-                "ADD COLUMN pinned_by BIGINT DEFAULT NULL, " +
-                "ADD CONSTRAINT fk_pinned_by FOREIGN KEY (pinned_by) REFERENCES users(id) ON DELETE SET NULL";
+
+        // Migration 4: role column in conversation_members (ADMIN/MEMBER)
+        String checkRoleColumn = "SHOW COLUMNS FROM conversation_members LIKE 'role'";
+        String addRoleColumn = "ALTER TABLE conversation_members ADD COLUMN role VARCHAR(10) NOT NULL DEFAULT 'MEMBER'";
 
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(checkPinnedColumn)) {
+             ResultSet rs = stmt.executeQuery(checkRoleColumn)) {
 
             if (!rs.next()) {
-                logger.info("Column 'pinned' not found in table 'messages'. Running migration...");
-                stmt.executeUpdate(addPinnedColumns);
-                logger.info("Database migration completed: added 'pinned' and 'pinned_by' to 'messages'.");
+                logger.info("Column 'role' not found in table 'conversation_members'. Running migration...");
+                stmt.executeUpdate(addRoleColumn);
+                logger.info("Database migration completed: added 'role' to 'conversation_members'.");
             } else {
-                logger.info("Database schema is up to date. Column 'pinned' already exists in 'messages'.");
+                logger.info("Database schema is up to date. Column 'role' already exists in 'conversation_members'.");
             }
         } catch (SQLException e) {
-            logger.error("Database migration (pinned/pinned_by) failed: {}", e.getMessage(), e);
+            logger.error("Database migration (conversation_members.role) failed: {}", e.getMessage(), e);
         }
 
-        // Migration 5: edited_to_id on messages table (for edit features; uses existing is_deleted column)
+        // Migration 5: Set ADMIN role for existing group creators
+        String updateAdminRole = "UPDATE conversation_members cm " +
+                "JOIN conversations c ON cm.conversation_id = c.id " +
+                "SET cm.role = 'ADMIN' " +
+                "WHERE c.type = 'GROUP' AND cm.user_id = c.created_by AND cm.role != 'ADMIN'";
+
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+            int updated = stmt.executeUpdate(updateAdminRole);
+            if (updated > 0) {
+                logger.info("Database migration: set ADMIN role for {} existing group creators.", updated);
+            }
+        } catch (SQLException e) {
+            logger.error("Database migration (set ADMIN role) failed: {}", e.getMessage(), e);
+        }
+
+        // Migration 6: edited_to_id — edit chain support
         String checkEditedToColumn = "SHOW COLUMNS FROM messages LIKE 'edited_to_id'";
         String addEditedToColumn = "ALTER TABLE messages " +
                 "ADD COLUMN edited_to_id BIGINT DEFAULT NULL, " +

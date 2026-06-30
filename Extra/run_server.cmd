@@ -10,7 +10,7 @@ echo.
 cd /d "%~dp0..\Code\Server"
 
 echo [1/2] Compiling Server code...
-call mvn compile
+call mvn clean compile
 if %ERRORLEVEL% NEQ 0 (
     color 0C
     echo.

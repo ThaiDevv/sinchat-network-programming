@@ -63,11 +63,14 @@ public class Router {
     private static NameHandler nameHandler = new NameHandler();
     private static CreateGroupHandler createGroupHandler = new CreateGroupHandler();
     private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
+
+    private static GroupManagementHandler groupManagementHandler = new GroupManagementHandler();
     private static DeleteMessageHandler deleteMessageHandler = new DeleteMessageHandler();
     private static EditMessageHandler editMessageHandler = new EditMessageHandler();
     private static PinMessageHandler pinMessageHandler = new PinMessageHandler();
     private static UnpinMessageHandler unpinMessageHandler = new UnpinMessageHandler();
     private static SetPinPolicyHandler setPinPolicyHandler = new SetPinPolicyHandler();
+
 
     // ---- friendship handlers (require FriendshipService) ----
     private static FriendshipService friendshipService = new FriendshipService();
@@ -192,6 +195,10 @@ public class Router {
                     break;
                 case "LEAVE_GROUP":
                     response = leaveGroupHandler.handleTcp(request, conn);
+                    break;
+
+                case "MANAGE_GROUP":
+                    response = groupManagementHandler.handleTcp(request, conn);
                     break;
                 case "DELETE_MESSAGE":
                     response = deleteMessageHandler.handleTcp(request, conn);
