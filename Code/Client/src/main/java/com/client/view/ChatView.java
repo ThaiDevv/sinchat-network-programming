@@ -1235,6 +1235,7 @@ public class ChatView {
             unpinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
             unpinItem.setOnAction(e -> {
                 controller.unpinMessage(messageId, currentConversationId,
+                        () -> Platform.runLater(() -> showToast("Đã bỏ ghim tin nhắn")),
                         err -> Platform.runLater(() -> showToast("Bỏ ghim thất bại: " + err)));
             });
             menu.getItems().add(unpinItem);
@@ -1243,6 +1244,7 @@ public class ChatView {
             pinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
             pinItem.setOnAction(e -> {
                 controller.pinMessage(messageId, currentConversationId,
+                        () -> Platform.runLater(() -> showToast("Đã ghim tin nhắn")),
                         err -> Platform.runLater(() -> showToast("Ghim thất bại: " + err)));
             });
             menu.getItems().add(pinItem);
@@ -1505,6 +1507,14 @@ public class ChatView {
 
         // Update pin state
         setMessagePinnedState(messageId, isPinned);
+
+        // Show toast for remote pin/unpin (not from myself)
+        Long pinnedBy = msgObj != null && msgObj.has("pinnedBy") && !msgObj.get("pinnedBy").isJsonNull()
+                ? msgObj.get("pinnedBy").getAsLong() : null;
+        if (pinnedBy != null && pinnedBy != currentUserId) {
+            String label = isPinned ? "đã ghim một tin nhắn" : "đã bỏ ghim một tin nhắn";
+            showToast("Một người dùng " + label);
+        }
 
         Platform.runLater(() -> {
             Node oldBubble = messageBubbleById.get(messageId);

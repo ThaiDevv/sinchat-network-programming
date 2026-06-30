@@ -476,23 +476,29 @@ public class ChatController {
         );
     }
 
-    public void pinMessage(long messageId, long conversationId, Consumer<String> onError) {
+    public void pinMessage(long messageId, long conversationId, Runnable onSuccess, Consumer<String> onError) {
         asyncCall(
                 () -> chatService.pinMessage(messageId, conversationId),
                 response -> {
-                    if (response != null && !response.isSuccess()) {
-                        Platform.runLater(() -> onError.accept(response.message()));
+                    if (response != null && response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response != null ? response.message() : "Không thể ghim tin nhắn";
+                        Platform.runLater(() -> onError.accept(err));
                     }
                 }
         );
     }
 
-    public void unpinMessage(long messageId, long conversationId, Consumer<String> onError) {
+    public void unpinMessage(long messageId, long conversationId, Runnable onSuccess, Consumer<String> onError) {
         asyncCall(
                 () -> chatService.unpinMessage(messageId, conversationId),
                 response -> {
-                    if (response != null && !response.isSuccess()) {
-                        Platform.runLater(() -> onError.accept(response.message()));
+                    if (response != null && response.isSuccess()) {
+                        Platform.runLater(onSuccess);
+                    } else {
+                        String err = response != null ? response.message() : "Không thể bỏ ghim tin nhắn";
+                        Platform.runLater(() -> onError.accept(err));
                     }
                 }
         );
