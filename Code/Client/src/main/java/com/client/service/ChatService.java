@@ -1,19 +1,29 @@
 package com.client.service;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
+import javax.net.SocketFactory;
+import javax.net.ssl.SSLSocketFactory;
+
 import com.client.model.ApiResponse;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import javafx.application.Platform;
 
-import javax.net.SocketFactory;
-import javax.net.ssl.SSLSocketFactory;
-import java.io.*;
-import java.net.Socket;
-import java.util.UUID;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import javafx.application.Platform;
 
 /**
  * Core TCP networking service.
@@ -88,6 +98,7 @@ public class ChatService {
     private Consumer<JsonObject> onNewMessage;
     private Consumer<JsonObject> onMessageEdited;
     private Consumer<JsonObject> onMessageDeleted;
+    private Consumer<JsonObject> onMessagePinned;
     private Consumer<JsonObject> onUserTyping;
     private Consumer<JsonObject> onUserStatusChange;
     private Consumer<JsonObject> onUserAvatarChanged;
@@ -95,11 +106,6 @@ public class ChatService {
     private Consumer<JsonObject> onLeftGroup;
     private Consumer<JsonObject> onFriendRequestReceived;
     private Consumer<JsonObject> onFriendAccepted;
-    private Consumer<JsonObject> onGroupRenamed;
-    private Consumer<JsonObject> onMemberAdded;
-    private Consumer<JsonObject> onMemberKicked;
-    private Consumer<JsonObject> onGroupDisbanded;
-    private Consumer<JsonObject> onAdminTransferred;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -113,6 +119,7 @@ public class ChatService {
     public void setOnNewMessage(Consumer<JsonObject> callback) { this.onNewMessage = callback; }
     public void setOnMessageEdited(Consumer<JsonObject> callback) { this.onMessageEdited = callback; }
     public void setOnMessageDeleted(Consumer<JsonObject> callback) { this.onMessageDeleted = callback; }
+    public void setOnMessagePinned(Consumer<JsonObject> callback) { this.onMessagePinned = callback; }
     public void setOnUserTyping(Consumer<JsonObject> callback) { this.onUserTyping = callback; }
     public void setOnUserStatusChange(Consumer<JsonObject> callback) { this.onUserStatusChange = callback; }
     public void setOnUserAvatarChanged(Consumer<JsonObject> callback) { this.onUserAvatarChanged = callback; }
@@ -120,11 +127,6 @@ public class ChatService {
     public void setOnLeftGroup(Consumer<JsonObject> callback) { this.onLeftGroup = callback; }
     public void setOnFriendRequestReceived(Consumer<JsonObject> callback) { this.onFriendRequestReceived = callback; }
     public void setOnFriendAccepted(Consumer<JsonObject> callback) { this.onFriendAccepted = callback; }
-    public void setOnGroupRenamed(Consumer<JsonObject> callback) { this.onGroupRenamed = callback; }
-    public void setOnMemberAdded(Consumer<JsonObject> callback) { this.onMemberAdded = callback; }
-    public void setOnMemberKicked(Consumer<JsonObject> callback) { this.onMemberKicked = callback; }
-    public void setOnGroupDisbanded(Consumer<JsonObject> callback) { this.onGroupDisbanded = callback; }
-    public void setOnAdminTransferred(Consumer<JsonObject> callback) { this.onAdminTransferred = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 
@@ -280,7 +282,7 @@ public class ChatService {
                 CompletableFuture<ApiResponse> future = pendingRequests.remove(requestId);
                 if (future != null) {
                     String status = json.has("status") ? json.get("status").getAsString() : "";
-                    String message = json.has("message") ? json.get("message").getAsString() : "";
+                    String message = extractMessage(json);
                     String code = json.has("code") ? json.get("code").getAsString() : "";
                     Long uid = json.has("userId") ? json.get("userId").getAsLong() : null;
                     int statusCode = "success".equals(status) ? 200 : 400;
@@ -300,6 +302,10 @@ public class ChatService {
                     break;
                 case "DELETE_MESSAGE_EVENT":
                     if (onMessageDeleted != null) Platform.runLater(() -> onMessageDeleted.accept(json));
+                    break;
+                case "PIN_MESSAGE_EVENT":
+                case "UNPIN_MESSAGE_EVENT":
+                    if (onMessagePinned != null) Platform.runLater(() -> onMessagePinned.accept(json));
                     break;
                 case "MESSAGE_STATUS_EVENT":
                     if (onMessageStatusChanged != null) Platform.runLater(() -> onMessageStatusChanged.accept(json));
@@ -325,27 +331,23 @@ public class ChatService {
                 case "LEFT_GROUP":
                     if (onLeftGroup != null) Platform.runLater(() -> onLeftGroup.accept(json));
                     break;
-                case "GROUP_RENAMED":
-                    if (onGroupRenamed != null) Platform.runLater(() -> onGroupRenamed.accept(json));
-                    break;
-                case "MEMBER_ADDED":
-                    if (onMemberAdded != null) Platform.runLater(() -> onMemberAdded.accept(json));
-                    break;
-                case "MEMBER_KICKED":
-                    if (onMemberKicked != null) Platform.runLater(() -> onMemberKicked.accept(json));
-                    break;
-                case "GROUP_DISBANDED":
-                    if (onGroupDisbanded != null) Platform.runLater(() -> onGroupDisbanded.accept(json));
-                    break;
-                case "ADMIN_TRANSFERRED":
-                    if (onAdminTransferred != null) Platform.runLater(() -> onAdminTransferred.accept(json));
-                    break;
                 default:
                     break;
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Safely extracts the "message" field from a server response.
+     * Some responses (e.g. PIN_MESSAGE_RESPONSE) have a JSON object in "message",
+     * while others have a plain string.
+     */
+    private static String extractMessage(JsonObject json) {
+        if (!json.has("message")) return "";
+        var el = json.get("message");
+        return el.isJsonPrimitive() ? el.getAsString() : "";
     }
 
     // ---- I/O helpers ----
@@ -657,61 +659,6 @@ public class ChatService {
         return sendRequestSync(req);
     }
 
-
-    // ---- group management API methods ----
-
-    public ApiResponse getGroupMembers(long conversationId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "GET_MEMBERS");
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse renameGroup(long conversationId, String newName) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "RENAME");
-        req.addProperty("newName", newName);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse addGroupMember(long conversationId, long targetUserId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "ADD_MEMBER");
-        req.addProperty("targetUserId", targetUserId);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse kickGroupMember(long conversationId, long targetUserId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "KICK_MEMBER");
-        req.addProperty("targetUserId", targetUserId);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse transferGroupAdmin(long conversationId, long targetUserId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "TRANSFER_ADMIN");
-        req.addProperty("targetUserId", targetUserId);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse disbandGroup(long conversationId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "DISBAND");
-        return sendRequestSync(req);
-    }
-
     public ApiResponse editMessage(long messageId, long conversationId, String content) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "EDIT_MESSAGE");
@@ -726,7 +673,30 @@ public class ChatService {
         req.addProperty("action", "DELETE_MESSAGE");
         req.addProperty("messageId", messageId);
         req.addProperty("conversationId", conversationId);
+        return sendRequestSync(req);
+    }
 
+    public ApiResponse pinMessage(long messageId, long conversationId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "PIN_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse unpinMessage(long messageId, long conversationId) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "UNPIN_MESSAGE");
+        req.addProperty("messageId", messageId);
+        req.addProperty("conversationId", conversationId);
+        return sendRequestSync(req);
+    }
+
+    public ApiResponse setPinPolicy(long conversationId, boolean adminOnly) {
+        JsonObject req = new JsonObject();
+        req.addProperty("action", "SET_PIN_POLICY");
+        req.addProperty("conversationId", conversationId);
+        req.addProperty("adminOnly", adminOnly);
         return sendRequestSync(req);
     }
 }

@@ -1,12 +1,20 @@
 package com.server.tcp;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.gson.JsonObject;
-import com.server.handler.auth.*;
-import com.server.handler.message.*;
-import com.server.handler.changeavatar.*;
+import com.server.ProfileHandler;
+import com.server.handler.JoinHandler;
+import com.server.handler.PingHandler;
+import com.server.handler.TypingHandler;
+import com.server.handler.auth.ChangePasswordHandler;
+import com.server.handler.auth.ForgotPasswordHandler;
+import com.server.handler.auth.LoginHandler;
+import com.server.handler.auth.RegisterHandler;
 import com.server.handler.avatar.GetAvatarHandler;
 import com.server.handler.changeName.NameHandler;
-
+import com.server.handler.changeavatar.AvatarHandler;
 import com.server.handler.friendship.BlockUserHandler;
 import com.server.handler.friendship.GetFriendRequestsHandler;
 import com.server.handler.friendship.GetFriendsHandler;
@@ -15,14 +23,21 @@ import com.server.handler.friendship.RespondFriendRequestHandler;
 import com.server.handler.friendship.SendFriendRequestHandler;
 import com.server.handler.friendship.UnblockUserHandler;
 import com.server.handler.friendship.UnfriendHandler;
-
-import com.server.handler.JoinHandler;
-import com.server.handler.PingHandler;
-import com.server.handler.TypingHandler;
-import com.server.ProfileHandler;
+import com.server.handler.message.ConversationHandler;
+import com.server.handler.message.CreateGroupHandler;
+import com.server.handler.message.DeleteMessageHandler;
+import com.server.handler.message.EditMessageHandler;
+import com.server.handler.message.GetConversationsHandler;
+import com.server.handler.message.GetMessagesHandler;
+import com.server.handler.message.LeaveGroupHandler;
+import com.server.handler.message.PinMessageHandler;
+import com.server.handler.message.SearchMessagesHandler;
+import com.server.handler.message.SearchUserHandler;
+import com.server.handler.message.SendMessageHandler;
+import com.server.handler.message.SetPinPolicyHandler;
+import com.server.handler.message.UnpinMessageHandler;
+import com.server.handler.message.UpdateMessageStatusHandler;
 import com.server.service.FriendshipService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class Router {
     private static final Logger logger = LoggerFactory.getLogger(Router.class);
@@ -48,11 +63,11 @@ public class Router {
     private static NameHandler nameHandler = new NameHandler();
     private static CreateGroupHandler createGroupHandler = new CreateGroupHandler();
     private static LeaveGroupHandler leaveGroupHandler = new LeaveGroupHandler();
-
-    private static GroupManagementHandler groupManagementHandler = new GroupManagementHandler();
     private static DeleteMessageHandler deleteMessageHandler = new DeleteMessageHandler();
     private static EditMessageHandler editMessageHandler = new EditMessageHandler();
-
+    private static PinMessageHandler pinMessageHandler = new PinMessageHandler();
+    private static UnpinMessageHandler unpinMessageHandler = new UnpinMessageHandler();
+    private static SetPinPolicyHandler setPinPolicyHandler = new SetPinPolicyHandler();
 
     // ---- friendship handlers (require FriendshipService) ----
     private static FriendshipService friendshipService = new FriendshipService();
@@ -178,15 +193,20 @@ public class Router {
                 case "LEAVE_GROUP":
                     response = leaveGroupHandler.handleTcp(request, conn);
                     break;
-
-                case "MANAGE_GROUP":
-                    response = groupManagementHandler.handleTcp(request, conn);
-                    break;
                 case "DELETE_MESSAGE":
                     response = deleteMessageHandler.handleTcp(request, conn);
                     break;
                 case "EDIT_MESSAGE":
                     response = editMessageHandler.handleTcp(request, conn);
+                    break;
+                case "PIN_MESSAGE":
+                    response = pinMessageHandler.handleTcp(request, conn);
+                    break;
+                case "UNPIN_MESSAGE":
+                    response = unpinMessageHandler.handleTcp(request, conn);
+                    break;
+                case "SET_PIN_POLICY":
+                    response = setPinPolicyHandler.handleTcp(request, conn);
                     break;
 
                 // ---- friendship actions ----

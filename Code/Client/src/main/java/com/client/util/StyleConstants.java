@@ -22,6 +22,9 @@ public final class StyleConstants {
     public static final String ACCENT       = "#7c5cfc";
     public static final String ACCENT_BLUE  = "#1877f2";
 
+    // Pin
+    public static final String PIN_COLOR = "#ffdd00";
+
     // --- LoginView styles ---
 
     public static final String STYLE_INPUT_BASE =

@@ -1,9 +1,8 @@
 package com.server.service;
-import com.server.model.Conversation;
-import com.server.repository.ConversationRepository;
-import com.google.gson.JsonArray;
 import java.sql.SQLException;
 import java.util.List;
+
+import com.server.repository.ConversationRepository;
 
 public class ConversationService {
 
@@ -37,50 +36,25 @@ public class ConversationService {
         return conversationRepo.getConversationType(conversationId);
     }
 
-    // ==================== GROUP MANAGEMENT ====================
+    // ==================== PIN / ROLE METHODS ====================
 
-    public String getMemberRole(long conversationId, long userId) {
-        return conversationRepo.getMemberRole(conversationId, userId);
+    public String getUserRole(long convId, long userId) {
+        return conversationRepo.getUserRoleInConversation(convId, userId);
     }
 
-    public long getConversationCreator(long conversationId) {
-        Long creator = conversationRepo.getConversationCreator(conversationId);
-        return creator != null ? creator : -1L;
+    public boolean isAdminOnlyPinEnabled(long convId) {
+        return conversationRepo.isAdminOnlyPinEnabled(convId);
     }
 
-    public JsonArray getGroupMembers(long conversationId) {
-        return conversationRepo.getMembersWithDetails(conversationId);
+    public int getPinLimit(long convId) {
+        return conversationRepo.getPinLimit(convId);
     }
 
-    public void renameGroup(long conversationId, String newName) throws SQLException {
-        conversationRepo.updateGroupName(conversationId, newName);
+    public void setAdminOnlyPin(long convId, boolean flag) throws SQLException {
+        conversationRepo.setAdminOnlyPin(convId, flag);
     }
 
-    public void addGroupMember(long conversationId, long userId) throws SQLException {
-        conversationRepo.addMemberWithRole(conversationId, userId, "MEMBER");
-    }
-
-    public void kickGroupMember(long conversationId, long userId) throws SQLException {
-        conversationRepo.removeMember(conversationId, userId);
-    }
-
-    public void transferGroupAdmin(long conversationId, long currentAdminId, long newAdminId) throws SQLException {
-        conversationRepo.transferAdmin(conversationId, currentAdminId, newAdminId);
-    }
-
-    public void disbandGroup(long conversationId) throws SQLException {
-        conversationRepo.disbandGroup(conversationId);
-    }
-
-    public boolean isGroupMember(long conversationId, long userId) {
-        return conversationRepo.isGroupMember(conversationId, userId);
-    }
-
-    public List<Long> getMemberIds(long conversationId) {
-        return conversationRepo.getMemberIds(conversationId);
-    }
-
-    public String getConversationName(long conversationId) {
-        return conversationRepo.getConversationName(conversationId);
+    public void addConversationRole(long convId, long userId, String role) throws SQLException {
+        conversationRepo.addConversationRole(convId, userId, role);
     }
 }
