@@ -34,7 +34,7 @@ public class PinMessageHandler {
         try {
             if (!request.has("messageId") || !request.has("conversationId")) {
                 response.addProperty("status", "error");
-                response.addProperty("message", "Missing messageId or conversationId");
+                response.addProperty("message", "Thiếu messageId hoặc conversationId");
                 return response;
             }
 
@@ -43,7 +43,7 @@ public class PinMessageHandler {
             Long userId = conn.getUserId();
             if (userId == null) {
                 response.addProperty("status", "error");
-                response.addProperty("message", "Unauthorized");
+                response.addProperty("message", "Chưa đăng nhập");
                 return response;
             }
 
@@ -53,7 +53,7 @@ public class PinMessageHandler {
                 logger.warn("[PIN_MESSAGE] Remote={} | UserId={} | ConversationId={} | Not a member",
                         conn.getRemoteAddress(), userId, conversationId);
                 response.addProperty("status", "error");
-                response.addProperty("message", "Unauthorized: not a member of this conversation");
+                response.addProperty("message", "Bạn không phải là thành viên của cuộc trò chuyện này");
                 return response;
             }
 
@@ -67,7 +67,7 @@ public class PinMessageHandler {
                         logger.warn("[PIN_MESSAGE] Remote={} | UserId={} | ConvId={} | Permission denied: admin-only pinning",
                                 conn.getRemoteAddress(), userId, conversationId);
                         response.addProperty("status", "error");
-                        response.addProperty("message", "Permission denied: admin-only pinning is enabled");
+                        response.addProperty("message", "Chỉ quản trị viên mới được ghim tin nhắn");
                         return response;
                     }
                 }
@@ -80,7 +80,7 @@ public class PinMessageHandler {
                 logger.warn("[PIN_MESSAGE] Remote={} | UserId={} | ConvId={} | Pin limit reached ({})",
                         conn.getRemoteAddress(), userId, conversationId, limit);
                 response.addProperty("status", "error");
-                response.addProperty("message", "Pin limit reached (" + limit + ")");
+                response.addProperty("message", "Đã đạt giới hạn ghim (" + limit + " tin nhắn)");
                 return response;
             }
 
@@ -88,7 +88,7 @@ public class PinMessageHandler {
             boolean ok = messageRepository.pinMessage(messageId, userId);
             if (!ok) {
                 response.addProperty("status", "error");
-                response.addProperty("message", "DB update failed");
+                response.addProperty("message", "Không thể cập nhật dữ liệu");
                 return response;
             }
 
@@ -113,7 +113,7 @@ public class PinMessageHandler {
         } catch (Exception e) {
             logger.error("[PIN_MESSAGE ERROR] Remote={} | Error: {}", conn.getRemoteAddress(), e.getMessage(), e);
             response.addProperty("status", "error");
-            response.addProperty("message", "Internal Server Error");
+            response.addProperty("message", "Lỗi máy chủ nội bộ");
         }
         return response;
     }

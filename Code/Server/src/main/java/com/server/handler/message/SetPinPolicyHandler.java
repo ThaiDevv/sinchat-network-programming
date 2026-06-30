@@ -25,7 +25,7 @@ public class SetPinPolicyHandler {
         try {
             if (!request.has("conversationId") || !request.has("adminOnly")) {
                 response.addProperty("status", "error");
-                response.addProperty("message", "Missing conversationId or adminOnly");
+                response.addProperty("message", "Thiếu conversationId hoặc adminOnly");
                 return response;
             }
 
@@ -34,7 +34,7 @@ public class SetPinPolicyHandler {
             Long userId = conn.getUserId();
             if (userId == null) {
                 response.addProperty("status", "error");
-                response.addProperty("message", "Unauthorized");
+                response.addProperty("message", "Chưa đăng nhập");
                 return response;
             }
 
@@ -42,7 +42,7 @@ public class SetPinPolicyHandler {
             String convType = conversationRepository.getConversationType(conversationId);
             if (!"GROUP".equals(convType)) {
                 response.addProperty("status", "error");
-                response.addProperty("message", "Pin policy can only be set on group conversations");
+                response.addProperty("message", "Chính sách ghim chỉ áp dụng cho nhóm chat");
                 return response;
             }
 
@@ -52,7 +52,7 @@ public class SetPinPolicyHandler {
                 logger.warn("[SET_PIN_POLICY] Remote={} | UserId={} | ConvId={} | Permission denied",
                         conn.getRemoteAddress(), userId, conversationId);
                 response.addProperty("status", "error");
-                response.addProperty("message", "Permission denied: only admins can change pin policy");
+                response.addProperty("message", "Chỉ quản trị viên mới được thay đổi chính sách ghim");
                 return response;
             }
 
@@ -69,7 +69,7 @@ public class SetPinPolicyHandler {
         } catch (Exception e) {
             logger.error("[SET_PIN_POLICY ERROR] Remote={} | Error: {}", conn.getRemoteAddress(), e.getMessage(), e);
             response.addProperty("status", "error");
-            response.addProperty("message", "Internal Server Error");
+            response.addProperty("message", "Lỗi máy chủ nội bộ");
         }
         return response;
     }
