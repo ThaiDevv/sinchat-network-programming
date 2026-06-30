@@ -90,6 +90,8 @@ public class ChatView {
     private Button leaveGroupBtn;
     private HBox pinPolicyBox;
     private javafx.scene.control.CheckBox adminOnlyPinCheckBox;
+    private HBox pinnedMessagesBar;
+    private Label pinnedMessagesLabel;
 
     // Message search fields
     private TextField messageSearchField;
@@ -297,6 +299,8 @@ public class ChatView {
                 Platform.runLater(() -> {
                     currentConversationId = -1;
                     messagesBox.getChildren().clear();
+                    messagePinnedState.clear();
+                    if (pinnedMessagesBar != null) { pinnedMessagesBar.setVisible(false); pinnedMessagesBar.setManaged(false); }
                     if (headerChatName != null) headerChatName.setText("Chọn người để chat");
                     if (chatStatus != null) chatStatus.setText("Offline");
                     if (leaveGroupBtn != null) {
@@ -563,6 +567,8 @@ public class ChatView {
         updateUnreadBadge(conversationId);
         messagesBox.getChildren().clear();
         messageBubbleById.clear();
+        messagePinnedState.clear();
+        if (pinnedMessagesBar != null) { pinnedMessagesBar.setVisible(false); pinnedMessagesBar.setManaged(false); }
         messageSeenContainers.clear();
         messageSeenUsers.clear();
         highlightedMessageBubble = null;
@@ -819,6 +825,7 @@ public class ChatView {
         if (reset) {
             messagesBox.getChildren().clear();
             messageBubbleById.clear();
+            messagePinnedState.clear();
             messageStatusLabels.clear();
             highlightedMessageBubble = null;
             highlightedMessageStyle = null;
@@ -936,6 +943,7 @@ public class ChatView {
         currentMessageOffset = offset + msgCount;
         hasMoreMessages = json.has("hasMore") ? json.get("hasMore").getAsBoolean() : msgCount >= PAGE_SIZE;
         hideAllStatusLabelsExceptLast();
+        refreshPinnedMessagesBar();
     }
 
     private void hideAllStatusLabelsExceptLast() {
@@ -1531,8 +1539,119 @@ public class ChatView {
                 } else if (!isPinned && existingPinLabel != null && existingPinGroup != null) {
                     existingPinGroup.getChildren().remove(existingPinLabel);
                 }
+                refreshPinnedMessagesBar();
             }
         });
+    }
+
+    // ==================== PINNED MESSAGES BAR ====================
+
+    private void refreshPinnedMessagesBar() {
+        if (pinnedMessagesBar == null || pinnedMessagesLabel == null) return;
+        Platform.runLater(() -> {
+            int pinnedCount = 0;
+            for (Boolean pinned : messagePinnedState.values()) {
+                if (pinned) pinnedCount++;
+            }
+            if (pinnedCount > 0) {
+                pinnedMessagesLabel.setText("\uD83D\uDCCC " + pinnedCount + " tin nhắn đã ghim — Nhấn để xem");
+                pinnedMessagesBar.setVisible(true);
+                pinnedMessagesBar.setManaged(true);
+            } else {
+                pinnedMessagesBar.setVisible(false);
+                pinnedMessagesBar.setManaged(false);
+            }
+        });
+    }
+
+    private void showPinnedMessagesDialog() {
+        if (currentConversationId <= 0) return;
+
+        // Collect pinned message IDs and their data from messageBubbleById
+        java.util.List<Long> pinnedMsgIds = new java.util.ArrayList<>();
+        for (var entry : messagePinnedState.entrySet()) {
+            if (entry.getValue()) {
+                pinnedMsgIds.add(entry.getKey());
+            }
+        }
+        if (pinnedMsgIds.isEmpty()) return;
+
+        // Create dialog
+        Stage dialog = new Stage();
+        dialog.initModality(Modality.APPLICATION_MODAL);
+        dialog.initOwner(stage);
+        dialog.setTitle("Tin nhắn đã ghim");
+        dialog.initStyle(StageStyle.UTILITY);
+
+        VBox root = new VBox(12);
+        root.setPadding(new Insets(16));
+        root.setStyle("-fx-background-color: #1a1a2e;");
+
+        Label titleLabel = new Label("\uD83D\uDCCC Tin nhắn đã ghim (" + pinnedMsgIds.size() + ")");
+        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold;");
+
+        VBox listBox = new VBox(6);
+        listBox.setStyle("-fx-background-color: transparent;");
+
+        for (Long msgId : pinnedMsgIds) {
+            Node bubble = messageBubbleById.get(msgId);
+            if (bubble == null) continue;
+
+            String content = "";
+            // Walk up to find container info
+            Node current = bubble;
+            while (current != null && !(current instanceof HBox && current.getParent() == messagesBox)) {
+                current = current.getParent();
+            }
+            // Try to get content text
+            if (bubble instanceof Label) {
+                content = ((Label) bubble).getText();
+            }
+
+            HBox item = new HBox(12);
+            item.setAlignment(Pos.CENTER_LEFT);
+            item.setPadding(new Insets(8, 12, 8, 12));
+            item.setStyle("-fx-background-color: #16213e; -fx-background-radius: 8px; -fx-cursor: hand;");
+            item.setOnMouseEntered(e -> item.setStyle("-fx-background-color: #2a2a5e; -fx-background-radius: 8px; -fx-cursor: hand;"));
+            item.setOnMouseExited(e -> item.setStyle("-fx-background-color: #16213e; -fx-background-radius: 8px; -fx-cursor: hand;"));
+
+            String displayContent = content.length() > 60 ? content.substring(0, 57) + "..." : content;
+            Label contentLabel = new Label(displayContent);
+            contentLabel.setStyle("-fx-text-fill: #cccccc; -fx-font-size: 13px;");
+            contentLabel.setMaxWidth(280);
+            contentLabel.setWrapText(true);
+            HBox.setHgrow(contentLabel, Priority.ALWAYS);
+
+            item.getChildren().add(contentLabel);
+
+            item.setOnMouseClicked(e -> {
+                dialog.close();
+                scrollToAndHighlightMessage(msgId);
+            });
+
+            listBox.getChildren().add(item);
+        }
+
+        ScrollPane scrollPane = new ScrollPane(listBox);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefHeight(Math.min(pinnedMsgIds.size() * 56, 350));
+        scrollPane.setStyle("-fx-background: #16213e; -fx-background-color: #16213e; -fx-border-color: #333; -fx-border-radius: 8px;");
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        Button closeBtn = new Button("Đóng");
+        closeBtn.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-font-size: 14px; "
+                + "-fx-padding: 10px 24px; -fx-background-radius: 8px; -fx-cursor: hand;");
+        closeBtn.setOnAction(e -> dialog.close());
+
+        HBox buttonRow = new HBox(12);
+        buttonRow.setAlignment(Pos.CENTER_RIGHT);
+        buttonRow.getChildren().add(closeBtn);
+
+        root.getChildren().addAll(titleLabel, scrollPane, buttonRow);
+
+        Scene scene = new Scene(root, 380, Math.min(pinnedMsgIds.size() * 60 + 120, 440));
+        dialog.setScene(scene);
+        dialog.showAndWait();
     }
 
     // ==================== FORWARD ====================
@@ -2471,6 +2590,8 @@ public class ChatView {
                     showToast("Đã thoát nhóm thành công!");
                     currentConversationId = -1;
                     messagesBox.getChildren().clear();
+                    messagePinnedState.clear();
+                    if (pinnedMessagesBar != null) { pinnedMessagesBar.setVisible(false); pinnedMessagesBar.setManaged(false); }
                     if (headerChatName != null) headerChatName.setText("Chọn người để chat");
                     if (chatStatus != null) chatStatus.setText("Offline");
                     if (leaveGroupBtn != null) {
@@ -2685,6 +2806,21 @@ public class ChatView {
         editPreviewBar.getChildren().addAll(editInfo, cancelEditBtn);
 
         panel.getChildren().addAll(chatHeader, messageSearchPanel, scrollMessages, typingLabel, replyPreviewBar, forwardPreviewBar, editPreviewBar, inputBar);
+
+        // Pinned messages bar — shown between search panel and messages
+        pinnedMessagesLabel = new Label("");
+        pinnedMessagesLabel.setStyle("-fx-text-fill: " + StyleConstants.PIN_COLOR + "; -fx-font-size: 12px; -fx-font-weight: bold; -fx-cursor: hand;");
+        pinnedMessagesLabel.setOnMouseClicked(e -> showPinnedMessagesDialog());
+        pinnedMessagesBar = new HBox(pinnedMessagesLabel);
+        pinnedMessagesBar.setAlignment(Pos.CENTER_LEFT);
+        pinnedMessagesBar.setPadding(new Insets(6, 24, 6, 24));
+        pinnedMessagesBar.setStyle("-fx-background-color: #1a1a0a; -fx-border-color: " + StyleConstants.PIN_COLOR + "33; -fx-border-width: 0 0 1 0; -fx-cursor: hand;");
+        pinnedMessagesBar.setVisible(false);
+        pinnedMessagesBar.setManaged(false);
+        pinnedMessagesBar.setOnMouseClicked(e -> showPinnedMessagesDialog());
+        // Insert after messageSearchPanel (index 1)
+        panel.getChildren().add(1, pinnedMessagesBar);
+
         return panel;
     }
 
