@@ -106,11 +106,6 @@ public class ChatService {
     private Consumer<JsonObject> onLeftGroup;
     private Consumer<JsonObject> onFriendRequestReceived;
     private Consumer<JsonObject> onFriendAccepted;
-    private Consumer<JsonObject> onGroupRenamed;
-    private Consumer<JsonObject> onMemberAdded;
-    private Consumer<JsonObject> onMemberKicked;
-    private Consumer<JsonObject> onGroupDisbanded;
-    private Consumer<JsonObject> onAdminTransferred;
     private Runnable onConnected;
     private Consumer<String> onDisconnected;
 
@@ -132,11 +127,6 @@ public class ChatService {
     public void setOnLeftGroup(Consumer<JsonObject> callback) { this.onLeftGroup = callback; }
     public void setOnFriendRequestReceived(Consumer<JsonObject> callback) { this.onFriendRequestReceived = callback; }
     public void setOnFriendAccepted(Consumer<JsonObject> callback) { this.onFriendAccepted = callback; }
-    public void setOnGroupRenamed(Consumer<JsonObject> callback) { this.onGroupRenamed = callback; }
-    public void setOnMemberAdded(Consumer<JsonObject> callback) { this.onMemberAdded = callback; }
-    public void setOnMemberKicked(Consumer<JsonObject> callback) { this.onMemberKicked = callback; }
-    public void setOnGroupDisbanded(Consumer<JsonObject> callback) { this.onGroupDisbanded = callback; }
-    public void setOnAdminTransferred(Consumer<JsonObject> callback) { this.onAdminTransferred = callback; }
     public void setOnConnected(Runnable callback) { this.onConnected = callback; }
     public void setOnDisconnected(Consumer<String> callback) { this.onDisconnected = callback; }
 
@@ -340,21 +330,6 @@ public class ChatService {
                     break;
                 case "LEFT_GROUP":
                     if (onLeftGroup != null) Platform.runLater(() -> onLeftGroup.accept(json));
-                    break;
-                case "GROUP_RENAMED":
-                    if (onGroupRenamed != null) Platform.runLater(() -> onGroupRenamed.accept(json));
-                    break;
-                case "MEMBER_ADDED":
-                    if (onMemberAdded != null) Platform.runLater(() -> onMemberAdded.accept(json));
-                    break;
-                case "MEMBER_KICKED":
-                    if (onMemberKicked != null) Platform.runLater(() -> onMemberKicked.accept(json));
-                    break;
-                case "GROUP_DISBANDED":
-                    if (onGroupDisbanded != null) Platform.runLater(() -> onGroupDisbanded.accept(json));
-                    break;
-                case "ADMIN_TRANSFERRED":
-                    if (onAdminTransferred != null) Platform.runLater(() -> onAdminTransferred.accept(json));
                     break;
                 default:
                     break;
@@ -684,61 +659,6 @@ public class ChatService {
         return sendRequestSync(req);
     }
 
-
-    // ---- group management API methods ----
-
-    public ApiResponse getGroupMembers(long conversationId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "GET_MEMBERS");
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse renameGroup(long conversationId, String newName) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "RENAME");
-        req.addProperty("newName", newName);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse addGroupMember(long conversationId, long targetUserId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "ADD_MEMBER");
-        req.addProperty("targetUserId", targetUserId);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse kickGroupMember(long conversationId, long targetUserId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "KICK_MEMBER");
-        req.addProperty("targetUserId", targetUserId);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse transferGroupAdmin(long conversationId, long targetUserId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "TRANSFER_ADMIN");
-        req.addProperty("targetUserId", targetUserId);
-        return sendRequestSync(req);
-    }
-
-    public ApiResponse disbandGroup(long conversationId) {
-        JsonObject req = new JsonObject();
-        req.addProperty("action", "MANAGE_GROUP");
-        req.addProperty("conversationId", conversationId);
-        req.addProperty("subAction", "DISBAND");
-        return sendRequestSync(req);
-    }
-
     public ApiResponse editMessage(long messageId, long conversationId, String content) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "EDIT_MESSAGE");
@@ -753,7 +673,6 @@ public class ChatService {
         req.addProperty("action", "DELETE_MESSAGE");
         req.addProperty("messageId", messageId);
         req.addProperty("conversationId", conversationId);
-
         return sendRequestSync(req);
     }
 

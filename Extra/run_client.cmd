@@ -29,8 +29,6 @@ echo.
 echo [Mode] Connect to localhost:3000 (default)
 echo        Set TCP_HOST / TCP_PORT env vars to override.
 echo.
-if not defined TCP_HOST set "TCP_HOST=127.0.0.1"
-if not defined TCP_PORT set "TCP_PORT=3000"
 call mvn javafx:run
 if %ERRORLEVEL% NEQ 0 (
     color 0C
