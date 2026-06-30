@@ -1235,7 +1235,11 @@ public class ChatView {
             unpinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
             unpinItem.setOnAction(e -> {
                 controller.unpinMessage(messageId, currentConversationId,
-                        () -> Platform.runLater(() -> showToast("Đã bỏ ghim tin nhắn")),
+                        () -> Platform.runLater(() -> {
+                            applyPinStateToBubble(messageId, false);
+                            refreshPinnedMessagesBar();
+                            showToast("Đã bỏ ghim tin nhắn");
+                        }),
                         err -> Platform.runLater(() -> showToast("Bỏ ghim thất bại: " + err)));
             });
             menu.getItems().add(unpinItem);
@@ -1244,7 +1248,11 @@ public class ChatView {
             pinItem.setStyle("-fx-text-fill: #ffd166; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
             pinItem.setOnAction(e -> {
                 controller.pinMessage(messageId, currentConversationId,
-                        () -> Platform.runLater(() -> showToast("Đã ghim tin nhắn")),
+                        () -> Platform.runLater(() -> {
+                            applyPinStateToBubble(messageId, true);
+                            refreshPinnedMessagesBar();
+                            showToast("Đã ghim tin nhắn");
+                        }),
                         err -> Platform.runLater(() -> showToast("Ghim thất bại: " + err)));
             });
             menu.getItems().add(pinItem);
@@ -1297,6 +1305,50 @@ public class ChatView {
 
     private void setMessagePinnedState(long messageId, boolean pinned) {
         messagePinnedState.put(messageId, pinned);
+    }
+
+    private void applyPinStateToBubble(long messageId, boolean isPinned) {
+        setMessagePinnedState(messageId, isPinned);
+        Node bubble = messageBubbleById.get(messageId);
+        if (bubble == null) return;
+        if (!(bubble.getParent() instanceof VBox)) return;
+        VBox container = (VBox) bubble.getParent();
+
+        String pinStyle = "-fx-font-size: 11px; -fx-text-fill: #ffd166; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;";
+
+        // Look for existing pin label in the container's children
+        Label existingPinLabel = null;
+        VBox existingPinGroup = null;
+        for (javafx.scene.Node child : container.getChildren()) {
+            if (child instanceof VBox) {
+                VBox group = (VBox) child;
+                if (!group.getChildren().isEmpty() && group.getChildren().get(0) instanceof Label) {
+                    Label first = (Label) group.getChildren().get(0);
+                    if ("\uD83D\uDCCC Đã ghim".equals(first.getText())) {
+                        existingPinLabel = first;
+                        existingPinGroup = group;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (isPinned && existingPinLabel == null) {
+            // Add pin label at the top of the bubble group
+            for (javafx.scene.Node child : container.getChildren()) {
+                if (child instanceof VBox) {
+                    VBox group = (VBox) child;
+                    if (group.getChildren().contains(bubble)) {
+                        Label newPinLabel = new Label("\uD83D\uDCCC Đã ghim");
+                        newPinLabel.setStyle(pinStyle);
+                        group.getChildren().add(0, newPinLabel);
+                        break;
+                    }
+                }
+            }
+        } else if (!isPinned && existingPinLabel != null && existingPinGroup != null) {
+            existingPinGroup.getChildren().remove(existingPinLabel);
+        }
     }
 
     private HBox createSeenContainer(boolean isMine) {
@@ -1505,9 +1557,6 @@ public class ChatView {
         JsonObject msgObj = json.has("message") ? json.getAsJsonObject("message") : null;
         boolean isPinned = msgObj != null && msgObj.has("pinned") && msgObj.get("pinned").getAsBoolean();
 
-        // Update pin state
-        setMessagePinnedState(messageId, isPinned);
-
         // Show toast for remote pin/unpin (not from myself)
         Long pinnedBy = msgObj != null && msgObj.has("pinnedBy") && !msgObj.get("pinnedBy").isJsonNull()
                 ? msgObj.get("pinnedBy").getAsLong() : null;
@@ -1517,48 +1566,8 @@ public class ChatView {
         }
 
         Platform.runLater(() -> {
-            Node oldBubble = messageBubbleById.get(messageId);
-            if (oldBubble != null && oldBubble.getParent() instanceof VBox) {
-                VBox container = (VBox) oldBubble.getParent();
-
-                // Check if pin label already exists in the container's children
-                String pinStyle = "-fx-font-size: 11px; -fx-text-fill: #ffd166; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;";
-                Label existingPinLabel = null;
-                VBox existingPinGroup = null;
-
-                for (javafx.scene.Node child : container.getChildren()) {
-                    if (child instanceof VBox) {
-                        VBox group = (VBox) child;
-                        if (!group.getChildren().isEmpty() && group.getChildren().get(0) instanceof Label) {
-                            Label first = (Label) group.getChildren().get(0);
-                            if ("\uD83D\uDCCC Đã ghim".equals(first.getText())) {
-                                existingPinLabel = first;
-                                existingPinGroup = group;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (isPinned && existingPinLabel == null) {
-                    // Add pin label at the top of the bubble group
-                    // Find the bubble group — it's the first VBox child of the container
-                    for (javafx.scene.Node child : container.getChildren()) {
-                        if (child instanceof VBox) {
-                            VBox group = (VBox) child;
-                            if (group.getChildren().contains(oldBubble)) {
-                                Label newPinLabel = new Label("\uD83D\uDCCC Đã ghim");
-                                newPinLabel.setStyle(pinStyle);
-                                group.getChildren().add(0, newPinLabel);
-                                break;
-                            }
-                        }
-                    }
-                } else if (!isPinned && existingPinLabel != null && existingPinGroup != null) {
-                    existingPinGroup.getChildren().remove(existingPinLabel);
-                }
-                refreshPinnedMessagesBar();
-            }
+            applyPinStateToBubble(messageId, isPinned);
+            refreshPinnedMessagesBar();
         });
     }
 
