@@ -122,6 +122,7 @@ public class ChatView {
     private final Map<Long, String> messageContentById = new HashMap<>();
     private final Map<Long, Integer> unreadCounts = new HashMap<>();
     private final Map<Long, String> conversationDisplayNames = new HashMap<>();
+    private final Map<Long, String> conversationUserRoles = new HashMap<>();
     private final Map<Long, Label> unreadBadgesByConvId = new HashMap<>();
     private final List<Stage> activeNotificationStages = new ArrayList<>();
     private final Map<Long, List<Circle>> peerAvatarCircles = new ConcurrentHashMap<>();
@@ -628,6 +629,21 @@ public class ChatView {
                 pinPolicyBox.setVisible(true);
                 pinPolicyBox.setManaged(true);
             }
+            // Enable/disable pin policy checkbox based on user role
+            if (adminOnlyPinCheckBox != null) {
+                String userRole = conversationUserRoles.get(conversationId);
+                boolean isAdminOrOwner = "ADMIN".equals(userRole) || "OWNER".equals(userRole);
+                adminOnlyPinCheckBox.setDisable(!isAdminOrOwner);
+                adminOnlyPinCheckBox.setStyle("-fx-text-fill: " + (isAdminOrOwner ? StyleConstants.TEXT_MUTED : "#666666")
+                        + "; -fx-font-size: 12px;");
+                if (!isAdminOrOwner) {
+                    // Re-fetch current admin_only_pin value from server to keep display accurate
+                    // Also add tooltip
+                    adminOnlyPinCheckBox.setTooltip(new Tooltip("Chỉ quản trị viên mới được thay đổi chính sách này"));
+                } else {
+                    adminOnlyPinCheckBox.setTooltip(null);
+                }
+            }
         }
 
         loadConversations();
@@ -642,6 +658,7 @@ public class ChatView {
         statusDotsByPeerId.clear();
         conversationIdByPeerId.clear();
         peerIdByConversationId.clear();
+        conversationUserRoles.clear();
 
         controller.loadConversations(
                 data -> {
@@ -673,6 +690,12 @@ public class ChatView {
     private void addContactWithPresence(long conversationId, String name, String lastMsg,
                                          boolean selected, JsonObject conv) {
         conversationDisplayNames.put(conversationId, name);
+        // Store user role for group conversations
+        if (conv.has("userRole") && !conv.get("userRole").isJsonNull()) {
+            conversationUserRoles.put(conversationId, conv.get("userRole").getAsString());
+        } else {
+            conversationUserRoles.remove(conversationId);
+        }
         HBox contact = new HBox(12);
         contact.setAlignment(Pos.CENTER_LEFT);
         contact.setPadding(new Insets(12, 14, 12, 14));

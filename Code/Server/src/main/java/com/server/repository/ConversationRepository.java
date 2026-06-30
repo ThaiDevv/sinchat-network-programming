@@ -165,6 +165,8 @@ public class ConversationRepository {
         JsonArray array = new JsonArray();
         // For PRIVATE: show peer name & presence; for GROUP: show group name with no peer presence
         String query = "SELECT c.id, c.type, c.name AS group_name, " +
+                "c.created_by, " +
+                "cr.role AS user_role, " +
                 "CASE WHEN c.type = 'PRIVATE' THEN u.username ELSE c.name END AS display_name, " +
                 "u.id AS peer_id, " +
                 "CASE WHEN c.type = 'PRIVATE' THEN COALESCE(u.is_online, 0) ELSE 0 END AS is_online, " +
@@ -177,6 +179,7 @@ public class ConversationRepository {
                 "c.last_message_at " +
                 "FROM conversations c " +
                 "JOIN conversation_members cm ON c.id = cm.conversation_id " +
+                "LEFT JOIN conversation_roles cr ON c.id = cr.conversation_id AND cr.user_id = cm.user_id " +
                 "LEFT JOIN conversation_members cm2 ON c.type = 'PRIVATE' AND c.id = cm2.conversation_id AND cm2.user_id != cm.user_id "
                 +
                 "LEFT JOIN users u ON cm2.user_id = u.id " +
@@ -199,6 +202,16 @@ public class ConversationRepository {
                     if ("GROUP".equals(type)) {
                         String groupName = rs.getString("group_name");
                         obj.addProperty("groupName", groupName != null ? groupName : "");
+                        long createdBy = rs.getLong("created_by");
+                        if (!rs.wasNull()) {
+                            obj.addProperty("createdBy", createdBy);
+                        }
+                        try {
+                            String userRole = rs.getString("user_role");
+                            if (userRole != null) {
+                                obj.addProperty("userRole", userRole);
+                            }
+                        } catch (SQLException ignored) {}
                     } else {
                         // PRIVATE: include peer info
                         long peerId = rs.getLong("peer_id");
