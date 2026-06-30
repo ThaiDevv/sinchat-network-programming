@@ -119,6 +119,7 @@ public class ChatView {
     private final Map<Long, Label> messageStatusLabels = new HashMap<>();
     private final Map<Long, Boolean> peerOnlineByPeerId = new HashMap<>();
     private final Map<Long, Node> messageBubbleById = new HashMap<>();
+    private final Map<Long, String> messageContentById = new HashMap<>();
     private final Map<Long, Integer> unreadCounts = new HashMap<>();
     private final Map<Long, String> conversationDisplayNames = new HashMap<>();
     private final Map<Long, Label> unreadBadgesByConvId = new HashMap<>();
@@ -299,6 +300,7 @@ public class ChatView {
                 Platform.runLater(() -> {
                     currentConversationId = -1;
                     messagesBox.getChildren().clear();
+                    messageContentById.clear();
                     messagePinnedState.clear();
                     if (pinnedMessagesBar != null) { pinnedMessagesBar.setVisible(false); pinnedMessagesBar.setManaged(false); }
                     if (headerChatName != null) headerChatName.setText("Chọn người để chat");
@@ -567,6 +569,7 @@ public class ChatView {
         updateUnreadBadge(conversationId);
         messagesBox.getChildren().clear();
         messageBubbleById.clear();
+        messageContentById.clear();
         messagePinnedState.clear();
         if (pinnedMessagesBar != null) { pinnedMessagesBar.setVisible(false); pinnedMessagesBar.setManaged(false); }
         messageSeenContainers.clear();
@@ -882,6 +885,7 @@ public class ChatView {
             HBox seenContainer = createSeenContainer(isMine);
             if (messageId > 0) {
                 messageSeenContainers.put(messageId, seenContainer);
+                messageContentById.put(messageId, content);
             }
 
             HBox wrapper;
@@ -1003,6 +1007,10 @@ public class ChatView {
             Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         HBox wrapper = new HBox(8);
         wrapper.setAlignment(senderId == currentUserId ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+
+        if (messageId > 0) {
+            messageContentById.put(messageId, text);
+        }
 
         if (senderId == currentUserId) {
             String bg = StyleConstants.ACCENT;
@@ -1597,16 +1605,8 @@ public class ChatView {
             Node bubble = messageBubbleById.get(msgId);
             if (bubble == null) continue;
 
-            String content = "";
-            // Walk up to find container info
-            Node current = bubble;
-            while (current != null && !(current instanceof HBox && current.getParent() == messagesBox)) {
-                current = current.getParent();
-            }
-            // Try to get content text
-            if (bubble instanceof Label) {
-                content = ((Label) bubble).getText();
-            }
+            // Get raw content from stored map for proper emoji rendering
+            String rawContent = messageContentById.getOrDefault(msgId, "");
 
             HBox item = new HBox(12);
             item.setAlignment(Pos.CENTER_LEFT);
@@ -1615,14 +1615,10 @@ public class ChatView {
             item.setOnMouseEntered(e -> item.setStyle("-fx-background-color: #2a2a5e; -fx-background-radius: 8px; -fx-cursor: hand;"));
             item.setOnMouseExited(e -> item.setStyle("-fx-background-color: #16213e; -fx-background-radius: 8px; -fx-cursor: hand;"));
 
-            String displayContent = content.length() > 60 ? content.substring(0, 57) + "..." : content;
-            Label contentLabel = new Label(displayContent);
-            contentLabel.setStyle("-fx-text-fill: #cccccc; -fx-font-size: 13px;");
-            contentLabel.setMaxWidth(280);
-            contentLabel.setWrapText(true);
-            HBox.setHgrow(contentLabel, Priority.ALWAYS);
+            Node contentNode = EmojiManager.getInstance().renderMessagePreview(rawContent);
+            HBox.setHgrow(contentNode, Priority.ALWAYS);
 
-            item.getChildren().add(contentLabel);
+            item.getChildren().add(contentNode);
 
             item.setOnMouseClicked(e -> {
                 dialog.close();
@@ -2590,6 +2586,7 @@ public class ChatView {
                     showToast("Đã thoát nhóm thành công!");
                     currentConversationId = -1;
                     messagesBox.getChildren().clear();
+                    messageContentById.clear();
                     messagePinnedState.clear();
                     if (pinnedMessagesBar != null) { pinnedMessagesBar.setVisible(false); pinnedMessagesBar.setManaged(false); }
                     if (headerChatName != null) headerChatName.setText("Chọn người để chat");
