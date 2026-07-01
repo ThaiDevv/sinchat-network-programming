@@ -32,12 +32,23 @@ public class SendMessageHandler {
             long senderId = request.get("senderId").getAsLong();
             String content = request.has("content") ? request.get("content").getAsString() : "";
 
-            // Validate message length
-            if (content.length() > MAX_MESSAGE_LENGTH) {
+            // Parse message type if provided
+            com.server.model.Message.MessageType type = com.server.model.Message.MessageType.TEXT;
+            if (request.has("type")) {
+                try {
+                    type = com.server.model.Message.MessageType.valueOf(request.get("type").getAsString());
+                } catch (IllegalArgumentException e) {
+                    // Fallback to TEXT if invalid
+                }
+            }
+
+            // Validate message length (larger limit for images: 7,000,000 chars ~ 5MB)
+            int lenLimit = (type == com.server.model.Message.MessageType.IMAGE) ? 7_000_000 : MAX_MESSAGE_LENGTH;
+            if (content.length() > lenLimit) {
                 logger.warn("[SEND_MESSAGE] Remote={} | UserId={} | ContentLength={} | Message too long (max {})",
-                        conn.getRemoteAddress(), senderId, content.length(), MAX_MESSAGE_LENGTH);
+                        conn.getRemoteAddress(), senderId, content.length(), lenLimit);
                 response.addProperty("status", "error");
-                response.addProperty("message", "Message too long. Maximum " + MAX_MESSAGE_LENGTH + " characters.");
+                response.addProperty("message", "Message too long. Maximum " + lenLimit + " characters.");
                 return response;
             }
 
@@ -103,7 +114,12 @@ public class SendMessageHandler {
             logger.info("[SEND_MESSAGE ATTEMPT] Remote={} | UserId={} | ConversationId={} | ContentLength={} | ReplyToId={} | ForwardFromId={}",
                     conn.getRemoteAddress(), senderId, conversationId, content.length(), replyToId, forwardFromId);
 
-            long msgId = messageService.sendMessage(conversationId, senderId, content, replyToId, forwardFromId);
+            // Determine type before saving: if it's forward, the forward type is resolved inside messageService.sendMessage
+            long msgId = messageService.sendMessage(conversationId, senderId, content, type, replyToId, forwardFromId);
+            // Re-resolve actual message type because if it was a forward, the type might have changed to match the original message
+            com.server.model.Message savedMsg = messageService.getMessageById(msgId);
+            com.server.model.Message.MessageType actualType = (savedMsg != null) ? savedMsg.getType() : type;
+
             logger.info("[SEND_MESSAGE SUCCESS] Remote={} | UserId={} | ConversationId={} | MessageId={} | Message stored",
                     conn.getRemoteAddress(), senderId, conversationId, msgId);
             com.server.model.MessageStatus.Status collectiveStatus = messageStatusRepository.getCollectiveStatus(msgId);
@@ -130,6 +146,7 @@ public class SendMessageHandler {
             response.addProperty("messageId", msgId);
             response.addProperty("conversationId", conversationId);
             response.addProperty("senderId", senderId);
+            response.addProperty("type", actualType.name());
             response.addProperty("content", content);
             response.addProperty("messageStatus", collectiveStatus.name());
             if (resolvedReplyToId != null) {
@@ -159,6 +176,7 @@ public class SendMessageHandler {
             broadcastMsg.addProperty("conversationId", conversationId);
             broadcastMsg.addProperty("senderId", senderId);
             broadcastMsg.addProperty("senderUsername", senderUsername);
+            broadcastMsg.addProperty("type", actualType.name());
             broadcastMsg.addProperty("content", content);
             broadcastMsg.addProperty("messageId", msgId);
             broadcastMsg.addProperty("messageStatus", collectiveStatus.name());
