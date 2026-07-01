@@ -480,6 +480,28 @@ public class ManageGroupDialog {
                 row.setPadding(new Insets(8, 12, 8, 12));
                 row.setStyle("-fx-background-color: transparent; -fx-background-radius: 8px; -fx-cursor: hand;");
 
+                // Avatar circle
+                javafx.scene.shape.Circle avatar = new javafx.scene.shape.Circle(16);
+                avatar.setFill(Color.web("#444444"));
+                avatar.setStroke(Color.web(StyleConstants.BORDER_COLOR));
+
+                Label initLabel = new Label(name.isEmpty() ? "" : name.substring(0, 1).toUpperCase());
+                initLabel.setStyle("-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold;");
+
+                StackPane avatarPane = new StackPane(avatar, initLabel);
+
+                // Load avatar image asynchronously
+                controller.loadPeerAvatar(id,
+                        dataUrl -> {
+                            Image img = ImageUtils.decodeAvatarDataUrl(dataUrl);
+                            if (img != null) {
+                                avatar.setFill(new ImagePattern(img));
+                                initLabel.setVisible(false);
+                            }
+                        },
+                        null
+                );
+
                 Label nameL = new Label(name);
                 nameL.setStyle("-fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 14px;");
 
@@ -507,7 +529,7 @@ public class ManageGroupDialog {
                     );
                 });
 
-                row.getChildren().addAll(nameL, s, addBtn);
+                row.getChildren().addAll(avatarPane, nameL, s, addBtn);
                 row.setOnMouseEntered(e -> row.setStyle("-fx-background-color: #202020; -fx-background-radius: 8px; -fx-cursor: hand;"));
                 row.setOnMouseExited(e -> row.setStyle("-fx-background-color: transparent; -fx-background-radius: 8px; -fx-cursor: hand;"));
                 contactList.getChildren().add(row);

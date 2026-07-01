@@ -1,7 +1,10 @@
 package com.client.view;
 
 import com.client.controller.ChatController;
+import com.client.util.ImageUtils;
 import com.client.util.StyleConstants;
+import javafx.scene.image.Image;
+import javafx.scene.paint.ImagePattern;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -259,16 +262,37 @@ public class CreateGroupDialog {
         row.setCursor(javafx.scene.Cursor.HAND);
         row.setStyle(rowStyle(selected));
 
-        // Avatar placeholder
+        // Avatar circle
         javafx.scene.shape.Circle avatar = new javafx.scene.shape.Circle(16);
-        avatar.setFill(Color.web(selected ? StyleConstants.ACCENT : "#444444"));
+        avatar.setFill(Color.web("#444444"));
         avatar.setStroke(Color.web(StyleConstants.BORDER_COLOR));
+
+        Label initLabel = new Label(username.isEmpty() ? "" : username.substring(0, 1).toUpperCase());
+        initLabel.setStyle("-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold;");
+        if (selected) {
+            initLabel.setVisible(false);
+        }
+
+        javafx.scene.shape.Circle overlay = new javafx.scene.shape.Circle(16);
+        overlay.setFill(Color.web(StyleConstants.ACCENT, 0.75));
+        overlay.setVisible(selected);
 
         Label checkMark = new Label(selected ? "✓" : "");
         checkMark.setStyle("-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold;");
-        avatar.setFill(Color.web(selected ? StyleConstants.ACCENT : "#444444"));
 
-        StackPane avatarPane = new StackPane(avatar, checkMark);
+        StackPane avatarPane = new StackPane(avatar, initLabel, overlay, checkMark);
+
+        // Load avatar image asynchronously
+        controller.loadPeerAvatar(userId,
+                dataUrl -> {
+                    Image img = ImageUtils.decodeAvatarDataUrl(dataUrl);
+                    if (img != null) {
+                        avatar.setFill(new ImagePattern(img));
+                        initLabel.setVisible(false);
+                    }
+                },
+                null
+        );
 
         Label nameLabel = new Label(username);
         nameLabel.setStyle("-fx-text-fill: " + StyleConstants.TEXT_WHITE + "; -fx-font-size: 14px;");
