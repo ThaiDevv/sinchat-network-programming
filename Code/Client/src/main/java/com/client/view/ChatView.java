@@ -97,6 +97,7 @@ public class ChatView {
     private final Map<Long, Image> peerAvatarCache = new ConcurrentHashMap<>();
     private final Map<Long, HBox> messageSeenContainers = new HashMap<>();
     private final Map<Long, List<ReaderInfo>> messageSeenUsers = new HashMap<>();
+    private final Map<Long, List<VBox>> quoteBoxesByReplyToId = new HashMap<>();
 
     // Message search state
     private final List<JsonObject> messageSearchMatches = new ArrayList<>();
@@ -851,6 +852,7 @@ public class ChatView {
             messagesBox.getChildren().clear();
             messageBubbleById.clear();
             messageStatusLabels.clear();
+            quoteBoxesByReplyToId.clear();
             highlightedMessageBubble = null;
             highlightedMessageStyle = null;
         }
@@ -898,6 +900,7 @@ public class ChatView {
             String forwardFromContent = msg.has("forwardFromContent") && !msg.get("forwardFromContent").isJsonNull()
                     ? msg.get("forwardFromContent").getAsString() : null;
 
+            boolean isDeleted = msg.has("isDeleted") && !msg.get("isDeleted").isJsonNull() && msg.get("isDeleted").getAsBoolean();
             boolean isMine = (senderId == currentUserId);
             HBox seenContainer = createSeenContainer(isMine);
             if (messageId > 0) {
@@ -917,18 +920,30 @@ public class ChatView {
                     String fwdContent = forwardFromContent != null ? forwardFromContent : "";
                     displayContent = (content != null && !content.isEmpty()) ? content + "\n" + fwdContent : fwdContent;
                 }
-                Node bubble = createMessageBubble(displayContent, type, StyleConstants.ACCENT, "18px 18px 4px 18px");
+                
+                Node bubble;
+                if (isDeleted) {
+                    Label deletedLabel = new Label("Tin nhắn đã bị thu hồi");
+                    deletedLabel.setStyle("-fx-text-fill: #888888; -fx-font-size: 14px; -fx-font-style: italic; -fx-padding: 8px 12px; -fx-background-color: #2b2b2b; -fx-background-radius: 10px;");
+                    deletedLabel.setMaxWidth(360);
+                    bubble = deletedLabel;
+                } else {
+                    bubble = createMessageBubble(displayContent, type, StyleConstants.ACCENT, "18px 18px 4px 18px");
+                }
+                
                 if (messageId > 0) messageBubbleById.put(messageId, bubble);
-                addContextMenuToBubble(bubble, messageId, "Bạn", displayContent, type);
+                if (!isDeleted) {
+                    addContextMenuToBubble(bubble, messageId, "Bạn", displayContent, type);
+                }
 
                 VBox bubbleGroup = new VBox(4);
                 bubbleGroup.setAlignment(Pos.TOP_RIGHT);
-                if (isFwd) {
+                if (isFwd && !isDeleted) {
                     Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                     forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                     bubbleGroup.getChildren().add(forwardLabel);
                 }
-                if (replyToId != null) {
+                if (replyToId != null && !isDeleted) {
                     VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
                     quoteBox.setMaxWidth(360);
                     bubbleGroup.getChildren().add(quoteBox);
@@ -938,6 +953,9 @@ public class ChatView {
                 Label statusLabel = new Label(ChatController.getStatusLabelText(status));
                 statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888; -fx-padding: 0 4px 0 0;");
                 if (messageId > 0) messageStatusLabels.put(messageId, statusLabel);
+                if (isDeleted) {
+                    statusLabel.setVisible(false);
+                }
 
                 container.getChildren().addAll(bubbleGroup, statusLabel, seenContainer);
                 wrapper.getChildren().add(container);
@@ -945,7 +963,7 @@ public class ChatView {
                 String senderUsername = msg.has("senderUsername") && !msg.get("senderUsername").isJsonNull()
                         ? msg.get("senderUsername").getAsString() : "Unknown";
                 wrapper = createMessageWrapper(senderId, senderUsername, content, type, messageId, seenContainer,
-                        replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent);
+                        replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent, isDeleted);
             }
             messagesBox.getChildren().add(insertIndex++, wrapper);
 
@@ -1004,17 +1022,23 @@ public class ChatView {
     // ==================== MESSAGE BUBBLES ====================
 
     private HBox createMessageWrapper(long senderId, String senderUsername, String text, String type, long messageId, HBox seenContainer) {
-        return createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer, null, null, null, null, null, null);
+        return createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer, null, null, null, null, null, null, false);
     }
 
     private HBox createMessageWrapper(long senderId, String senderUsername, String text, String type, long messageId, HBox seenContainer,
             Long replyToId, String replyToUsername, String replyToContent) {
-        return createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer, replyToId, replyToUsername, replyToContent, null, null, null);
+        return createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer, replyToId, replyToUsername, replyToContent, null, null, null, false);
     }
 
     private HBox createMessageWrapper(long senderId, String senderUsername, String text, String type, long messageId, HBox seenContainer,
             Long replyToId, String replyToUsername, String replyToContent,
             Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
+        return createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer, replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent, false);
+    }
+
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, String type, long messageId, HBox seenContainer,
+            Long replyToId, String replyToUsername, String replyToContent,
+            Long forwardFromId, String forwardFromUsername, String forwardFromContent, boolean isDeleted) {
         HBox wrapper = new HBox(8);
         wrapper.setAlignment(senderId == currentUserId ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
 
@@ -1028,18 +1052,30 @@ public class ChatView {
                 String fwdContent = forwardFromContent != null ? forwardFromContent : "";
                 displayText = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
             }
-            Node bubble = createMessageBubble(displayText, type, bg, radius);
+            
+            Node bubble;
+            if (isDeleted) {
+                Label deletedLabel = new Label("Tin nhắn đã bị thu hồi");
+                deletedLabel.setStyle("-fx-text-fill: #888888; -fx-font-size: 14px; -fx-font-style: italic; -fx-padding: 8px 12px; -fx-background-color: #2b2b2b; -fx-background-radius: 10px;");
+                deletedLabel.setMaxWidth(360);
+                bubble = deletedLabel;
+            } else {
+                bubble = createMessageBubble(displayText, type, bg, radius);
+            }
+            
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
-            addContextMenuToBubble(bubble, messageId, "Bạn", displayText, type);
+            if (!isDeleted) {
+                addContextMenuToBubble(bubble, messageId, "Bạn", displayText, type);
+            }
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_RIGHT);
-            if (isForward) {
+            if (isForward && !isDeleted) {
                 Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                 forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 4px 2px 0;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
-            if (replyToId != null) {
+            if (replyToId != null && !isDeleted) {
                 VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, true);
                 quoteBox.setMaxWidth(360);
                 bubbleGroup.getChildren().add(quoteBox);
@@ -1068,18 +1104,30 @@ public class ChatView {
                 String fwdContent = forwardFromContent != null ? forwardFromContent : "";
                 displayText2 = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
             }
-            Node bubble = createMessageBubble(displayText2, type, bg, radius);
+            
+            Node bubble;
+            if (isDeleted) {
+                Label deletedLabel = new Label("Tin nhắn đã bị thu hồi");
+                deletedLabel.setStyle("-fx-text-fill: #888888; -fx-font-size: 14px; -fx-font-style: italic; -fx-padding: 8px 12px; -fx-background-color: #2b2b2b; -fx-background-radius: 10px;");
+                deletedLabel.setMaxWidth(360);
+                bubble = deletedLabel;
+            } else {
+                bubble = createMessageBubble(displayText2, type, bg, radius);
+            }
+            
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
-            addContextMenuToBubble(bubble, messageId, senderUsername, displayText2, type);
+            if (!isDeleted) {
+                addContextMenuToBubble(bubble, messageId, senderUsername, displayText2, type);
+            }
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_LEFT);
-            if (isForward2) {
+            if (isForward2 && !isDeleted) {
                 Label forwardLabel = new Label("Đã chuyển tiếp một tin nhắn");
                 forwardLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-font-style: italic; -fx-padding: 0 0 2px 4px;");
                 bubbleGroup.getChildren().add(forwardLabel);
             }
-            if (replyToId != null) {
+            if (replyToId != null && !isDeleted) {
                 VBox quoteBox = createQuoteBox(replyToId, replyToUsername, replyToContent, false);
                 quoteBox.setMaxWidth(360);
                 bubbleGroup.getChildren().add(quoteBox);
@@ -1090,12 +1138,14 @@ public class ChatView {
             wrapper.getChildren().addAll(avatar, container);
         }
         // Enable click on entire message (including quote) to reply
-        wrapper.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
-            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
-                setReplyTarget(messageId, senderUsername, text, type);
-                e.consume();
-            }
-        });
+        if (!isDeleted) {
+            wrapper.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
+                if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                    setReplyTarget(messageId, senderUsername, text, type);
+                    e.consume();
+                }
+            });
+        }
         return wrapper;
     }
 
@@ -1524,6 +1574,17 @@ public class ChatView {
                     }
                 }
             }
+
+            // Update reply quote boxes dynamically
+            List<VBox> quotes = quoteBoxesByReplyToId.get(messageId);
+            if (quotes != null) {
+                for (VBox qBox : quotes) {
+                    if (qBox.getChildren().size() >= 2) {
+                        Node textNode = EmojiManager.getInstance().renderMessagePreview("Tin nhắn đã bị thu hồi");
+                        qBox.getChildren().set(1, textNode);
+                    }
+                }
+            }
         });
     }
 
@@ -1816,6 +1877,8 @@ public class ChatView {
                 openMessageFromSearch(currentConversationId, replyToId);
             }
         });
+
+        quoteBoxesByReplyToId.computeIfAbsent(replyToId, k -> new ArrayList<>()).add(quote);
 
         return quote;
     }

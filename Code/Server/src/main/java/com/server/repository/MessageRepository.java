@@ -69,10 +69,10 @@ public class MessageRepository {
 
     public List<Message> getByConversationId(long conversationId, int limit, int offset) {
         List<Message> messages = new ArrayList<>();
-        // Exclude deleted messages AND messages that are edit-children (referenced by edited_to_id)
+        // Exclude messages that are edit-children (referenced by edited_to_id)
         StringBuilder query = new StringBuilder(
                 "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
-                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
+                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, pm.is_deleted AS reply_to_is_deleted, " +
                 "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
                 "m.is_deleted, m.is_edited, m.edited_at, m.edited_to_id " +
                 "FROM messages m " +
@@ -82,7 +82,6 @@ public class MessageRepository {
                 "LEFT JOIN messages fm ON m.forward_from_id = fm.id " +
                 "LEFT JOIN users fu ON fm.sender_id = fu.id " +
                 "WHERE m.conversation_id = ? " +
-                "AND m.is_deleted = 0 " +
                 "AND m.id NOT IN (SELECT edited_to_id FROM messages WHERE edited_to_id IS NOT NULL) " +
                 "ORDER BY m.created_at DESC");
         if (limit > 0) query.append(" LIMIT ?");
@@ -106,7 +105,7 @@ public class MessageRepository {
 
     public Message findById(long messageId) {
         String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
-                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
+                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, pm.is_deleted AS reply_to_is_deleted, " +
                 "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
                 "m.is_deleted, m.is_edited, m.edited_at, m.edited_to_id " +
                 "FROM messages m " +
@@ -175,7 +174,17 @@ public class MessageRepository {
             if (!rs.wasNull()) {
                 msg.setReplyToId(replyToIdVal);
                 msg.setReplyToUsername(rs.getString("reply_to_username"));
-                msg.setReplyToContent(rs.getString("reply_to_content"));
+                
+                boolean replyToIsDeleted = false;
+                try {
+                    replyToIsDeleted = rs.getBoolean("reply_to_is_deleted");
+                } catch (SQLException ignored) {}
+                
+                if (replyToIsDeleted) {
+                    msg.setReplyToContent("Tin nhắn đã bị thu hồi");
+                } else {
+                    msg.setReplyToContent(rs.getString("reply_to_content"));
+                }
             }
         } catch (SQLException ignored) {}
         try {
@@ -313,7 +322,7 @@ public class MessageRepository {
             placeholders.append("?");
         }
         String query = "SELECT m.id, m.conversation_id, m.sender_id, u.username AS sender_username, m.type, m.content, m.created_at, " +
-                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, " +
+                "m.reply_to_message_id, pu.username AS reply_to_username, pm.content AS reply_to_content, pm.is_deleted AS reply_to_is_deleted, " +
                 "m.forward_from_id, fu.username AS forward_from_username, fm.content AS forward_from_content, " +
                 "m.is_deleted, m.is_edited, m.edited_at, m.edited_to_id " +
                 "FROM messages m " +
