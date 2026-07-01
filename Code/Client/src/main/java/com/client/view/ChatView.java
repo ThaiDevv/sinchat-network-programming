@@ -218,6 +218,7 @@ public class ChatView {
         long conversationId = json.get("conversationId").getAsLong();
         long senderId = json.get("senderId").getAsLong();
         String content = json.get("content").getAsString();
+        String type = json.has("type") ? json.get("type").getAsString() : "TEXT";
         long messageId = json.has("messageId") ? json.get("messageId").getAsLong() : -1;
         String senderUsername = json.has("senderUsername") && !json.get("senderUsername").isJsonNull()
                 ? json.get("senderUsername").getAsString() : "Unknown";
@@ -241,10 +242,10 @@ public class ChatView {
 
             if (senderId == currentUserId) {
                 String status = json.has("messageStatus") ? json.get("messageStatus").getAsString() : "SENT";
-                addSentMessage(content, messageId, status, replyToId, replyToUsername, replyToContent,
+                addSentMessage(content, type, messageId, status, replyToId, replyToUsername, replyToContent,
                         forwardFromId, forwardFromUsername, forwardFromContent);
             } else {
-                addReceivedMessage(senderId, senderUsername, content, messageId, replyToId, replyToUsername, replyToContent,
+                addReceivedMessage(senderId, senderUsername, content, type, messageId, replyToId, replyToUsername, replyToContent,
                         forwardFromId, forwardFromUsername, forwardFromContent);
                 if (messageId > 0) controller.markMessageSeen(currentConversationId, messageId);
             }
@@ -254,7 +255,8 @@ public class ChatView {
             updateUnreadBadge(conversationId);
             String senderName = json.has("senderUsername") ? json.get("senderUsername").getAsString()
                     : conversationDisplayNames.getOrDefault(conversationId, "Ai đó");
-            showNewMessageNotification(senderName, content, conversationId, senderId);
+            String notificationText = "IMAGE".equalsIgnoreCase(type) ? "[Hình ảnh]" : content;
+            showNewMessageNotification(senderName, notificationText, conversationId, senderId);
         }
         Platform.runLater(this::loadConversations);
     }
@@ -715,9 +717,21 @@ public class ChatView {
         nameLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: " + StyleConstants.TEXT_WHITE + ";");
 
         String formattedLastMsg = lastMsg;
-        if (lastMsg != null && !lastMsg.isEmpty() && conv.has("lastMessageSenderId")) {
+        String lastMsgType = conv.has("lastMessageType") && !conv.get("lastMessageType").isJsonNull()
+                ? conv.get("lastMessageType").getAsString() : "TEXT";
+        String displayContent = "IMAGE".equalsIgnoreCase(lastMsgType) ? "[Hình ảnh]" : lastMsg;
+
+        if (displayContent != null && !displayContent.isEmpty() && conv.has("lastMessageSenderId")) {
             long senderId = conv.get("lastMessageSenderId").getAsLong();
-            if (senderId != currentUserId) formattedLastMsg = name + ": " + lastMsg;
+            if (senderId == currentUserId) {
+                formattedLastMsg = "Bạn: " + displayContent;
+            } else {
+                String senderName = conv.has("lastMessageSenderName") && !conv.get("lastMessageSenderName").isJsonNull()
+                        ? conv.get("lastMessageSenderName").getAsString() : name;
+                formattedLastMsg = senderName + ": " + displayContent;
+            }
+        } else {
+            formattedLastMsg = displayContent;
         }
 
         Label msgLabel = new Label(formattedLastMsg);
@@ -852,6 +866,7 @@ public class ChatView {
             long senderId = msg.get("senderId").getAsLong();
             String content = msg.get("content").getAsString();
             String status = msg.has("status") ? msg.get("status").getAsString() : "SENT";
+            String type = msg.has("type") ? msg.get("type").getAsString() : "TEXT";
 
             List<ReaderInfo> seenUsers = new ArrayList<>();
             if (msg.has("seenByUsers") && msg.get("seenByUsers").isJsonArray()) {
@@ -898,13 +913,13 @@ public class ChatView {
 
                 boolean isFwd = (forwardFromId != null);
                 String displayContent = content;
-                if (isFwd) {
+                if (isFwd && !"IMAGE".equalsIgnoreCase(type)) {
                     String fwdContent = forwardFromContent != null ? forwardFromContent : "";
                     displayContent = (content != null && !content.isEmpty()) ? content + "\n" + fwdContent : fwdContent;
                 }
-                Node bubble = createMessageBubble(displayContent, StyleConstants.ACCENT, "18px 18px 4px 18px");
+                Node bubble = createMessageBubble(displayContent, type, StyleConstants.ACCENT, "18px 18px 4px 18px");
                 if (messageId > 0) messageBubbleById.put(messageId, bubble);
-                addContextMenuToBubble(bubble, messageId, "Bạn", displayContent);
+                addContextMenuToBubble(bubble, messageId, "Bạn", displayContent, type);
 
                 VBox bubbleGroup = new VBox(4);
                 bubbleGroup.setAlignment(Pos.TOP_RIGHT);
@@ -929,7 +944,7 @@ public class ChatView {
             } else {
                 String senderUsername = msg.has("senderUsername") && !msg.get("senderUsername").isJsonNull()
                         ? msg.get("senderUsername").getAsString() : "Unknown";
-                wrapper = createMessageWrapper(senderId, senderUsername, content, messageId, seenContainer,
+                wrapper = createMessageWrapper(senderId, senderUsername, content, type, messageId, seenContainer,
                         replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent);
             }
             messagesBox.getChildren().add(insertIndex++, wrapper);
@@ -988,16 +1003,16 @@ public class ChatView {
 
     // ==================== MESSAGE BUBBLES ====================
 
-    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer) {
-        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, null, null, null, null, null, null);
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, String type, long messageId, HBox seenContainer) {
+        return createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer, null, null, null, null, null, null);
     }
 
-    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer,
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, String type, long messageId, HBox seenContainer,
             Long replyToId, String replyToUsername, String replyToContent) {
-        return createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer, replyToId, replyToUsername, replyToContent, null, null, null);
+        return createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer, replyToId, replyToUsername, replyToContent, null, null, null);
     }
 
-    private HBox createMessageWrapper(long senderId, String senderUsername, String text, long messageId, HBox seenContainer,
+    private HBox createMessageWrapper(long senderId, String senderUsername, String text, String type, long messageId, HBox seenContainer,
             Long replyToId, String replyToUsername, String replyToContent,
             Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         HBox wrapper = new HBox(8);
@@ -1009,13 +1024,13 @@ public class ChatView {
             // For forwarded messages: bubble content = forwarded content (+ user text if any)
             String displayText = text;
             boolean isForward = (forwardFromId != null);
-            if (isForward) {
+            if (isForward && !"IMAGE".equalsIgnoreCase(type)) {
                 String fwdContent = forwardFromContent != null ? forwardFromContent : "";
                 displayText = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
             }
-            Node bubble = createMessageBubble(displayText, bg, radius);
+            Node bubble = createMessageBubble(displayText, type, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
-            addContextMenuToBubble(bubble, messageId, "Bạn", displayText);
+            addContextMenuToBubble(bubble, messageId, "Bạn", displayText, type);
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_RIGHT);
@@ -1049,13 +1064,13 @@ public class ChatView {
             // For forwarded messages: bubble content = forwarded content (+ user text if any)
             String displayText2 = text;
             boolean isForward2 = (forwardFromId != null);
-            if (isForward2) {
+            if (isForward2 && !"IMAGE".equalsIgnoreCase(type)) {
                 String fwdContent = forwardFromContent != null ? forwardFromContent : "";
                 displayText2 = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
             }
-            Node bubble = createMessageBubble(displayText2, bg, radius);
+            Node bubble = createMessageBubble(displayText2, type, bg, radius);
             if (messageId > 0) messageBubbleById.put(messageId, bubble);
-            addContextMenuToBubble(bubble, messageId, senderUsername, displayText2);
+            addContextMenuToBubble(bubble, messageId, senderUsername, displayText2, type);
 
             VBox bubbleGroup = new VBox(4);
             bubbleGroup.setAlignment(Pos.TOP_LEFT);
@@ -1077,7 +1092,7 @@ public class ChatView {
         // Enable click on entire message (including quote) to reply
         wrapper.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
             if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
-                setReplyTarget(messageId, senderUsername, text);
+                setReplyTarget(messageId, senderUsername, text, type);
                 e.consume();
             }
         });
@@ -1085,15 +1100,15 @@ public class ChatView {
     }
 
     private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId) {
-        addReceivedMessage(senderId, senderUsername, text, messageId, null, null, null, null, null, null);
+        addReceivedMessage(senderId, senderUsername, text, "TEXT", messageId, null, null, null, null, null, null);
     }
 
     private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId,
             Long replyToId, String replyToUsername, String replyToContent) {
-        addReceivedMessage(senderId, senderUsername, text, messageId, replyToId, replyToUsername, replyToContent, null, null, null);
+        addReceivedMessage(senderId, senderUsername, text, "TEXT", messageId, replyToId, replyToUsername, replyToContent, null, null, null);
     }
 
-    private void addReceivedMessage(long senderId, String senderUsername, String text, long messageId,
+    private void addReceivedMessage(long senderId, String senderUsername, String text, String type, long messageId,
             Long replyToId, String replyToUsername, String replyToContent,
             Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         HBox seenContainer = createSeenContainer(false);
@@ -1101,21 +1116,21 @@ public class ChatView {
             messageSeenContainers.put(messageId, seenContainer);
             messageSeenUsers.put(messageId, new ArrayList<>());
         }
-        messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, messageId, seenContainer,
+        messagesBox.getChildren().add(createMessageWrapper(senderId, senderUsername, text, type, messageId, seenContainer,
                 replyToId, replyToUsername, replyToContent, forwardFromId, forwardFromUsername, forwardFromContent));
         for (Label label : messageStatusLabels.values()) label.setVisible(false);
     }
 
     private void addSentMessage(String text, long messageId, String status) {
-        addSentMessage(text, messageId, status, null, null, null, null, null, null);
+        addSentMessage(text, "TEXT", messageId, status, null, null, null, null, null, null);
     }
 
     private void addSentMessage(String text, long messageId, String status,
             Long replyToId, String replyToUsername, String replyToContent) {
-        addSentMessage(text, messageId, status, replyToId, replyToUsername, replyToContent, null, null, null);
+        addSentMessage(text, "TEXT", messageId, status, replyToId, replyToUsername, replyToContent, null, null, null);
     }
 
-    private void addSentMessage(String text, long messageId, String status,
+    private void addSentMessage(String text, String type, long messageId, String status,
             Long replyToId, String replyToUsername, String replyToContent,
             Long forwardFromId, String forwardFromUsername, String forwardFromContent) {
         for (Label oldLabel : messageStatusLabels.values()) oldLabel.setVisible(false);
@@ -1127,13 +1142,13 @@ public class ChatView {
 
         boolean isForward = (forwardFromId != null);
         String displayText = text;
-        if (isForward) {
+        if (isForward && !"IMAGE".equalsIgnoreCase(type)) {
             String fwdContent = forwardFromContent != null ? forwardFromContent : "";
             displayText = (text != null && !text.isEmpty()) ? text + "\n" + fwdContent : fwdContent;
         }
-        Node bubble = createMessageBubble(displayText, StyleConstants.ACCENT, "18px 18px 4px 18px");
+        Node bubble = createMessageBubble(displayText, type, StyleConstants.ACCENT, "18px 18px 4px 18px");
         if (messageId > 0) messageBubbleById.put(messageId, bubble);
-        addContextMenuToBubble(bubble, messageId, "Bạn", displayText);
+        addContextMenuToBubble(bubble, messageId, "Bạn", displayText, type);
 
         VBox bubbleGroup = new VBox(4);
         bubbleGroup.setAlignment(Pos.TOP_RIGHT);
@@ -1164,7 +1179,11 @@ public class ChatView {
         messagesBox.getChildren().add(wrapper);
     }
 
-    private Node createMessageBubble(String text, String bg, String radius) {
+    private Node createMessageBubble(String text, String type, String bg, String radius) {
+        if ("IMAGE".equalsIgnoreCase(type)) {
+            return createImageBubble(text, radius);
+        }
+
         Node content = EmojiManager.getInstance().renderMessage(text);
 
         // If the rendered content is a TextFlow (multi-node), wrap in styling container
@@ -1195,7 +1214,67 @@ public class ChatView {
         return content;
     }
 
-    private void addContextMenuToBubble(Node bubble, long messageId, String senderUsername, String content) {
+    private Node createImageBubble(String base64Data, String radius) {
+        try {
+            byte[] imageBytes = Base64.getDecoder().decode(base64Data.trim());
+            Image image = new Image(new ByteArrayInputStream(imageBytes));
+            ImageView imageView = new ImageView(image);
+            imageView.setPreserveRatio(true);
+            imageView.setFitWidth(220);
+            imageView.setFitHeight(220);
+
+            javafx.scene.shape.Rectangle clip = new javafx.scene.shape.Rectangle();
+            clip.setArcWidth(16);
+            clip.setArcHeight(16);
+            clip.widthProperty().bind(imageView.fitWidthProperty());
+            clip.heightProperty().bind(imageView.fitHeightProperty());
+
+            imageView.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> {
+                clip.setWidth(newBounds.getWidth());
+                clip.setHeight(newBounds.getHeight());
+            });
+            imageView.setClip(clip);
+
+            StackPane imageWrapper = new StackPane(imageView);
+            imageWrapper.setStyle("-fx-background-color: transparent; -fx-padding: 4px;");
+
+            imageView.setCursor(javafx.scene.Cursor.HAND);
+            imageView.setOnMouseClicked(e -> {
+                if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY && e.getClickCount() == 2) {
+                    showLargeImagePopup(image);
+                }
+            });
+
+            return imageWrapper;
+        } catch (Exception e) {
+            Label errLabel = new Label("[Hình ảnh lỗi hoặc không tải được]");
+            errLabel.setStyle("-fx-text-fill: #ff4a4a; -fx-font-style: italic; -fx-font-size: 13px; -fx-padding: 8px;");
+            return errLabel;
+        }
+    }
+
+    private void showLargeImagePopup(Image image) {
+        Stage popupStage = new Stage(StageStyle.TRANSPARENT);
+        popupStage.initModality(Modality.APPLICATION_MODAL);
+        popupStage.initOwner(stage);
+
+        ImageView largeView = new ImageView(image);
+        largeView.setPreserveRatio(true);
+        largeView.setFitWidth(800);
+        largeView.setFitHeight(600);
+
+        StackPane rootPane = new StackPane(largeView);
+        rootPane.setStyle("-fx-background-color: rgba(0, 0, 0, 0.85); -fx-padding: 24px;");
+
+        rootPane.setOnMouseClicked(e -> popupStage.close());
+
+        Scene scene = new Scene(rootPane);
+        scene.setFill(Color.TRANSPARENT);
+        popupStage.setScene(scene);
+        popupStage.show();
+    }
+
+    private void addContextMenuToBubble(Node bubble, long messageId, String senderUsername, String content, String type) {
         if (messageId <= 0) return;
         ContextMenu menu = new ContextMenu();
         menu.setStyle("-fx-background-color: #222222; -fx-border-color: #333333; -fx-border-width: 1px; -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-padding: 6px;");
@@ -1206,20 +1285,24 @@ public class ChatView {
 
         MenuItem replyItem = new MenuItem("Phản hồi");
         replyItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
-        replyItem.setOnAction(e -> setReplyTarget(messageId, senderUsername, content));
+        replyItem.setOnAction(e -> setReplyTarget(messageId, senderUsername, content, type));
 
         menu.getItems().addAll(forwardItem, replyItem);
 
         if ("Bạn".equals(senderUsername)) {
-            MenuItem editItem = new MenuItem("Sửa");
-            editItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
-            editItem.setOnAction(e -> startEditMessage(messageId, content));
+            // Sửa tin nhắn chỉ hoạt động cho tin nhắn TEXT
+            if (!"IMAGE".equalsIgnoreCase(type)) {
+                MenuItem editItem = new MenuItem("Sửa");
+                editItem.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
+                editItem.setOnAction(e -> startEditMessage(messageId, content));
+                menu.getItems().add(editItem);
+            }
 
             MenuItem deleteItem = new MenuItem("Xóa");
             deleteItem.setStyle("-fx-text-fill: #ff4a4a; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 8px 16px;");
             deleteItem.setOnAction(e -> deleteMessage(messageId));
 
-            menu.getItems().addAll(editItem, deleteItem);
+            menu.getItems().add(deleteItem);
         }
 
         // Attach context menu for right‑click
@@ -1231,7 +1314,7 @@ public class ChatView {
         // Left‑click (primary button) should also trigger reply
         bubble.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
             if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
-                setReplyTarget(messageId, senderUsername, content);
+                setReplyTarget(messageId, senderUsername, content, type);
                 e.consume();
             }
         });
@@ -1241,7 +1324,7 @@ public class ChatView {
                 child.setOnContextMenuRequested(e -> menu.show(child, e.getScreenX(), e.getScreenY()));
                 child.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
                     if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
-                        setReplyTarget(messageId, senderUsername, content);
+                        setReplyTarget(messageId, senderUsername, content, type);
                         e.consume();
                     }
                 });
@@ -1320,12 +1403,12 @@ public class ChatView {
         }
     }
 
-    private void setReplyTarget(long messageId, String senderUsername, String content) {
+    private void setReplyTarget(long messageId, String senderUsername, String content, String type) {
         cancelForward(); // forward and reply are mutually exclusive
         activeReplyToId = messageId;
         String safeUsername = senderUsername != null && !senderUsername.isBlank() ? senderUsername : "tin nhan";
-        String safeContent = content != null ? content : "";
-        replyPreviewUserLabel.setText("Dang tra loi " + safeUsername);
+        String safeContent = "IMAGE".equalsIgnoreCase(type) ? "[Hình ảnh]" : (content != null ? content : "");
+        replyPreviewUserLabel.setText("Đang trả lời " + safeUsername);
         // Render emoji preview using a container instead of Label graphic
         Node rendered = EmojiManager.getInstance().renderMessagePreview(safeContent);
         // Wrap in a simple container to replace the label's graphic cleanly
@@ -1397,9 +1480,9 @@ public class ChatView {
                     boolean isMine = parent.getAlignment() == Pos.TOP_RIGHT;
                     String bg = isMine ? StyleConstants.ACCENT : "#1e1e1e";
                     String radius = isMine ? "18px 18px 4px 18px" : "18px 18px 18px 4px";
-                    Node newBubble = createMessageBubble(content, bg, radius);
+                    Node newBubble = createMessageBubble(content, "TEXT", bg, radius);
                     String senderName = isMine ? "Bạn" : "Người khác";
-                    addContextMenuToBubble(newBubble, messageId, senderName, content);
+                    addContextMenuToBubble(newBubble, messageId, senderName, content, "TEXT");
 
                     // Wrap bubble with "Đã chỉnh sửa" label, similar to forward indicator
                     VBox editedGroup = new VBox(4);
@@ -1719,6 +1802,9 @@ public class ChatView {
 
         // Render emoji content for the quote box preview
         String quoteContent = content != null ? content : "";
+        if (quoteContent.length() > 200 && !quoteContent.contains(" ") && !quoteContent.contains("\n")) {
+            quoteContent = "[Hình ảnh]";
+        }
         Node renderedContent = EmojiManager.getInstance().renderMessagePreview(quoteContent);
         quote.getChildren().addAll(userLabel, renderedContent);
 
@@ -2491,6 +2577,7 @@ public class ChatView {
         Button attachBtn = new Button("+");
         attachBtn.setStyle("-fx-background-color: " + StyleConstants.ACCENT + "; -fx-text-fill: " + StyleConstants.TEXT_WHITE
                 + "; -fx-font-size: 20px; -fx-font-weight: bold; -fx-background-radius: 50%; -fx-min-width: 40px; -fx-min-height: 40px; -fx-cursor: hand;");
+        attachBtn.setOnAction(e -> browseAndSendImage());
 
         // Emoji picker button
         Button emojiBtn = new Button("😊");
@@ -2549,6 +2636,29 @@ public class ChatView {
                 + "; -fx-font-size: 15px; -fx-font-weight: bold; -fx-background-radius: 24px; -fx-padding: 12px 24px; -fx-cursor: hand;");
         sendBtn.setOnAction(e -> sendMessage());
         messageInput.setOnAction(e -> sendMessage());
+
+        // Listen to Ctrl+V on messageInput to paste image or files
+        messageInput.setOnKeyPressed(e -> {
+            if (e.isControlDown() && e.getCode() == javafx.scene.input.KeyCode.V) {
+                javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+                if (clipboard.hasImage()) {
+                    Image img = clipboard.getImage();
+                    sendClipboardImage(img);
+                    e.consume();
+                } else if (clipboard.hasFiles()) {
+                    java.util.List<java.io.File> files = clipboard.getFiles();
+                    if (files != null && !files.isEmpty()) {
+                        java.io.File firstFile = files.get(0);
+                        String fileName = firstFile.getName().toLowerCase();
+                        if (fileName.endsWith(".png") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")
+                                || fileName.endsWith(".gif") || fileName.endsWith(".bmp")) {
+                            sendImageFile(firstFile);
+                            e.consume();
+                        }
+                    }
+                }
+            }
+        });
 
         inputBar.getChildren().addAll(attachBtn, emojiBtn, messageInputStack, sendBtn);
 
@@ -2910,6 +3020,89 @@ public class ChatView {
 
     public Scene createScene() {
         return new Scene(root, 1400, 800);
+    }
+
+    private void browseAndSendImage() {
+        if (currentConversationId <= 0 || !controller.getChatService().isConnected()) {
+            showToast("Vui lòng chọn một cuộc trò chuyện để gửi ảnh.");
+            return;
+        }
+
+        javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+        fileChooser.setTitle("Chọn hình ảnh");
+        fileChooser.getExtensionFilters().addAll(
+                new javafx.stage.FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp")
+        );
+        java.io.File selectedFile = fileChooser.showOpenDialog(stage);
+        if (selectedFile != null) {
+            sendImageFile(selectedFile);
+        }
+    }
+
+    private void sendImageFile(java.io.File file) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                long fileSizeInBytes = file.length();
+                long fileSizeInMb = fileSizeInBytes / (1024 * 1024);
+                if (fileSizeInMb > 4) {
+                    Platform.runLater(() -> showToast("Dung lượng ảnh tối đa là 4MB."));
+                    return;
+                }
+
+                byte[] fileContent = java.nio.file.Files.readAllBytes(file.toPath());
+                String base64Content = Base64.getEncoder().encodeToString(fileContent);
+
+                Platform.runLater(() -> {
+                    Long replyId = activeReplyToId;
+                    Long forwardId = activeForwardFromId;
+                    controller.sendMessage(currentConversationId, base64Content, "IMAGE", replyId, forwardId,
+                            err -> showToast("Gửi hình ảnh thất bại: " + err));
+                    cancelReply();
+                    cancelForward();
+                });
+            } catch (java.io.IOException e) {
+                Platform.runLater(() -> showToast("Không thể đọc file ảnh: " + e.getMessage()));
+            }
+        });
+    }
+
+    private void sendClipboardImage(Image image) {
+        if (currentConversationId <= 0 || !controller.getChatService().isConnected()) {
+            showToast("Vui lòng chọn một cuộc trò chuyện để gửi ảnh.");
+            return;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                java.awt.image.BufferedImage bufferedImage = javafx.embed.swing.SwingFXUtils.fromFXImage(image, null);
+                if (bufferedImage == null) {
+                    Platform.runLater(() -> showToast("Không thể đọc ảnh từ clipboard."));
+                    return;
+                }
+
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                javax.imageio.ImageIO.write(bufferedImage, "png", baos);
+                byte[] bytes = baos.toByteArray();
+
+                if (bytes.length > 4 * 1024 * 1024) {
+                    Platform.runLater(() -> showToast("Dung lượng ảnh tối đa là 4MB."));
+                    return;
+                }
+
+                String base64Content = Base64.getEncoder().encodeToString(bytes);
+
+                Platform.runLater(() -> {
+                    Long replyId = activeReplyToId;
+                    Long forwardId = activeForwardFromId;
+                    controller.sendMessage(currentConversationId, base64Content, "IMAGE", replyId, forwardId,
+                            err -> showToast("Gửi hình ảnh thất bại: " + err));
+                    cancelReply();
+                    cancelForward();
+                });
+            } catch (Exception e) {
+                Platform.runLater(() -> showToast("Gửi ảnh từ clipboard thất bại: " + e.getMessage()));
+            }
+        });
     }
 
     public static class ReaderInfo {
