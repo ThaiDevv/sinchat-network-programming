@@ -514,11 +514,18 @@ public class ChatService {
     }
 
     public ApiResponse sendMessage(long conversationId, long senderId, String content, Long replyToId, Long forwardFromId) {
+        return sendMessage(conversationId, senderId, content, "TEXT", replyToId, forwardFromId);
+    }
+
+    public ApiResponse sendMessage(long conversationId, long senderId, String content, String type, Long replyToId, Long forwardFromId) {
         JsonObject req = new JsonObject();
         req.addProperty("action", "SEND_MESSAGE");
         req.addProperty("conversationId", conversationId);
         req.addProperty("senderId", senderId);
         req.addProperty("content", content);
+        if (type != null) {
+            req.addProperty("type", type);
+        }
         if (replyToId != null) {
             req.addProperty("replyToId", replyToId);
         }

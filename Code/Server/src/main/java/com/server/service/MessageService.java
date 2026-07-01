@@ -29,10 +29,21 @@ public class MessageService {
     }
 
     public long sendMessage(long conversationId, long senderId, String content, Long replyToId, Long forwardFromId) throws SQLException {
+        Message.MessageType type = Message.MessageType.TEXT;
+        if (forwardFromId != null) {
+            Message fwd = messageRepository.findById(forwardFromId);
+            if (fwd != null) {
+                type = fwd.getType();
+            }
+        }
+        return sendMessage(conversationId, senderId, content, type, replyToId, forwardFromId);
+    }
+
+    public long sendMessage(long conversationId, long senderId, String content, Message.MessageType type, Long replyToId, Long forwardFromId) throws SQLException {
         Message message = new Message();
         message.setConversationId(conversationId);
         message.setSenderId(senderId);
-        message.setType(Message.MessageType.TEXT);
+        message.setType(type != null ? type : Message.MessageType.TEXT);
         message.setContent(content);
         message.setReplyToId(replyToId);
         message.setForwardFromId(forwardFromId);
